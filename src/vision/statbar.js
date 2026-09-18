@@ -160,14 +160,19 @@ export function locateStatBar(image, options = {}) {
   }
 
   // 大數值行 = 最高而且橫向覆蓋夠闊嘅一條
-  const tall = bands.filter((b) => b.spread >= 0.8).sort((a, b) => b.height - a.height);
+  // （覆蓋門檻唔可以設太高：ROI 係為咗包住面板條而設，但數值本身右對齊、
+  //   實測 5 個數值只佔圖闊 0.164–0.385，即 ROI 嘅 ~0.76；
+  //   真實截圖量到 0.90 係因為同一行仲有右邊「技能Pt」格。用 0.6 留足夠餘量。）
+  const minValuesSpread = o.minValuesSpread ?? 0.6;
+  const minLimitsSpread = o.minLimitsSpread ?? 0.5;
+  const tall = bands.filter((b) => b.spread >= minValuesSpread).sort((a, b) => b.height - a.height);
   if (!tall.length) {
     return { ...meta, values: null, limits: null, scale: 1, reason: '冇一條帶橫跨成條 ROI' };
   }
   const values = tall[0];
   // 上限行 = 喺大數值行**下面**（嚴格喺帶尾之後，避免揀到同一行嘅子帶）、同樣橫跨得夠闊嘅帶
   const limits = bands
-    .filter((b) => b.y0 > values.y1 && b.spread >= 0.6)
+    .filter((b) => b.y0 > values.y1 && b.spread >= minLimitsSpread)
     .sort((a, b) => b.height - a.height)[0] ?? null;
 
   const scale = Math.min(4, Math.max(0.5, o.targetGlyphHeight / values.height));
