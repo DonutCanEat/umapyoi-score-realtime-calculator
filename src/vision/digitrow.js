@@ -1,0 +1,344 @@
+/**
+ * 五維數字列偵測（**色彩與插畫無關**）。
+ *
+ * ## 設計原則
+ *
+ * 1. **唔可以靠面板顏色**：ステータス面板顏色跟隻馬嘅主題色（用戶實機確認），
+ *    任何寫死色相嘅判定都會喺其他馬身上失效。
+ * 2. **唔可以靠「墨量」揀行**：實測全畫面截圖入面，插畫嘅墨點比真正數字多一個數量級，
+ *    按墨量排名一定揀錯（呢個係之前一直失敗嘅根因）。
+ * 3. **唔可以只用顏色判墨**：暖色插畫會大量通過純顏色判準 →
+ *    一定要配「深色字喺淺色底上面」嘅結構條件，見 `inkmask.js`。
+ *
+ * ## 現行流程
+ *
+ * ```
+ * buildInkMask()      顏色 + 淺色底 → 墨點遮罩（剔走插畫）
+ * findTextLines()     連續有墨嘅行 → 文字行
+ * denseBands()        行內再切「密集帶」→ 真正嘅字身範圍（避免兩行黏埋）
+ * columnsToGroups()   欄投影 → 字群
+ * groupsToNumbers()   用間距砌返「數字」
+ * pickBestFive()      由候選揀最似五維嘅 5 個
+ * scoreNumberRow()    結構評分（寬度相近、等距、有高度）
+ * coverage            5 個數字要佔盡該行嘅墨（文字段落會有大量殘墨 → 淘汰）
+ * ```
+ */
+
+import { buildInkMask, findTextLines, isDigitInk, maskRowCounts } from './inkmask.js';
+
+export { isDigitInk, buildInkMask, findTextLines, maskRowCounts };
+
+/** 逐行墨點數（保留舊名，內部用遮罩）。 */
+export function inkRowCounts(image, options = {}) {
+  const mask = options.mask ?? buildInkMask(image, options);
+  return maskRowCounts(image, mask);
+}
+
+/** 一行帶入面做欄投影，切出字形群組。 */
+export function columnsToGroups(mask, width, y0, y1, options = {}) {
+  const minGap = options.minGap ?? 3;
+  const minInk = options.minInk ?? 2;
+
+  const cols = new Int32Array(width);
+  for (let y = y0; y <= y1; y += 1) {
+    const base = y * width;
+    for (let x = 0; x < width; x += 1) cols[x] += mask[base + x];
+  }
+
+  const groups = [];
+  let start = -1;
+  let gap = 0;
+  let ink = 0;
+  for (let x = 0; x < width; x += 1) {
+    if (cols[x] >= minInk) {
+      if (start < 0) { start = x; ink = 0; }
+      gap = 0;
+      ink += cols[x];
+    } else if (start >= 0) {
+      gap += 1;
+      if (gap >= minGap) {
+        groups.push({ x0: start, x1: x - gap, ink });
+        start = -1;
+        gap = 0;
+      }
+    }
+  }
+  if (start >= 0) groups.push({ x0: start, x1: width - 1 - gap, ink });
+  return groups.filter((g) => g.x1 >= g.x0);
+}
+
+/**
+ * 把字形群組砌返做「數字」。
+ *
+ * ⚠️ 2026-09 修正：唔可以再用「中位間距 × 2.2」嘅自適應門檻。
+ *    實測 uma2 嘅格係「[徽章雜訊][數字]」，徽章同數字之間隔 13~17px，
+ *    而數字內部只隔 2~7px。用中位數會畀徽章嘅大間距拉高門檻
+ *    （median 13 → 門檻 30）→ 徽章同數字黏成同一個「數字」（闊 70px）→ 切字元爆數。
+ *
+ *    真實分佈嘅安全邊界好闊：
+ *      數字內部位間距：2–7px
+ *      數字之間（格與格）：28–68px
+ *      徽章與數字之間：11–20px
+ *    → 用**固定門檻 10px** 同時切開「格與格」同「徽章與數字」，兩邊都唔會誤切。
+ */
+export function groupsToNumbers(groups, options = {}) {
+  if (groups.length === 0) return [];
+  const threshold = options.numberGap ?? 10;
+
+  const numbers = [];
+  let current = { x0: groups[0].x0, x1: groups[0].x1, parts: [groups[0]], ink: groups[0].ink ?? 0 };
+  for (let i = 1; i < groups.length; i += 1) {
+    const gap = groups[i].x0 - groups[i - 1].x1 - 1;
+    if (gap >= threshold) {
+      numbers.push(current);
+      current = { x0: groups[i].x0, x1: groups[i].x1, parts: [groups[i]], ink: groups[i].ink ?? 0 };
+    } else {
+      current.x1 = groups[i].x1;
+      current.parts.push(groups[i]);
+      current.ink += groups[i].ink ?? 0;
+    }
+  }
+  numbers.push(current);
+  return numbers;
+}
+
+/**
+ * 由一堆候選「數字」揀出最好嘅 5 個。
+ *
+ * 為何需要：一個格係「[ランク徽章][數字]」，徽章同屬性名都可能會混入，
+ * 所以切出嚟嘅候選通常多過 5 個。五維嘅特徵係「**5 個、寬度相近、間距相近**」
+ * → 用組合搜尋揀最似嗰組。
+ */
+export function pickBestFive(numbers, options = {}) {
+  if (numbers.length < 5) return null;
+  if (numbers.length === 5) return { numbers, cost: 0 };
+
+  const n = numbers.length;
+  let best = null;
+  const idx = [0, 1, 2, 3, 4];
+  const advance = () => {
+    let i = 4;
+    while (i >= 0 && idx[i] === n - 5 + i) i -= 1;
+    if (i < 0) return false;
+    idx[i] += 1;
+    for (let j = i + 1; j < 5; j += 1) idx[j] = idx[j - 1] + 1;
+    return true;
+  };
+
+  do {
+    const sel = idx.map((i) => numbers[i]);
+    const widths = sel.map((s) => s.x1 - s.x0 + 1);
+    const gaps = [];
+    for (let i = 1; i < 5; i += 1) gaps.push(sel[i].x0 - sel[i - 1].x1 - 1);
+    if (gaps.some((g) => g < 3)) continue;
+
+    const wMean = widths.reduce((a, b) => a + b, 0) / 5;
+    const gMean = gaps.reduce((a, b) => a + b, 0) / 4;
+    if (wMean < 8 || gMean <= 0) continue;
+    const wVar = widths.reduce((a, w) => a + (w - wMean) ** 2, 0) / 5 / (wMean ** 2);
+    const gVar = gaps.reduce((a, g) => a + (g - gMean) ** 2, 0) / 4 / (gMean ** 2);
+    const cost = wVar + gVar * (options.spacingWeight ?? 1.5);
+
+    if (!best || cost < best.cost) {
+      best = { numbers: sel, cost, widthSpread: Math.max(...widths) / Math.min(...widths) };
+    }
+  } while (advance());
+
+  return best;
+}
+
+/** 結構評分：五維數字係「5 個、同級、等距、有高度」。唔合格回 null。 */
+export function scoreNumberRow(numbers, y0, y1, options = {}) {
+  if (numbers.length !== 5) return null;
+  const widths = numbers.map((n) => n.x1 - n.x0 + 1);
+  const minW = Math.min(...widths);
+  const maxW = Math.max(...widths);
+  if (minW < 8) return null;
+  // 適性列（草地S/沙地B/短距離E…）都有 5 個色塊，但寬度差好遠。
+  if (maxW / minW > (options.maxWidthSpread ?? 1.5)) return null;
+
+  const gaps = [];
+  for (let i = 1; i < numbers.length; i += 1) {
+    gaps.push(numbers[i].x0 - numbers[i - 1].x1 - 1);
+  }
+  const minGap = Math.min(...gaps);
+  const maxGap = Math.max(...gaps);
+  if (minGap < 3) return null;                          // 數字之間要有明顯間距
+  if (maxGap / Math.max(1, minGap) > 2.5) return null;  // 間距要相近（等距排列）
+
+  const bandHeight = y1 - y0 + 1;
+  if (bandHeight < 8) return null;
+  return {
+    bandHeight,
+    spacing: Math.round((minGap + maxGap) / 2),
+    widthSpread: Number((maxW / minW).toFixed(2)),
+  };
+}
+
+/**
+ * 喺一條文字行入面，再切出「密集帶」。
+ *
+ * 為何需要：文字行係用低門檻切嘅，所以兩行字會黏成一條（例如 y=747..782 其實係
+ * 兩行數字）。密集帶用「逐行墨點數 ≥ 該行峰值嘅某個比例」再切一次，
+ * 就會得到真正嘅字身範圍。
+ */
+export function denseBands(mask, width, line, options = {}) {
+  const minRatio = options.bandRatio ?? 0.35;
+  const maxHeight = options.maxBandHeight ?? 60;
+  const counts = [];
+  let peak = 0;
+  for (let y = line.y0; y <= line.y1; y += 1) {
+    let c = 0;
+    const base = y * width;
+    for (let x = 0; x < width; x += 1) c += mask[base + x];
+    counts.push(c);
+    if (c > peak) peak = c;
+  }
+  if (peak === 0) return [];
+  const threshold = Math.max(2, peak * minRatio);
+
+  const bands = [];
+  let start = -1;
+  for (let i = 0; i < counts.length; i += 1) {
+    const dense = counts[i] >= threshold;
+    if (dense && start < 0) start = i;
+    if ((!dense || i === counts.length - 1) && start >= 0) {
+      const end = dense ? i : i - 1;
+      const y0 = line.y0 + start;
+      const y1 = line.y0 + end;
+      if (y1 - y0 + 1 <= maxHeight) bands.push({ y0, y1, height: y1 - y0 + 1 });
+      start = -1;
+    }
+  }
+  return bands;
+}
+
+/**
+ * 收窄一條帶到「真正嘅字身範圍」。
+ *
+ * 為何需要（2026-09 實測）：文字行嘅上下經常黏住稀疏嘅雜訊（邊框、插畫邊緣、
+ * 相鄰元素），令帶高由 17px 變 32px。帶太高會有兩個惡果：
+ *   1. 切字元時會夾埋雜訊 → 字元數唔對；
+ *   2. 字形被拉長 → 歸一化之後同模板對唔上 → 讀錯數。
+ *
+ * 做法：以帶內墨點峰值嘅 `ratio`（預設 0.25）做門檻，取**包含峰值**嘅連續段。
+ * 實測 uma1（峰值 144，帶 259..283 → 收窄到 259..276）
+ * 同 uma2（峰值 158，帶 251..282 → 收窄到 258..275），兩者都準。
+ *
+ * ⚠️ 門檻唔可以設得太高（例如 0.4）：字形嘅橫劃（例如「8」中間、「5」頂）會令
+ *    個別行嘅墨點數遠高於其他行，太高嘅門檻會令收窄出嚟嘅帶只剩一兩行（實測過）。
+ */
+export function tightenBand(mask, width, y0, y1, options = {}) {
+  const ratio = options.tightenRatio ?? 0.25;
+  const counts = [];
+  let peakIndex = 0;
+  let peak = -1;
+  for (let y = y0; y <= y1; y += 1) {
+    let c = 0;
+    const base = y * width;
+    for (let x = 0; x < width; x += 1) c += mask[base + x];
+    counts.push(c);
+    if (c > peak) {
+      peak = c;
+      peakIndex = counts.length - 1;
+    }
+  }
+  if (peak <= 0) return { y0, y1 };
+  const threshold = Math.max(1, peak * ratio);
+
+  // 揀「墨量最多」嘅連續段，而唔係「包含第一條峰值行」嗰段。
+  // 原因：一枝獨秀嘅單行（例如邊框線）都可能有全帶最高嘅墨量，
+  // 揀佢會得出只有一兩行嘅帶（實測踩過）。同墨量就揀較長、再揀較前。
+  let best = null;
+  let start = -1;
+  for (let i = 0; i <= counts.length; i += 1) {
+    const dense = i < counts.length && counts[i] >= threshold;
+    if (dense && start < 0) start = i;
+    if (!dense && start >= 0) {
+      let ink = 0;
+      for (let k = start; k < i; k += 1) ink += counts[k];
+      const run = { start, end: i - 1, ink, length: i - start };
+      if (
+        !best ||
+        run.ink > best.ink ||
+        (run.ink === best.ink && run.length > best.length)
+      ) {
+        best = run;
+      }
+      start = -1;
+    }
+  }
+  if (!best) return { y0, y1 };
+  return { y0: y0 + best.start, y1: y0 + best.end };
+}
+
+/**
+ * 全圖搜尋「五維數字列」。
+ *
+ * @returns {{y0,y1,numbers,spacing,coverage,confidence}|null}
+ */
+export function detectDigitRow(image, options = {}) {
+  const { data, width, height } = image;
+  const mask = options.mask ?? buildInkMask(image, options);
+  const lines = findTextLines(image, mask, options);
+
+  let best = null;
+  const consider = (y0, y1, lineInk) => {
+    const height = y1 - y0 + 1;
+    if (height < (options.minHeight ?? 8)) return;
+    if (height > (options.maxHeight ?? 70)) return;
+
+    const groups = columnsToGroups(mask, width, y0, y1, options);
+    if (groups.length < 5) return;
+    const allNumbers = groupsToNumbers(groups, options);
+    const picked = allNumbers.length === 5 ? { numbers: allNumbers, cost: 0 } : pickBestFive(allNumbers, options);
+    if (!picked) return;
+    const score = scoreNumberRow(picked.numbers, y0, y1, options);
+    if (!score) return;
+
+    // 5 個數字要佔盡該行嘅墨：文字段落／插畫會有大量殘墨 → 淘汰。
+    const usedInk = picked.numbers.reduce((sum, n) => sum + (n.ink ?? 0), 0);
+    const coverage = lineInk > 0 ? usedInk / lineInk : 0;
+    if (coverage < (options.minCoverage ?? 0.55)) return;
+
+    const cost = picked.cost;
+    if (!best || coverage > best.coverage + 1e-9 || (Math.abs(coverage - best.coverage) < 1e-9 && cost < best.cost)) {
+      best = {
+        y0,
+        y1,
+        numbers: picked.numbers,
+        coverage,
+        cost,
+        ...score,
+      };
+    }
+  };
+
+  // 1) 先用「密集帶」試（可以分開黏埋嘅兩行），每條都收窄到字身範圍
+  const bands = [];
+  for (const line of lines) {
+    for (const band of denseBands(mask, width, line, options)) {
+      bands.push(tightenBand(mask, width, band.y0, band.y1, options));
+    }
+    bands.push(tightenBand(mask, width, line.y0, line.y1, options));
+  }
+  for (const band of bands) {
+    if (band.y1 < band.y0) continue;
+    let ink = 0;
+    for (let y = band.y0; y <= band.y1; y += 1) {
+      const base = y * width;
+      for (let x = 0; x < width; x += 1) ink += mask[base + x];
+    }
+    consider(band.y0, band.y1, ink);
+  }
+  if (!best) return null;
+
+  return {
+    y0: best.y0,
+    y1: best.y1,
+    numbers: best.numbers.map((n) => ({ x0: n.x0, x1: n.x1, ink: n.ink, parts: n.parts })),
+    spacing: best.spacing,
+    coverage: Number(best.coverage.toFixed(3)),
+    confidence: Math.min(1, best.coverage * (best.widthSpread <= 1.6 ? 1 : 0.75)),
+  };
+}

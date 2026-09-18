@@ -1,0 +1,19 @@
+{
+  "name": "umapyoi-score-realtime-calculator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.js",
+  "description": "賽馬娘桌面版（繁中／簡中服）即時評價分偵測：五維分＋技能分＋ランク，HUD 疊加＋獨立面板。",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test --test-isolation=none test/*.test.js",
+    "calc": "node src/cli.js"
+  },
+  "devDependencies": {
+    "electron": "^44.4.1"
+  }
+}

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <title>Umapyoi 擷取</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #111; color: #ddd;
+        font: 13px/1.6 "Segoe UI", "Microsoft JhengHei", sans-serif; }
+      #wrap { display: flex; flex-direction: column; height: 100%; }
+      #bar { padding: 8px 12px; background: #1c1c1c; border-bottom: 1px solid #333; }
+      #bar b { color: #7ee081; }
+      #stage { flex: 1; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+      video, canvas { max-width: 100%; max-height: 100%; }
+      canvas { display: none; }
+      #hint { padding: 6px 12px; color: #888; }
+    </style>
+  </head>
+  <body>
+    <div id="wrap">
+      <div id="bar">
+        狀態：<b id="status">等待主程序…</b>
+        <span id="hint"></span>
+      </div>
+      <div id="stage"><video id="v" autoplay muted playsinline></video></div>
+    </div>
+    <canvas id="c"></canvas>
+    <script>
+      const { ipcRenderer } = require('electron');
+
+      const video = document.getElementById('v');
+      const canvas = document.getElementById('c');
+      const statusEl = document.getElementById('status');
+      const hintEl = document.getElementById('hint');
+
+      // 縮圖闊度：錨點偵測只需要粗略影像，縮圖可以大幅減低 IPC 同 CPU 成本。
+      const THUMB_WIDTH = 640;
+      // 目標幀率。錨點唔需要太快，5fps 已經足夠，而且唔會搶遊戲嘅 GPU。
+      const TARGET_FPS = 5;
+      const FRAME_MS = 1000 / TARGET_FPS;
+
+      let started = false;
+      let lastSent = 0;
+
+      ipcRenderer.on('no-source', () => {
+        statusEl.textContent = '揾唔到遊戲視窗';
+        hintEl.textContent = '請先開賽馬娘，再重新啟動本程式。';
+      });
+
+      ipcRenderer.on('start', async (_event, sourceId) => {
+        if (started) return;
+        started = true;
+        try {
+          statusEl.textContent = '擷取中…';
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              mandatory: {
+                chromeMediaSource: 'desktop',
+                chromeMediaSourceId: sourceId,
+                maxWidth: 4096,
+                maxHeight: 4096,
+                maxFrameRate: 30,
+              },
+            },
+          });
+          video.srcObject = stream;
+          await video.play();
+          statusEl.textContent = '擷取中';
+          loop();
+        } catch (error) {
+          statusEl.textContent = '擷取失敗';
+          hintEl.textContent = String(error && error.message ? error.message : error);
+          ipcRenderer.send('capture-error', String(error));
+        }
+      });
+
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+      function loop(now) {
+        requestAnimationFrame(loop);
+        if (!video.videoWidth || !video.videoHeight) return;
+        if (now && now - lastSent < FRAME_MS) return;
+        lastSent = now || 0;
+
+        const scale = Math.min(1, THUMB_WIDTH / video.videoWidth);
+        const width = Math.max(1, Math.round(video.videoWidth * scale));
+        const height = Math.max(1, Math.round(video.videoHeight * scale));
+
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+        ctx.drawImage(video, 0, 0, width, height);
+        const image = ctx.getImageData(0, 0, width, height);
+
+        ipcRenderer.send('frame', {
+          width,
+          height,
+          fullWidth: video.videoWidth,
+          fullHeight: video.videoHeight,
+          buffer: image.data.buffer,
+        });
+
+        hintEl.textContent =
+          ' · 遊戲 ' + video.videoWidth + '×' + video.videoHeight +
+          ' → 縮圖 ' + width + '×' + height + ' @' + TARGET_FPS + 'fps';
+      }
+    </script>
+  </body>
+</html>

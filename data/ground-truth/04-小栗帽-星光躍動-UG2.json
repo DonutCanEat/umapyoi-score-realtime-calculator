@@ -1,0 +1,161 @@
+{
+  "id": "小栗帽[星光躍動] UG2",
+  "server": "tw",
+  "character": "小栗帽",
+  "costume": "星光躍動",
+  "note": "育成終了「賽馬娘詳情」畫面（別稱：自主訓練賽馬娘）。技能由捲動前後兩張截圖合併去重。",
+  "unconfirmed": [
+    "技能資料由 bwiki 繁中技能資料庫自動填入（含條件同適性倍率）",
+    "唔喺資料庫嘅技能名一律當繼承固有（固定 180）"
+  ],
+  "stats": [
+    1475,
+    747,
+    929,
+    771,
+    815
+  ],
+  "total": 20589,
+  "rank": "UG2",
+  "aptitudes": {
+    "場地": {
+      "草地": "A",
+      "沙地": "B"
+    },
+    "距離": {
+      "短距離": "E",
+      "一哩": "A",
+      "中距離": "A",
+      "長距離": "S"
+    },
+    "腳質": {
+      "領頭": "F",
+      "前列": "A",
+      "居中": "A",
+      "後追": "D"
+    }
+  },
+  "uniqueSkills": [
+    {
+      "name": "勝利的躍動",
+      "star": 4,
+      "level": 5
+    }
+  ],
+  "skills": [
+    {
+      "name": "順時針◎",
+      "base": 174,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 200
+    },
+    {
+      "name": "東京賽場◎",
+      "base": 174,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 200
+    },
+    {
+      "name": "函館賽場◎",
+      "base": 174,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 160
+    },
+    {
+      "name": "良好場地◎",
+      "base": 174,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 200
+    },
+    {
+      "name": "春賽馬娘◎",
+      "base": 174,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 200
+    },
+    {
+      "name": "冬賽馬娘◎",
+      "base": 174,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 200
+    },
+    {
+      "name": "陰天◎",
+      "base": 174,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 200
+    },
+    {
+      "name": "急彎◎",
+      "base": 174,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 160
+    },
+    {
+      "name": "弧線的教授",
+      "base": 508,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 360
+    },
+    {
+      "name": "長距離彎道○",
+      "base": 217,
+      "condition": "長距離",
+      "aptitudes": [
+        "S"
+      ],
+      "skillPt": 100
+    },
+    {
+      "name": "飢渴的怪物",
+      "base": 633,
+      "condition": "前列",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 360
+    },
+    {
+      "name": "革命的岔路",
+      "base": 633,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": null
+    },
+    {
+      "name": "英雄豪傑",
+      "base": 633,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 400
+    },
+    {
+      "name": "締造新傳說之人",
+      "base": 633,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 400
+    },
+    {
+      "name": "奔騰勝疾風",
+      "base": 633,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 0
+    }
+  ],
+  "inheritedUniqueCount": 2,
+  "inheritedSkills": [
+    "VICTORY SHOT!",
+    "∴win Q.E.D."
+  ]
+}

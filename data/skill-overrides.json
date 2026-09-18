@@ -1,0 +1,30 @@
+{
+  "note": "wiki 的『分类:繁中技能』冇收錄的技能（多數係『繼承技』，所需技能PT = 0）。base = 基礎評價分。base 為 null 就當未確認，唔會用。",
+  "source": "wiki 命名空間：繁/继承技/<技能名>；數值由計算器畫面確認",
+  "skills": [
+    {
+      "name": "奔騰勝疾風",
+      "simplifiedName": "奔驰胜疾风",
+      "base": 633,
+      "condition": "通用",
+      "skillPt": 0,
+      "source": "用戶提供計算器截圖：通用 / 633 / PT 0"
+    },
+    {
+      "name": "VICTORY SHOT!",
+      "simplifiedName": "VICTORY SHOT!",
+      "base": null,
+      "condition": "通用",
+      "skillPt": 0,
+      "source": "待確認（wiki 頁面：繁/继承技/VICTORY SHOT！）"
+    },
+    {
+      "name": "一鼓作氣♪Chu",
+      "simplifiedName": "一鼓作气♪Chu",
+      "base": null,
+      "condition": "通用",
+      "skillPt": 0,
+      "source": "待確認（wiki 頁面：繁/继承技/一鼓作氣♪Chu）"
+    }
+  ]
+}

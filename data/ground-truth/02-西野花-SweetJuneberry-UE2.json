@@ -1,0 +1,216 @@
+{
+  "id": "西野花[Sweet Juneberry] UE2",
+  "server": "tw",
+  "character": "西野花",
+  "costume": "Sweet Juneberry",
+  "note": "育成終了「賽馬娘詳情」畫面。技能由捲動前後兩張截圖合併去重。取代舊嘅 UE6 紀錄。",
+  "stats": [
+    1909,
+    853,
+    1122,
+    905,
+    1044
+  ],
+  "total": 30134,
+  "rank": "UE2",
+  "aptitudes": {
+    "場地": {
+      "草地": "A",
+      "沙地": "F"
+    },
+    "距離": {
+      "短距離": "A",
+      "一哩": "A",
+      "中距離": "E",
+      "長距離": "G"
+    },
+    "腳質": {
+      "領頭": "E",
+      "前列": "A",
+      "居中": "A",
+      "後追": "G"
+    }
+  },
+  "uniqueSkills": [
+    {
+      "name": "Flowering Dreams",
+      "star": 3,
+      "level": 4
+    }
+  ],
+  "skills": [
+    {
+      "name": "順時針◎",
+      "base": 174,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 200
+    },
+    {
+      "name": "東京賽場○",
+      "base": 129,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 90
+    },
+    {
+      "name": "良好場地◎",
+      "base": 174,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 200
+    },
+    {
+      "name": "路況差勁◎",
+      "base": 174,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 200
+    },
+    {
+      "name": "下雨天◎",
+      "base": 174,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 200
+    },
+    {
+      "name": "彎道靈巧○",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 180
+    },
+    {
+      "name": "彎道回復○",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 170
+    },
+    {
+      "name": "直線靈巧",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 170
+    },
+    {
+      "name": "直線回復",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 170
+    },
+    {
+      "name": "集中力",
+      "base": 129,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 140
+    },
+    {
+      "name": "混戰冷靜",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 170
+    },
+    {
+      "name": "尾段加速",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 170
+    },
+    {
+      "name": "準備外側超前",
+      "base": 217,
+      "condition": "居中",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 180
+    },
+    {
+      "name": "謀略（後）",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 140
+    },
+    {
+      "name": "祝福的花童",
+      "base": 633,
+      "condition": "一哩",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 360
+    },
+    {
+      "name": "居中彎道◎",
+      "base": 262,
+      "condition": "居中",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 270
+    },
+    {
+      "name": "稍微休息",
+      "base": 217,
+      "condition": "居中",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 180
+    },
+    {
+      "name": "喜愛賽馬娘",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 160
+    },
+    {
+      "name": "打好基礎",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 100
+    },
+    {
+      "name": "咬住不放",
+      "base": 217,
+      "condition": "前列, 居中",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 180
+    },
+    {
+      "name": "革命的岔路",
+      "base": 633,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": null
+    },
+    {
+      "name": "傳說降臨",
+      "base": 758,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": null
+    }
+  ],
+  "inheritedSkills": [
+    "勝利的躍動",
+    "一鼓作氣♪Chu"
+  ],
+  "inheritedUniqueCount": 2,
+  "unconfirmed": [
+    "技能資料由 bwiki 繁中技能資料庫自動填入（含條件同適性倍率）",
+    "唔喺資料庫嘅技能名一律當繼承固有（固定 180）"
+  ]
+}

@@ -1,0 +1,195 @@
+{
+  "id": "特別週[特別夢想家] UF8",
+  "server": "tw",
+  "character": "特別週",
+  "costume": "特別夢想家",
+  "note": "育成終了「賽馬娘詳情」畫面。技能由捲動前後兩張截圖合併去重。",
+  "unconfirmed": [
+    "技能資料由 bwiki 繁中技能資料庫自動填入（含條件同適性倍率）",
+    "唔喺資料庫嘅技能名一律當繼承固有（固定 180）"
+  ],
+  "stats": [
+    1505,
+    1240,
+    1009,
+    1220,
+    1099
+  ],
+  "total": 28211,
+  "rank": "UF8",
+  "aptitudes": {
+    "場地": {
+      "草地": "S",
+      "沙地": "G"
+    },
+    "距離": {
+      "短距離": "F",
+      "一哩": "C",
+      "中距離": "A",
+      "長距離": "A"
+    },
+    "腳質": {
+      "領頭": "G",
+      "前列": "A",
+      "居中": "A",
+      "後追": "C"
+    }
+  },
+  "uniqueSkills": [
+    {
+      "name": "逐夢之星",
+      "star": 3,
+      "level": 4
+    }
+  ],
+  "skills": [
+    {
+      "name": "弧線的教授",
+      "base": 508,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 360
+    },
+    {
+      "name": "直線加速",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 170
+    },
+    {
+      "name": "好轉歇息",
+      "base": 508,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 340
+    },
+    {
+      "name": "集中力",
+      "base": 129,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 140
+    },
+    {
+      "name": "尾段加速",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 170
+    },
+    {
+      "name": "維持持久力",
+      "base": 217,
+      "condition": "前列",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 180
+    },
+    {
+      "name": "好位追趕",
+      "base": 217,
+      "condition": "前列",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 180
+    },
+    {
+      "name": "速度之星",
+      "base": 508,
+      "condition": "前列",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 360
+    },
+    {
+      "name": "緊咬不放",
+      "base": 217,
+      "condition": "中距離",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 160
+    },
+    {
+      "name": "使前列遲疑",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 130
+    },
+    {
+      "name": "中距離直線◎",
+      "base": 262,
+      "condition": "中距離",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 210
+    },
+    {
+      "name": "中距離彎道◎",
+      "base": 262,
+      "condition": "中距離",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 210
+    },
+    {
+      "name": "喜愛賽馬娘",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 160
+    },
+    {
+      "name": "鬥爭心",
+      "base": 217,
+      "condition": "中距離",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 160
+    },
+    {
+      "name": "猛追",
+      "base": 508,
+      "condition": "前列, 居中",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 360
+    },
+    {
+      "name": "堅毅之心",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 180
+    },
+    {
+      "name": "革命的岔路",
+      "base": 633,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": null
+    },
+    {
+      "name": "奔騰勝疾風",
+      "base": 633,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 0
+    }
+  ],
+  "inheritedUniqueCount": 3,
+  "inheritedSkills": [
+    "勝利的躍動",
+    "∴win Q.E.D.",
+    "絕對是我"
+  ]
+}

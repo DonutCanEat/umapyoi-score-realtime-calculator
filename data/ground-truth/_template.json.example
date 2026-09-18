@@ -1,0 +1,14 @@
+{
+  "id": "範例（培育完成）",
+  "server": "tw",
+  "note": "育成終了画面嘅數字",
+  "stats": [1200, 600, 900, 400, 1100],
+  "uniqueSkills": [{ "star": 3, "level": 5 }],
+  "inheritedUniqueCount": 2,
+  "skills": [
+    { "name": "直線加速", "base": 217, "aptitudes": [] },
+    { "name": "短距離直線◎", "base": 239, "aptitudes": ["S"] }
+  ],
+  "total": 15900,
+  "rank": "S+"
+}

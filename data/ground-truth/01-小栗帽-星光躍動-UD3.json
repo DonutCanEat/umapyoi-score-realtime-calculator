@@ -1,0 +1,225 @@
+{
+  "id": "小栗帽[星光躍動] UD3",
+  "server": "tw",
+  "character": "小栗帽",
+  "costume": "星光躍動",
+  "note": "育成終了「賽馬娘詳情」畫面。技能由捲動前後兩張截圖合併去重。",
+  "unconfirmed": [
+    "技能資料由 bwiki 繁中技能資料庫自動填入（含條件同適性倍率）",
+    "唔喺資料庫嘅技能名一律當繼承固有（固定 180）"
+  ],
+  "stats": [
+    1840,
+    1324,
+    1222,
+    1206,
+    1125
+  ],
+  "total": 36575,
+  "rank": "UD3",
+  "aptitudes": {
+    "場地": {
+      "草地": "S",
+      "沙地": "B"
+    },
+    "距離": {
+      "短距離": "E",
+      "一哩": "A",
+      "中距離": "A",
+      "長距離": "S"
+    },
+    "腳質": {
+      "領頭": "F",
+      "前列": "A",
+      "居中": "A",
+      "後追": "D"
+    }
+  },
+  "uniqueSkills": [
+    {
+      "name": "勝利的躍動",
+      "star": 4,
+      "level": 5
+    }
+  ],
+  "skills": [
+    {
+      "name": "陰天○",
+      "base": 129,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 90
+    },
+    {
+      "name": "下雨天○",
+      "base": 129,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 90
+    },
+    {
+      "name": "弧線的教授",
+      "base": 508,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 360
+    },
+    {
+      "name": "曲線的侍酒師",
+      "base": 508,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 360
+    },
+    {
+      "name": "混戰冷靜",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 170
+    },
+    {
+      "name": "避開力竭賽馬娘",
+      "base": 174,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 150
+    },
+    {
+      "name": "尾段加速",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 170
+    },
+    {
+      "name": "維持持久力",
+      "base": 217,
+      "condition": "前列",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 180
+    },
+    {
+      "name": "好位追趕",
+      "base": 217,
+      "condition": "前列",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 180
+    },
+    {
+      "name": "冷卻",
+      "base": 508,
+      "condition": "長距離",
+      "aptitudes": [
+        "S"
+      ],
+      "skillPt": 320
+    },
+    {
+      "name": "內側強者",
+      "base": 217,
+      "condition": "長距離",
+      "aptitudes": [
+        "S"
+      ],
+      "skillPt": 160
+    },
+    {
+      "name": "第二體力條",
+      "base": 217,
+      "condition": "長距離",
+      "aptitudes": [
+        "S"
+      ],
+      "skillPt": 160
+    },
+    {
+      "name": "謀略（後）",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 140
+    },
+    {
+      "name": "長距離直線◎",
+      "base": 262,
+      "condition": "長距離",
+      "aptitudes": [
+        "S"
+      ],
+      "skillPt": 210
+    },
+    {
+      "name": "長距離彎道◎",
+      "base": 262,
+      "condition": "長距離",
+      "aptitudes": [
+        "S"
+      ],
+      "skillPt": 210
+    },
+    {
+      "name": "飢渴的怪物",
+      "base": 633,
+      "condition": "前列",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 360
+    },
+    {
+      "name": "革命的岔路",
+      "base": 633,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": null
+    },
+    {
+      "name": "英雄豪傑",
+      "base": 633,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 400
+    },
+    {
+      "name": "重播夢想的方法",
+      "base": 263,
+      "condition": "中距離, 長距離",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 200
+    },
+    {
+      "name": "改變時代之人",
+      "base": 263,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 200
+    },
+    {
+      "name": "競賽的精髓・體能",
+      "base": 174,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 150
+    },
+    {
+      "name": "奔騰勝疾風",
+      "base": 633,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 0
+    }
+  ],
+  "inheritedUniqueCount": 3,
+  "inheritedSkills": [
+    "逐夢之星",
+    "∴win Q.E.D.",
+    "絕對是我"
+  ]
+}
