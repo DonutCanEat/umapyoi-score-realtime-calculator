@@ -125,7 +125,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（181 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（195 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 
 # HUD 相關開關（環境變數）
 #   ⚠️ 三個旗標（UMAPYOI_NO_HUD／UMAPYOI_NO_SETTINGS／UMAPYOI_HUD_EDIT）嘅**確切**語意
@@ -233,7 +233,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **181 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **195 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 4/4　完全命中 4/4　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（雙閘：**實機面板條 9/9**），兩個都要中
@@ -271,13 +271,20 @@ src/vision/
   anchor.js       # ⚠️ 已棄用（靠粉紅色揾面板 → 見地雷 #10/#11），保留只為舊測試
   panel.js        # ⚠️ 同上（粉紅比例版），未接入主流程
 
+src/capture/
+  source.js       # ⭐ 揀「擷取來源」嘅純函數（零 Electron、可 node --test）：
+                  #    pickGameSource()（**排除本程式自己嘅窗**：HWND 硬排除 ＋ 標題第二重）、
+                  #    matchScore()（完全相符 3／開頭 2／包含 1）、windowHandleOf()。
+                  #    ⚠️ 呢個係「唔可以再揀錯窗」嘅單一來源（見地雷 #27）
+
 src/cli.js        # 手動試算
 
 src/hud/
   layout.js       # ⭐ HUD overlay 嘅**幾何 + 顯示狀態**（純函數，可 node --test）：
                   #    相對位置、內容框推算、四態（ok／stale／none／edit）、顯示選項、
                   #    clampLayout()（用戶郁過嘅值一律夾成合法）、
-                  #    layoutFromBounds()／relativeFromBounds()（拖完反推）、
+                  #    layoutFromBounds()／relativeFromBounds()（拖完反推：位置寫 x[0]／y[0] ＋
+                  #    夾入內容區、offset 歸零、size 唔郁 —— 見地雷 #28）、
                   #    round6()（6 位小數收斂；config.js 推導 size／x[1] 都用佢，避免寫浮點噪音入用戶個檔）
   config.js       # ⭐ HUD 設定存檔層（`hud-position.json`）：DEFAULT_HUD_CONFIG／
                   #    validateConfig()／loadConfig()／saveConfig()／resolveHudConfig()（env > 檔案 > 預設）／
@@ -297,12 +304,19 @@ electron/
   capture.html    # 擷取 renderer：getUserMedia → **1:1 剪面板 ROI**（冇 ROI 就退回 640px 縮圖）
   hud.html        # HUD overlay renderer：透明無邊框，只畫主程序推落嚟嘅 view（＋對位模式拖位）
   settings.html   # ⭐ HUD 設定窗（**普通視窗**，classic script）：8 個數值 slider ＋ 7 個顯示選項
+                  #    ⚠️ 標題唔准含遊戲關鍵字（會蓋過 BrowserWindow 嘅 title，見地雷 #27）
+                  #    ⚠️ slider 上下限由純函數 fieldBounds() 動態計（冇死區）＋
+                  #       用戶互動中唔搶佢手上嗰個控制 ＋ 顯示 HUD 實際螢幕像素範圍（地雷 #28）
 
 test/
+  capture-source.test.js # ⭐ 擷取來源挑選（**排除本程式自己嘅窗**、標題三級相符、
+                      #    同分保留原本次序、唔合法輸入唔准 throw —— 見地雷 #27）
   hud.test.js         # HUD 幾何／狀態（anchorHud／contentRect／hudState 基本行為）
   hud-display.test.js # ⭐ 顯示選項（7 個 boolean）＋ 金色格嘅**真實粒度**（整體 boolean）
   hud-clamp.test.js   # ⭐ clampLayout()（slider 拉爆／拖位反推共用嘅夾法）
-  hud-drag.test.js    # ⭐ 拖完反推：round-trip（±1px）、唔改 size、30 次唔漂
+  hud-drag.test.js    # ⭐ 拖完反推：round-trip（±1px）、唔改 size、30 次唔漂；
+                      #    ⭐ 位置寫入 x0／y0 ＋ offset 歸零；⭐ 拖出界一律夾返入內容區；
+                      #    ⭐ 舊檔嘅飽和 offset（dx=1／dy=−0.82）唔會再令拖位卡死（地雷 #28）
   hud-config.test.js  # HUD 設定存檔層（env > 檔案 > 預設；唔合法一律 throw；
                       #    ⭐ 含「AGENTS §2 六行環境變數一齊用唔准 throw」回歸測試
                       #    ＋ assertFullDisplay()／onWarn 警告收集）
@@ -318,6 +332,9 @@ test/
   hud-settings-html.test.js # ⭐ 「設定窗 ↔ config.js 欄位對齊」：**真係由 `electron/settings.html` 抽**
                       #    `DISPLAY_FIELDS`／`NUM_FIELDS` 再同 `HUD_DISPLAY_KEYS`／layout 欄位比對
                       #    （之前呢兩份清單係人手抄嘅，加一格／少一格冇人知）
+                      #    ⭐ 另有 3 條由 HTML **抽 `fieldBounds()` 出嚟執行**（唔係抄公式）：
+                      #    「x0 上限唔可以再寫死成 1」、「任何情況下拉到最大都仍然合法（冇死區）」、
+                      #    「大細下限／x1 起碼值／dx dy 嘅 ±1」（地雷 #28）
   hud-env-flag.test.js # ⭐ `envFlag()` 21 個值嘅行為（1／true 系 7 個開、7 個閂、7 個唔認識要警告）
                       #    ＋ 預設 env＝process.env、預設 onWarn＝console.warn
 
@@ -452,7 +469,9 @@ oval > 0 → 再加 oval 部分；最後 floor
 | 23 | ⭐⭐ **以為「gt 30/30 = 實機行得通」** | ⛔ **最嚴重嘅一個**。gt 截圖係**另一種排法**（5 個同位數、闊度相近嘅 4 位數字一行，格距 110px、字高 17px）。實機**育成主畫面**每個屬性格係「**大數值（上面）＋ `/上限`（下面細字）**」→ 現行「揀 5 個闊度最相近嘅等距數字」判準**一定揀到『上限』欄**（上限全部 4 位、闊度一致；數值 2–3 位、闊度唔一致）。實測 5 個解析度（1356→2560）**5/5 都讀錯欄**：讀出 `1946/1600/1600/1500/1450`（＝上限）而真值係 `226/54/139/85/102`，信心仲有 0.55–0.70 → **靜默報錯數**。而且 band 會把「大數值行＋細上限行」**合併**，砌數字時混行 → 連上限都讀唔準。→ 實機要**先切行（大數值 / 細上限）再砌數字**，唔可以靠「闊度相近」呢個判準。 ✅ **2026-09-18 已修**：`src/vision/statbar.js`（相對 ROI → 切行 → 只按右邊界間距揀 5 個 → 信心閘），實機 5/5；另加 10 個合成測試（`test/statbar.test.js`）守住 |
 | 24 | **假設遊戲 UI 係固定像素大細** | ⛔ 賽馬娘桌面版**冇固定解析度，只有固定 16:9**（用戶確認）。實測 5 個解析度：cell pitch ÷ 圖闊 = **0.0494–0.0498（恆定）**、面板列 normalized y = **0.691–0.703（恆定）** → **UI 完全等比縮放、面板相對位置穩定**。即係：① 唔可以用固定 `THUMB_WIDTH`（1280 窗同 4K 窗行為完全唔同）；② **相對 ROI 係可行而且穩定**（同地雷 #10 嘅「寫死色相」唔同：寫死**相對座標**喺固定比例之下係安全嘅）；③ 字高 ∝ 圖闊（實機量到：數值 ≈ 0.0098×闊、上限 ≈ 0.0064×闊）→ 要「正規化字高」而唔係「固定解析度」 |
 | 25 | ⭐ **以為「相似度 0.55 門檻好安全」，同埋「數字框入面一定只有數字」** | ⛔ 實機（1920 窗）會出現「第 5 個數值讀唔清」，三個根因都係違反呢啲假設：① 數字**右邊多咗一舊 3×4 像素碎片**（格線／高亮邊緣，0.28 分）→ `readNumberTrimmed()` 由右邊貪心收，一撞到低分就**即刻停** → 成格報「?」，連左邊正確數字都讀唔到；② 真數字「8」最佳匹配**仍然係 8**，但得 **0.41** —— 實機數字係**漸變色**（上淺下深），墨點遮罩削走較淺嘅上半 → 相似度天然偏低；③ 其他畫面（選單／列表）嘅**細字**都會被當成面板條 → 報「讀唔清」（假警報）。**正解**：`dropNonDigits()`（同字數字元一定同高）＋ `minAccept` **0.40**（實測掃描：0.45 讀到 9 幀、0.40 讀到 10 幀、再低冇用，而且全部同已知值一致）＋ `expectedGlyphHeight()` 判斷（UI 等比 → 字高 ≈ 0.0098×圖闊，遠細過就判 **`notBar`**，log 同 dump 都分開處理）。⚠️ **試過但否決**：放寬 `lumMax` 0.62 → 0.85 想救返上半漸變色，實測**反而讀錯**（`727/108/…`、`727/188/…`）兼真值跌到 6/8。驗證工具：`tools/replay-dumps.js`（重播失敗幀，**唔可以只用成功圖驗證**）|
-| 26 | ⭐⭐ **以為「所有狀態嘅數字都係橙棕色」，同埋「金色 → 唔出數就得」** | ⛔ **最危險嘅一類：靜默讀錯數**（用戶實機報 1489→**1483**、1613→**1513**）。屬性升咗之後遊戲把該格數字畫成**金色**：深金邊 ＋ **極淺金高光**（實測 `rgb(255,255,214)`、色相 60°、**亮度 0.98**）。⭐ **用戶 2026-09-18 確認嘅兩件事**：① **逐格獨立**（只有過 1200 嗰格金，其餘照舊橙棕 —— 實測 1489 金、543/655/624/628 橙棕）；② **一達到 1200 就即刻變金**（唔係等訓練完、唔係短暫高亮）→ 所以判準一定要**逐格**做。**先踩嘅第一個坑**：一度改成「偵測到金色就唔出數」，但既然係長期狀態，唔出數等於千二點之後**永遠冇數**，唔可行。**真正根因（唔止顏色窗口）**：墨點遮罩嘅「深色字喺淺色底上面」**結構條件**（窗口淺色比例 ≥ `lightFraction` 0.4）被淺金高光**推爆** → 反而削走筆劃（同一格墨量 137/176/188 → **119/89/137**）→「9」同「3」打和（0.54 vs 0.60）→ 靜默讀錯。⚠️ **試過但否決**：加「淺金窗口」（8 讀成 5）、單純放寬 `lumMax`（`727/108/…`）、全局放寬 `lightFraction`（dump 重播 FAIL 由 10 幀升到 20 幀）。**正解**：逐格量墨點**色相 p90**（正常幀 27–28°、金幀 37–44° → 門檻 **33**）→ **只喺確認係金色嘅格**用放寬嘅 `lightFraction` 0.3 重做遮罩（`goldLightFraction`）→ 實測 9 張真值圖由 8/9 變 **9/9**、3 個原本讀成 1483 嘅實機幀**讀返 1489**（信心 0.72）。`highlighted: true` 仍然照標（HUD 可以顯示「呢格屬性已過 1200」）。永久回歸：`shots/live/roi-regress-gold.png` ＋ `data/live-truth.json` 嘅 `expectHighlighted`（判準＝「要讀到真值 **而且** 要標 highlighted」）＋ 合成測試「逐格獨立混色」。⚠️ **唔好**把金色字形混入模板訓練（空心輪廓 vs 棕色實心，會拉歪平均值）|
+| 27 | ⭐⭐ **以為「揀擷取來源」係小事，同埋「自己個窗標題唔會撞到遊戲關鍵字」** | ⛔ **最貴嘅一個 bug（用戶 2026-09-19 實機報「擷取咗設定視窗而唔係賽馬娘個 app」）**。舊寫法係 `sources.find((s) => GAME_TITLE_HINTS.some((h) => s.name.includes(h)))`，而**本程式自己嘅設定窗標題**係「賽馬娘即時評價分 — HUD 設定」→ **含「賽馬娘」**。`getSources()` 係 **z-order／前景優先** → 用戶一撳設定窗（它一定喺前景，因為啱啱先撳過）就揀咗佢。⚠️ **完全唔會報錯**（個窗真係存在），但症狀離奇：① 三個窗都有 `setContentProtection(true)`（＝`WDA_EXCLUDEFROMCAPTURE`）→ 擷取到嘅係**全黑** → 五維永遠讀唔到（只 log「唔見面板條」，屬正常）；② `capture.html` 報返嘅 `fullWidth/fullHeight` 變咗**設定窗大細**（實測 560×780）→ `placeHud()` 攞住錯嘅「遊戲內容區」（560×315）→ HUD 縮到 188×146、**可拖範圍** x∈[0, 932]（＝1920 螢幕嘅左半邊）→ 用戶見到嘅係「HUD 淨係可以喺左半邊拖嚟拖去，右半邊唔得」＋ 存檔 `offset.dx` 飽和成 **1**。**指紋**：`offset.dy = -0.8235294117647058`（＝要個窗擺喺內容區上方 0.8235×高，用真內容區（1080）根本做唔到，最多 −size.h；用 315 就啱啱好）。**正解**：①「**排除自己嘅窗**」係**必要條件**（HWND 硬排除 ＋ 標題第二重，見 `src/capture/source.js`，有 10 個測試）；② 標題三級相符（完全相符 3／開頭 2／包含 1）令瀏覽器攻略頁（只「包含」）唔會贏遊戲本體；③ 自己嘅窗標題**唔准**含遊戲關鍵字（`settings.html` 嘅 `<title>` 會蓋過 BrowserWindow 嘅 `title` → 兩邊都要改）；④ `warnIfSourceTooSmall()`：「擷取到嘅畫面比工作區細好多」即刻大聲警告（呢句就係可見防線）。驗法：開住設定窗跑 `npm start`，睇 `[來源] 見到嘅視窗` 清單同 `[HUD] 對位：遊戲 W×H` 係唔係遊戲大細 |
+| 28 | ⭐⭐ **以為「拖位只改 `offset`」同「slider `max=1`」冇問題** | ⛔ 用戶實機報「拉到某個位就唔再跟」、「拉咗之後自己彈返」、「HUD 淨係可以喺左半邊拖」。根因兩個，都係**上下限唔對應模型**：① `layoutFromBounds()` 舊設計只改 `offset`，而 `offset` 有 **±1** 上限（`config.js` 契約）→ 拖到某個位就**飽和**（實測用戶存檔 `offset.dx` 寫死成 **1**）；② 設定窗 `x0`／`y0` 嘅 slider `max` 寫死成 **1**，但模型係 `x0 + w ≤ 1`（用戶 w = 0.335 → 真正上限 0.665）→ 拉到 0.8 會被夾返，而 reply 又**無條件 `writeForm()`**（連用戶正拖緊嗰個 slider 都改）→ thumb 彈返原位。**正解**：① 拖位**位置直接寫 `x[0]`／`y[0]`**（冇 ±1 上限）＋ `clampLayout()` **夾入內容區**（`x0 ∈ [0, 1−size.w]`）→ HUD **永遠唔會走失**、`offset` 歸零（佢係 env 微調旋鈕，唔應該同拖位疊加）；② 設定窗上下限由純函數 `fieldBounds()` 計（x0 最多 = 1 − w、w 最多 = 1 − x0…）＋**貼 slider 格仔**（`stepFloor6/stepCeil6`，同 `LAYOUT_EPSILON` 相容 → 唔會假警報）；③ 用戶**互動中唔准**改佢手上嗰個控制（pointerdown／input／focus ＋ 400ms watchdog，放手 250ms 後對帳）。⚠️ **唔准**把「拖位只改 offset」改返（會即刻令 ① 復發）；⚠️ **唔准**把 slider `max` 寫死成 1。回歸：`test/hud-drag.test.js`（⭐「拖出界一定要夾返入內容區」、⭐「舊檔嘅飽和 offset 唔會再令拖位卡死」）＋ `test/hud-settings-html.test.js`（⭐「x0 上限唔可以再寫死成 1」、⭐「冇死區」，**真係由 HTML 抽** `fieldBounds()` 出嚟執行）|
+
 
 ---
 
@@ -587,8 +606,19 @@ UMAPYOI_NO_HUD=1 npm.cmd start       # ⭐ 兩個窗都唔開（淨係要 consol
   真正 throw 只有「推導出嚟嘅範圍唔合法」（右邊界 > 1／`size <= 0`／`x[0] < 0`／offset 超出 ±1）。
   `clampLayout()` 係**唯一**做夾嘅地方（用戶拉爆 slider／拖出界一律夾返合法，唔會出現「拉咗但冇反應」）。
 - ⚠️ `offset`（`dx`／`dy`）只夾到 **±1**（同 `config.js` 契約一致），
-  **唔會**夾到「一定喺螢幕內」→ 極端 offset 會令 HUD 走出畫面，所以設定窗有顯示
-  「實際左上角」＋ 走出範圍就出警告。
+  **唔會**夾到「一定喺螢幕內」→ 極端 offset 會令 HUD 走出畫面。所以（2026-09-19 實機之後）：
+  - 設定窗顯示**實際螢幕像素範圍**（主程序經 `hud-config` 報 `bounds`／`content`）——
+    HUD 有 `setContentProtection`（截圖影唔到）→ 呢幾個數就係「HUD 到底擺咗喺邊」嘅唯一可見證據
+    ＋ 講明**邊幾邊**走出內容區（唔再係一句籠統警告）
+  - `main.js` `warnIfHudOffContent()`：走出內容區就照實 log（連「完全睇唔到／只有一部分睇得到」），
+    並指去「還原預設」。⚠️ **只出警告，唔會自動改用戶設定檔**（見上面「唔好見到位置古怪就當 bug 修」）
+  - ⚠️ `x0`／`y0` 嘅 slider 上限係**動態**（純函數 `fieldBounds()`：x0 最多 ＝ 1 − w、
+    w 最多 ＝ 1 − x0…）＋貼 slider 格仔 → 唔會再有「拉得到但一定被夾返」嘅死區（地雷 #28）
+  - ⚠️ 用戶**互動中**（拖 slider／打字）唔准改佢手上嗰個控制，放手 250ms 後同主程序對帳
+    （舊 bug：reply 無條件 `writeForm()` → thumb 彈返原位、數值跳）
+  - ⚠️ 真係要夾嘅時候，橫額一定要**逐個欄位**講（`describeClamp()`：
+    `x0：0.9 → 0.665（x0 + w 唔可以大過 1）`）—— 唔准再出一句籠統「有數值超出合法範圍」
+    （用戶實機原話：「佢去到某個數值就話會令 hud 跑出遊戲內容區，但係其實根本就冇」）
 
 #### 對位模式拖位（`UMAPYOI_HUD_EDIT=1`）
 
@@ -629,10 +659,18 @@ UMAPYOI_NO_HUD=1 npm.cmd start       # ⭐ 兩個窗都唔開（淨係要 consol
   而且透明窗 + `focusable:false` 之下行為未文檔化。
 - ⚠️ **`placeHud()` 會蓋走拖完嘅位**（首幀、`display-metrics-changed`、設定窗改動都會再叫佢）
   → 放手之後**一定**要寫入 `hudConfig.layout` 再經 `placeHud()`，唔可以只 `setBounds()`。
-- **反推**用 `layoutFromBounds(hudContent, bounds, layout)`：只改 `offset`，**唔改 `size`**。
-  原因：`anchorHud()` 有大細下限（`max(80,…)`／`max(40,…)`），被夾過嘅
-  `bounds.width ÷ content.width` **唔等於** `size.w` → 攞佢寫 `size` 就係「拖一拖，大細自己變咗」；
-  而且整數 round 會令 `size` 慢慢漂。
+- **反推**用 `layoutFromBounds(hudContent, bounds, layout)`：位置寫入 `x[0]`／`y[0]`
+  （**2026-09-19 改**，舊版係「只改 `offset`」）＋ **夾入內容區** ＋ `offset` **歸零**，
+  **唔改 `size`**。
+  - 為何唔再用 offset：`offset` 有 **±1** 上限（`config.js` 契約）→ 拖到某個位就**飽和**
+    （實測用戶存檔 `offset.dx` 寫死成 **1**），用戶見到嘅係「淨係可以喺左半邊拖嚟拖去」。
+    位置本來就係 `x[0]`／`y[0]` 嘅意思，而佢哋冇 ±1 上限；`offset` 留返做「env／微調旋鈕」
+    （拖位結果唔應該同佢疊加）。⚠️ **唔准改返做 offset 版本**（見地雷 #28）。
+  - 為何**唔准改 `size`**：`anchorHud()` 有大細下限（`max(80,…)`／`max(40,…)`），被夾過嘅
+    `bounds.width ÷ content.width` **唔等於** `size.w` → 攞佢寫 `size` 就係「拖一拖，大細自己變咗」；
+    而且整數 round 會令 `size` 慢慢漂。
+  - 夾入內容區（`clampLayout()`：`x0 ∈ [0, 1−size.w]`）係為咗「**HUD 永遠唔會走失**」——
+    拖出界只會貼住邊，而且 `finishDrag()` 會 log 警告（唔准靜默改用戶拖到嘅位）。
   ⚠️ `hudContent` **一定**要係 `placeHud()` 計出嚟嗰個物件（單一來源）——
   唔准喺反推路徑再叫 `getPrimaryDisplay()` 或者用擷取幀嘅 `fullWidth/fullHeight` 另計一次。
 - 拖完會**自動存檔**（`hud-position.json`，原子寫：`.tmp` ＋ `rename`）。
@@ -777,7 +815,7 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **181 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **195 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
@@ -848,6 +886,12 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
    ② `envFlag()` 搬去 `src/hud/env-flag.js` ＋ 21 個值嘅測試（`test/hud-env-flag.test.js`）；
    ③ `applyHudConfig()` 嘅 display 防呆抽成純函數 `assertFullDisplay()`（有測試）。
    ⚠️ 剩返**真係零覆蓋**嘅：IPC handler 本體、拖曳狀態機、`placeHud()`／`pushHud()`。
+   ✅ **2026-09-19 第二輪收窄（實機 bug 之後）**：④ 擷取來源挑選抽去
+   `src/capture/source.js` ＋ `test/capture-source.test.js`（10 條，含「唔准揀到自己個窗」回歸）
+   —— 但 `main.js` 嘅 `ownWindowIds()`（handle／標題收集）同 `warnIfSourceTooSmall()` 本身仍然零覆蓋；
+   ⑤ 設定窗 slider 上下限抽成純函數 `fieldBounds()`（`test/hud-settings-html.test.js` 3 條，
+   **真係由 HTML 抽出嚟執行**）—— 但「互動中唔搶控制」嗰段（`interacting`／watchdog／
+   `describeClamp()`／`renderEffective()`，全部要 DOM）**仍然零覆蓋**，只可以手動驗。
 6. **原子寫冇 `fsync`**（`saveHudConfigFile()` = 寫 `.tmp` ＋ `renameSync`）：停電／硬斷電
    可能留低半截 JSON。可接受嘅理由：`loadConfig()` 會**大聲 throw**，而且**唔會覆寫**壞檔
    （改用預設 ＋ 設定窗出紅色橫額）—— 但唔係「零風險」。
@@ -879,10 +923,10 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 
 | # | 項目 | 內容 | 大細 |
 |---|---|---|---|
-| A1 | ~~**HUD 用家拖位**~~ ✅ **已做** | 對位模式下開滑鼠事件，拖完寫落 `hud-position.json`；正常模式照穿透（見 §6.4「對位模式拖位」）。⚠️ 未實機驗過 | 中 |
-| A2 | ~~**HUD 設定面板**~~ ✅ **已做** | 獨立設定窗（`electron/settings.html`）：8 個數值 slider ＋ 7 個顯示選項，改動即時生效（見 §6.4「獨立設定窗」）。⚠️ 未實機驗過外觀 | 中 |
+| A1 | ~~**HUD 用家拖位**~~ ✅ **已做** | 對位模式下開滑鼠事件，拖完寫落 `hud-position.json`；正常模式照穿透（見 §6.4「對位模式拖位」）。✅ **2026-09-19 已實機驗** → 搵到兩個 bug（拖位 offset 飽和 ＋ 揀錯擷取來源令可拖範圍縮到半個螢幕），已修（見地雷 #27/#28；`7c80758`／`439ada7`）。⚠️ 未驗：長期拖位手感、多螢幕 | 中 |
+| A2 | ~~**HUD 設定面板**~~ ✅ **已做** | 獨立設定窗（`electron/settings.html`）：8 個數值 slider ＋ 7 個顯示選項，改動即時生效（見 §6.4「獨立設定窗」）。✅ **2026-09-19 已實機驗外觀同拖動** → 搵到死區／thumb 彈返／警告同現實唔對應，已修（見地雷 #28；`1781182`）。⚠️ 未驗：打字入數值嘅手感 | 中 |
 | A3 | ~~**HUD 顯示選項**~~ ✅ **已做** | 7 個 `display` 開關（含金色格提示）。⚠️ 金色格嘅**真實粒度係一個整體 boolean**（`highlighted` 唔係逐格）→ HUD 只可以標「有金色格」 | 細 |
-| A4 | ~~**`hud-position.json` 設定檔**~~ ✅ **已做** | 位置／大細／顯示選項寫入檔案（env > 檔案 > 預設；原子寫）。⚠️ 未實機驗過「重開之後讀返」 | 細 |
+| A4 | ~~**`hud-position.json` 設定檔**~~ ✅ **已做** | 位置／大細／顯示選項寫入檔案（env > 檔案 > 預設；原子寫）。✅ **2026-09-19 已實機驗**（用戶個檔真係有寫入）—— ⚠️ 但驗到「存落去嘅 offset 可以令 HUD 完全走出畫面」（`dx=1`／`dy=−0.82`），所以加咗 `warnIfHudOffContent()` ＋ 拖位夾入內容區（見地雷 #28；`1781182`）。⚠️ 未驗：重開之後讀返嘅一致度（要開遊戲） | 細 |
 | A5 | **`npm start` 前置檢查** | 開唔到遊戲視窗／模板缺失／Smart App Control 擋咗 → 出清楚指引（見 §7 已知坑） | 細 |
 | A6 | **日誌整理** | 分 `--verbose`／靜音；log 寫檔（方便用戶回報問題） | 細 |
 | A7 | **測試覆蓋** | `evaluate.js` 邊界（1200／2000 上限、負分進化技能）、更多合成圖 | 中 |
