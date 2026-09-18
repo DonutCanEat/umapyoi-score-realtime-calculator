@@ -26,7 +26,7 @@ import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skil
 import { encodePng } from '../src/vision/pngwrite.js';
 import { STAT_LABELS, STAT_KEYS } from '../src/umascore/evaluate.js';
 import { anchorHud, contentRect, hudState, clampLayout, layoutFromBounds, HUD_ENV_KEYS } from '../src/hud/layout.js';
-import { loadConfig, saveConfig, resolveHudConfig, validateConfig } from '../src/hud/config.js';
+import { loadConfig, saveConfig, resolveHudConfig, validateConfig, assertFullDisplay } from '../src/hud/config.js';
 import { configPathFor } from '../src/hud/config-path.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -255,6 +255,20 @@ function createHudWindow() {
 }
 
 /**
+ * HUD 設定層嘅**警告**（唔係錯誤）統一去處：`console.warn('[設定] ⚠️ …')`。
+ *
+ * 為何要一條鏈路（`validateConfig` → `resolveHudConfig` → 呢度）：
+ * 「同一個軸上面範圍同大細兩樣都寫死而唔一致」係**冗餘欄位矛盾**（`x[1]` 唔影響渲染，
+ * 見 `src/hud/config.js` 嘅規則表）→ 唔可以 throw（會令程式開唔到），但**更加唔可以靜默**
+ * （用戶以為自己調好咗個範圍）。所以一定要真係出得嚟。
+ *
+ * @param {string} message
+ */
+function warnHudConfig(message) {
+  console.warn(`[設定] ⚠️ ${message}`);
+}
+
+/**
  * 讀 HUD 設定：**環境變數 > `hud-position.json` > 預設**（全部經 `resolveHudConfig()`）。
  *
  * 三件事一定要 log 出嚟（唔准靜默）：
@@ -291,7 +305,9 @@ function loadHudConfig() {
     console.error('[設定] 　→ 呢次用預設值，而且**唔會**覆寫你個檔（修好或者刪咗佢再開就會正常）。');
   }
 
-  hudConfig = resolveHudConfig(process.env, fileConfig);
+  // ⚠️ `onWarn` 一定要傳（唔係就靠 `config.js` 嘅 `console.warn` 預設，冇咗 `[設定] ⚠️` 前綴
+  //    同埋同其他設定訊息撈唔埋一齊）：範圍／大細兩邊都寫死而唔一致 → 大聲警告（唔 throw）。
+  hudConfig = resolveHudConfig(process.env, fileConfig, { onWarn: warnHudConfig });
   const l = hudConfig.layout;
   const on = Object.entries(hudConfig.display).filter(([, v]) => v).map(([k]) => k);
   console.log(
@@ -326,7 +342,9 @@ function saveHudConfigFile(config) {
 /** 設定窗送出嘅值 → 合法設定（先 `clampLayout()` 夾，再 `validateConfig()` 驗）。 */
 function configFromUi(raw) {
   const layout = clampLayout(raw?.layout ?? {});
-  return validateConfig({ layout, display: raw?.display });
+  // ⚠️ 一樣要傳 `onWarn`：設定窗拉 slider 唔會砌出矛盾（`clampLayout()` 維持不變式），
+  //    但「用戶送嚟嘅值經過夾之後仍然對唔上」係值得大聲講嘅（唔准靜默改佢個數）。
+  return validateConfig({ layout, display: raw?.display }, { onWarn: warnHudConfig });
 }
 
 /** 兩個 layout 嘅 8 個數係唔係一樣（用嚟話畀用戶知「你嘅值被我夾過」）。 */
@@ -387,6 +405,8 @@ function applyHudConfig(config, { why = '' } = {}) {
   //    → `layout.js` `hudState()` 攞唔到顯示選項就會**當全部開** →
   //    用戶今次 session 閂咗嘅顯示選項被靜默重設成開（現行呼叫者全部補齊所以未爆，但係瑕疵）。
   //    唔完整就 throw，而且訊息要講得出**缺咩**（唔准靜默補預設）。
+  //    ⚠️ **唔止「係唔係物件」**：`display: {}`（空物件）一樣會過關 → `hudState()` 一樣當全部開
+  //    → 同一個靜默重設。所以一定要 `assertFullDisplay()`（7 個 key 一個都唔可以少）。
   const missing = [];
   if (!config || typeof config !== 'object') {
     missing.push('layout', 'display');
@@ -407,6 +427,8 @@ function applyHudConfig(config, { why = '' } = {}) {
       `缺咗／唔啱型別：${missing.join('、')}（實得 ${JSON.stringify(config)}）`,
     );
   }
+  // ⭐ 7 個 display key 齊全（`assertFullDisplay()` 會逐個點名缺咗邊個）。
+  assertFullDisplay(config.display);
   hudConfig = config;
   placeHud(hudGameSize);
   pushHud();

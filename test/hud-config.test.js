@@ -18,6 +18,7 @@ import {
   DEFAULT_HUD_DISPLAY,
   HUD_CONFIG_FILENAME,
   HUD_DISPLAY_KEYS,
+  assertFullDisplay,
   defaultConfigPath,
   defaultHudConfig,
   loadConfig,
@@ -578,3 +579,58 @@ test('hud-config saveConfig：validate 唔過就 throw，而且**唔會**寫壞�
   assert.throws(() => saveConfig({ display: { nope: 1 } }, { filePath: path }), /唔認識「nope」/);
   assert.equal(readFileSync(path, 'utf8'), good, '舊檔要原封不動');
 });
+
+// ─────────────── assertFullDisplay（`applyHudConfig()` 嘅防呆閘）───────────────
+//
+// 為何要呢條閘（獨立審計發現嘅「靜默重設」）：`layout.js` `hudState()` 嘅語意係
+// 「**冇明明寫 `false` 就當開**」（刻意嘅：舊呼叫唔傳 `display` 一定要照舊顯示）。
+// 但 `applyHudConfig()` 係「用戶／程式交一份完整設定」嘅路，`display: {}`（空物件）
+// 一樣會過「係唔係物件」呢個寬鬆檢查 → `hudState()` 當全部開 →
+// **用戶今次 session 閂咗嘅選項被靜默重設成開**。所以要逐個 key 驗齊。
+//
+// ⚠️ 呢個函數住喺 `src/hud/config.js`（唔喺 `electron/main.js`）**就係為咗測得到**：
+//    `main.js` import `electron` 入唔到 `node --test`。`main.js` 嘅 `applyHudConfig()`
+//    只係喺原本嘅 `missing` 檢查之後多叫一句 `assertFullDisplay(config.display)`。
+
+test('assertFullDisplay：7 個 key 齊全就過（預設形狀／全開／全閂／混合都要過）', () => {
+  const cases = [
+    ['出廠預設', { ...DEFAULT_HUD_DISPLAY }],
+    ['全閂', Object.fromEntries(HUD_DISPLAY_KEYS.map((k) => [k, false]))],
+    ['混合 ＋ 多餘 key 都唔理（只驗 7 個）', { ...DEFAULT_HUD_DISPLAY, total: false, edit: false }],
+  ];
+  for (const [name, display] of cases) {
+    assert.equal(assertFullDisplay(display), display, `${name}：要回同一個 object（唔改嘢）`);
+  }
+  // 真嘅 `validateConfig()` 產出一定過閘（兩者契約要一致）
+  assert.ok(assertFullDisplay(validateConfig({ display: { total: false } }).display));
+  assert.ok(assertFullDisplay(defaultHudConfig().display));
+});
+
+test('assertFullDisplay：空物件／缺任何一個 key → throw，而且訊息要**點名**缺邊個', () => {
+  // ⭐ 呢個就係審計實測嗰個個案：`display: {}` 以前會過閘 → 全部被當開（靜默重設）
+  assert.throws(() => assertFullDisplay({}), /缺 total、stats、statScore、skillScore、goldMark、note、edit/);
+
+  // 逐個 key 抽走 → 一定要 throw，而且訊息要提嗰個 key
+  for (const key of HUD_DISPLAY_KEYS) {
+    const partial = { ...DEFAULT_HUD_DISPLAY };
+    delete partial[key];
+    const err = (() => {
+      try {
+        assertFullDisplay(partial);
+        return null;
+      } catch (e) { return e; }
+    })();
+    assert.ok(err, `缺「${key}」一定要 throw`);
+    assert.ok(err.message.includes(key), `訊息要提「${key}」：${err.message}`);
+    assert.ok(err.message.includes('靜默重設'), `訊息要講明後果：${err.message}`);
+  }
+  // 只寫一個 key（最常見嘅「手砌一半」）一樣要擋
+  assert.throws(() => assertFullDisplay({ total: false }), /缺 stats、statScore、skillScore、goldMark、note、edit/);
+});
+
+test('assertFullDisplay：唔係物件（undefined／null／陣列／字串）一律 throw（唔准靜默當全開）', () => {
+  for (const bad of [undefined, null, [], 'total', 1, true]) {
+    assert.throws(() => assertFullDisplay(bad), /display 要係物件/, `實得 ${JSON.stringify(bad)} 要 throw`);
+  }
+});
+
