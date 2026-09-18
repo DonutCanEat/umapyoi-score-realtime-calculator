@@ -108,6 +108,14 @@
         const vw = video.videoWidth;
         const vh = video.videoHeight;
 
+        // ⚠️ 安全閥：ROI 覆蓋成個畫面（連拍模式）就係 1:1 全畫面（一幀 4–6MB），
+        //    5fps 會無謂咁燒頻寬同 CPU → 夾到 2fps 或以下（正常模式剪面板條唔受影響）。
+        const fullFrame = roi && roi.x0 <= 0 && roi.x1 >= 1 && roi.y0 <= 0 && roi.y1 >= 1;
+        if (fullFrame && targetFps > 2) {
+          targetFps = 2;
+          frameMs = 500;
+        }
+
         // 內容框：如果擷取到嘅高度大過 16:9（例如連埋標題列），多出嘅部分喺頂
         const contentH = Math.min(vh, Math.round(vw * CONTENT_ASPECT));
         const contentTop = Math.max(0, vh - contentH);
