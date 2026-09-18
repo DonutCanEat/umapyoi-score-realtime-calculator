@@ -31,6 +31,10 @@
       .row .value { font-variant-numeric: tabular-nums; }
       #summary { font-size: 11px; font-weight: 400; color: #b9f6c0; white-space: nowrap; }
       #note { font-size: 11px; font-weight: 400; color: #9ef0a8; white-space: nowrap; }
+      /* 金色格提示（屬性 > 1200）。⚠️ 主程序只知「有一格」，唔知係邊一格 → 唔可以標某一格。 */
+      #gold { font-size: 11px; font-weight: 400; color: #ffd479; white-space: nowrap; }
+      /* 顯示選項閂咗 = 主程序唔推嗰一項 → 呢度收到空字串就唔畫（連個框都唔要）。 */
+      #total:empty, #stats:empty, #summary:empty, #note:empty, #edit:empty, #gold:empty { display: none; }
       /* 對位模式：顯示範圍／偏移（`UMAPYOI_HUD_EDIT=1`） */
       #edit { font-size: 10px; font-weight: 400; color: #ffd479; white-space: nowrap; }
       /* 狀態色：綠 = 即時、黃 = 用緊上一個穩定值、灰 = 未有數、藍 = 對位模式 */
@@ -48,6 +52,7 @@
       <div id="total">評價点 —</div>
       <div id="stats"></div>
       <div id="summary"></div>
+      <div id="gold"></div>
       <div id="note">等待面板條（開育成主畫面）</div>
       <div id="edit"></div>
     </div>
@@ -58,6 +63,7 @@
       const summaryEl = document.getElementById('summary');
       const noteEl = document.getElementById('note');
       const editEl = document.getElementById('edit');
+      const goldEl = document.getElementById('gold');
 
       /** 五維逐格（主程序已經按「速度／持久／力量／毅力／智力」排好）。 */
       let statKeys = '';
@@ -68,7 +74,8 @@
         document.body.dataset.state = view.state;
 
         const total = view.lines.find((l) => l.key === 'total');
-        totalEl.textContent = total ? `評價点 ${total.value}` : '評價点 —';
+        // 空字串 = 主程序話「呢一項唔顯示」（顯示選項閂咗）→ `:empty` CSS 會收埋個框。
+        totalEl.textContent = total ? `評價点 ${total.value}` : '';
 
         const stats = view.lines.filter((l) => l.key.startsWith('stat'));
         const nextKeys = stats.map((l) => `${l.key}:${l.label}:${l.value}`).join('|');
@@ -90,8 +97,11 @@
         }
 
         summaryEl.textContent = view.summary.map((s) => `${s.label} ${s.value}`).join('　');
-        noteEl.textContent = view.note;
+        noteEl.textContent = view.note ?? '';
         editEl.textContent = view.edit ?? '';
+        // 金色格：⚠️ 主程序嘅 `highlighted` 係「整條數值列」一個 boolean
+        //（唔係逐格）→ 只可以老實講「有」，唔可以標某一格（見 layout.js hudState 註解）。
+        goldEl.textContent = view.gold ? '⭐ 金色格（≥1200）' : '';
       });
     </script>
   </body>

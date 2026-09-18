@@ -71,6 +71,14 @@ let hudLayout = null;
 const HUD_EDIT = Boolean(process.env.UMAPYOI_HUD_EDIT);
 /** 最近一次顯示嘅五維數值（HUD 要逐格顯示）。 */
 let lastStats = null;
+/**
+ * 最近一次讀到嘅「金色格」旗標（屬性 > 1200，遊戲長期用金色畫）。
+ *
+ * ⚠️ **粒度**：`statbar.readStatBar()` 嘅 `highlighted` 係**一個整體 boolean**
+ * （「呢一幀嘅數值列整體色相 p90 ≥ 33°」，見 AGENTS 地雷 #26）——
+ * **唔係**逐格 5 個 → HUD 只可以標「有金色格」，唔可以標係邊一格。
+ */
+let lastGold = false;
 
 function createHudWindow() {
   const win = new BrowserWindow({
@@ -146,8 +154,13 @@ function pushHud(now = Date.now()) {
     now,
     edit: HUD_EDIT,
     layout: hudLayout,
+    gold: lastGold,
   });
-  const key = JSON.stringify([view.state, view.lines, view.summary, view.note, view.edit]);
+  // ⚠️ dedupe key 一定要包含**所有**會顯示嘅欄位：漏一個 = 嗰個欄位永遠唔會更新
+  //    （加咗新顯示項目但唔加落 key，就係「HUD 唔郁」嘅經典死法）。
+  const key = JSON.stringify([
+    view.state, view.lines, view.summary, view.note, view.edit, view.gold,
+  ]);
   if (key === lastHudKey) return; // 冇變就唔好每幀 send
   lastHudKey = key;
   hudWindow.webContents.send('hud', view);
@@ -492,6 +505,8 @@ ipcMain.on('frame', (_event, frame) => {
   lastScore = score;
   lastStats = stats;
   lastScoreAt = Date.now();
+  // 金色格旗標跟「已採用嘅穩定值」一齊更新（讀唔到嗰陣保留上一個，同五維一樣唔閃走）。
+  lastGold = Boolean(read.highlighted);
 
   if (!changed) return;
 

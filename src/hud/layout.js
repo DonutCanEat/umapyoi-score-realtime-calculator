@@ -153,6 +153,45 @@ export function layoutFromEnv(env = {}) {
 }
 
 /**
+ * 顯示選項 key（對應 `src/hud/config.js` 嘅 `HUD_DISPLAY_KEYS`）。
+ *
+ * ⚠️ 呢度**唔 import** `config.js`：反過來 `config.js` 已經 import 咗呢個檔
+ * （循環 import 會令模組初始化次序變得脆弱），而且呢度只需要「知有邊 7 個 key」
+ * —— 而真正嘅判斷係「明明寫住 `false` 就唔出」，其餘（`undefined`／冇傳）一律當開，
+ * 咁就保證**舊呼叫（唔傳 `display`）行為 100% 唔變**。
+ *
+ * | key          | 對應輸出 |
+ * |---|---|
+ * | `total`      | `lines[].key === 'total'` |
+ * | `stats`      | `lines[].key === 'stat0'…'stat4'` |
+ * | `statScore`  | `summary[].key === 'stat'` |
+ * | `skillScore` | `summary[].key === 'skill'` |
+ * | `goldMark`   | `gold`（金色格提示，屬性 > 1200）|
+ * | `note`       | `note` |
+ * | `edit`       | `edit` |
+ */
+export const HUD_DISPLAY_KEY_NAMES = Object.freeze([
+  'total',
+  'stats',
+  'statScore',
+  'skillScore',
+  'goldMark',
+  'note',
+  'edit',
+]);
+
+/**
+ * 某個顯示選項係唔係開。
+ *
+ * 語意刻意係「**冇明明寫 false 就當開**」而唔係「一定要 `=== true`」：
+ * 舊呼叫唔傳 `display`、或者傳一個得一部分 key 嘅 object，行為要同以前一樣。
+ */
+function shown(display, key) {
+  if (!display || typeof display !== 'object') return true;
+  return display[key] !== false;
+}
+
+/**
  * HUD 而家應該顯示咩（純函數）。
  *
  * 四種狀態：
@@ -167,6 +206,25 @@ export function layoutFromEnv(env = {}) {
  * ⚠️ **技能分未讀到嘅時候唔可以報一個實數**（唔可以「假設 0」，亦唔可以估）。
  * 只可以出「`？／總分 ≥ 五維分`」—— `skills` 係 null 就係呢個情況。
  *
+ * ## 顯示選項（`display`，見 `HUD_DISPLAY_KEY_NAMES`）
+ *
+ * `display` **完全係選填**：唔傳（或者傳 `null`）＝全部顯示，
+ * 同加設定之前嘅行為一模一樣 —— 加「顯示選項」唔可以令人一開就少咗嘢。
+ * 隱藏咗嘅項目係**直接唔出**（唔會出空字串、亦唔會出佔位符），
+ * renderer 見到項目唔存在就唔畫（唔會畫一個空嘅框）。
+ *
+ * ⚠️ `state` 唔受 `display` 影響：`edit` 蓋過 `stale`／`none` 嘅規則照舊
+ * （對位模式要睇得出「而家可以拖」，就算用戶閂咗 `edit` 行都仲有虛線框）。
+ *
+ * ## 金色格（`gold`）
+ *
+ * ⚠️ **真實粒度係「一個整體 boolean」**：`statbar.readStatBar()` 回嘅
+ * `highlighted` 係「**呢一幀嘅數值列整體**色相 p90 ≥ 33°」（見 AGENTS 地雷 #26），
+ * **唔係**逐格 5 個 boolean（`collectStatBarGlyphs()` 內部雖然會逐格量 `cellHue`，
+ * 但只係用嚟揀遮罩，冇回傳出嚟）。
+ * → 所以 HUD 只可以老實講「**有**一格過 1200」，**唔可以**假裝知道係邊一格。
+ * 要升級成逐格就要 `statbar.js` 額外回傳每格嘅色相判斷（未做）。
+ *
  * @param {{
  *   score?: {total:number, rank:string, statScore:number, skillScore?:number|null}|null,
  *   stats?: number[]|null,
@@ -174,10 +232,13 @@ export function layoutFromEnv(env = {}) {
  *   now?: number,
  *   edit?: boolean,
  *   layout?: {x:number[],y:number[],offset:{dx:number,dy:number},size:{w:number,h:number}},
+ *   display?: Record<string,boolean>|null,
+ *   gold?: boolean,
  * }} input
  * @returns {{state:string, total:number|null, rank:string|null, ageMs:number|null,
  *            lines:Array<{key:string,label:string,value:string}>, note:string,
- *            summary:Array<{key:string,label:string,value:string}>, edit:string|null}}
+ *            summary:Array<{key:string,label:string,value:string}>, edit:string|null,
+ *            gold:boolean}}
  */
 export function hudState({
   score = null,
@@ -186,12 +247,15 @@ export function hudState({
   now = 0,
   edit = false,
   layout = null,
+  display = null,
+  gold = false,
 } = {}) {
-  const editLine = edit && layout
+  const editLine = edit && layout && shown(display, 'edit')
     ? `x ${layout.x[0].toFixed(3)}–${layout.x[1].toFixed(3)}　y ${layout.y[0].toFixed(3)}–${layout.y[1].toFixed(3)}` +
       `　偏移 ${layout.offset.dx >= 0 ? '+' : ''}${layout.offset.dx.toFixed(3)}/${layout.offset.dy >= 0 ? '+' : ''}${layout.offset.dy.toFixed(3)}` +
       `　大細 ${layout.size.w.toFixed(3)}×${layout.size.h.toFixed(3)}`
     : null;
+  const goldMark = shown(display, 'goldMark') && Boolean(gold);
 
   if (!score) {
     return {
@@ -199,28 +263,34 @@ export function hudState({
       total: null,
       rank: null,
       ageMs: null,
-      lines: [{ key: 'total', label: '評價点', value: '—' }],
-      note: '等待面板條（開育成主畫面）',
+      lines: shown(display, 'total') ? [{ key: 'total', label: '評價点', value: '—' }] : [],
+      note: shown(display, 'note') ? '等待面板條（開育成主畫面）' : '',
       summary: [],
       edit: editLine,
+      gold: goldMark,
     };
   }
 
   const ageMs = Math.max(0, now - updatedAt);
   const stale = ageMs > STALE_MS;
-  const lines = [{ key: 'total', label: '評價点', value: String(score.total) }];
+  const lines = shown(display, 'total')
+    ? [{ key: 'total', label: '評價点', value: String(score.total) }]
+    : [];
 
   // 技能分未讀到 → 老實出「？／總分 ≥ 五維分」（唔可以假設 0）
   const skills = typeof score.skillScore === 'number' ? score.skillScore : null;
-  const summary = [
-    { key: 'stat', label: '五維分', value: String(score.statScore ?? '—') },
-    skills === null
+  const summary = [];
+  if (shown(display, 'statScore')) {
+    summary.push({ key: 'stat', label: '五維分', value: String(score.statScore ?? '—') });
+  }
+  if (shown(display, 'skillScore')) {
+    summary.push(skills === null
       ? { key: 'skill', label: '技能分', value: `？／總分 ≥ ${score.total}` }
-      : { key: 'skill', label: '技能分', value: String(skills) },
-  ];
+      : { key: 'skill', label: '技能分', value: String(skills) });
+  }
 
   // 逐格五維（有 stats 就出，唔夠 5 個就唔出，免得顯示半截資料）
-  if (Array.isArray(stats) && stats.length === STAT_LABELS_ZH.length) {
+  if (shown(display, 'stats') && Array.isArray(stats) && stats.length === STAT_LABELS_ZH.length) {
     for (const [i, label] of STAT_LABELS_ZH.entries()) {
       lines.push({ key: `stat${i}`, label, value: String(stats[i]) });
     }
@@ -232,10 +302,13 @@ export function hudState({
     rank: score.rank,
     ageMs,
     lines,
-    note: stale
-      ? `唔見面板條 ${(ageMs / 1000).toFixed(0)} 秒 → 顯示上一個穩定值`
-      : `ランク ${score.rank}`,
+    note: shown(display, 'note')
+      ? (stale
+        ? `唔見面板條 ${(ageMs / 1000).toFixed(0)} 秒 → 顯示上一個穩定值`
+        : `ランク ${score.rank}`)
+      : '',
     summary,
     edit: editLine,
+    gold: goldMark,
   };
 }
