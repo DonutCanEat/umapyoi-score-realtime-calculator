@@ -62,7 +62,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 | Phase 0 | 評價分運算核心 | ✅ **誤差 = 0**（4 條實機樣本全部吻合）|
 | Phase 0 | 技能資料庫（1323 招）＋ 進化技能 override | ✅ |
 | Phase 1 | 畫面擷取（`npm start` 跑得通）| ✅ |
-| Phase 1 | **五維數字辨識（零校準，圖上直接讀）** | ⚠️ **只喺 gt 嘅排法 30/30**（ステータス面板：5 個闊度相近嘅 4 位數字一行）。**實機育成主畫面未通過** —— 判準會讀到「上限」欄（地雷 #23），5/5 解析度都錯 |
+| Phase 1 | **五維數字辨識（零校準）** | ✅ 兩條路都通：**畫面 A 面板條**（`statbar.js`）截圖驗證 **5/5 全中**（1356→2560 五個解析度）；ステータス面板排法 **30/30**。⚠️ 未做實機 `npm start` 測試 |
 | Phase 1 | HUD overlay ＋ 設定面板 | ⏳ 下一步 |
 | Phase 2 | 技能 icon 識別（自動知學咗邊啲技能）| 未開始 |
 | Phase 3 | what-if 模擬（加一招加幾多分／Pt）、成長曲線 | 未開始 |
@@ -84,7 +84,12 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 > ① UI **完全等比縮放**（cell pitch ÷ 圖闊 = 0.0495 恆定）、面板 normalized y 0.691–0.703 恆定
 > → **相對 ROI 可行**（地雷 #24）；② 但實機**讀錯欄**：判準揀到「/上限」而唔係數值
 > （讀 `1946/1600/…` 而真值 `226/54/139/85/102`），5/5 解析度都錯，信心仲有 0.55–0.70
-> → **靜默報錯數**（地雷 #23）。**呢個係現時最高優先嘅阻塞。**
+> → **靜默報錯數**（地雷 #23）。
+>
+> **同日已修（2026-09-18）**：新增 `src/vision/statbar.js` 走「相對 ROI → 切大數值行/上限行 →
+> 只按右邊界間距揀 5 個 → 信心閘」→ 實機 5 張 **5/5 全中**（信心 0.80–0.89）；
+> 擷取端改為只傳面板 ROI（原生像素）→ 頻寬由 ~8MB/幀跌到 ~0.5MB/幀（地雷 #22 亦解）。
+> 模板改用「面板截圖 ＋ 實機面板條」一齊訓練（雙閘：30/30 同 5/5）。
 
 ---
 
@@ -96,7 +101,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）
-npm.cmd test              # 單元測試（69 個，必須全過）
+npm.cmd test              # 單元測試（79 個，必須全過）
 
 node src/cli.js 600 600 600 600 600        # 手動試算 → 5715 / C+
 
@@ -110,8 +115,11 @@ node tools/breakdown.js                    # 逐招明細表（肉眼核對用�
 # ── Phase 1（影像辨識）──
 node tools/read-stats.js shots/gt/uma1-p1.png --gt=data/ground-truth/01-小栗帽-星光躍動-UD3.json
                                            # ⭐ 由截圖讀五維＋對答案（--trace 睇每個字元分數）
-node tools/build-glyph-templates.js        # 由 ground truth 建字形模板（**有驗證閘**）
+node tools/build-glyph-templates.js        # 建字形模板（面板截圖 ＋ 實機面板條；**雙閘**）
 node tools/build-glyph-templates.js --verify
+node tools/diag-statbar.js                 # ⭐ 實機面板條定位（ROI／切行／相對比例）
+node tools/diag-statbar.js --read --expect=226,54,139,85,102   # ⭐ 實機讀數對答案（5/5）
+node tools/diag-statbar.js --read --cropped --trace            # 模擬 renderer 剪 ROI（執行時路徑）
 node tools/tune-detect.js --quick          # 參數掃描（用真值做評分）
 node tools/tune-detect.js --hue            # ⭐ 色相窗口／亮度門檻單軸掃描（量安全邊界）
 node tools/diag-hue.js                     # ⭐ 量數字墨／ランク徽章真實色相分佈
@@ -129,10 +137,13 @@ node tools/diag-shots.js                   # 列出所有截圖尺寸
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **69 個**）
+1. `npm.cmd test` 全過（現時 **79 個**）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 4/4　完全命中 4/4　總絕對誤差 0`
-3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify` 要 **30/30**
+3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
+   → **面板截圖 30/30**（雙閘：**實機面板條 5/5**），兩個都要中
 4. 動到墨點／色相／亮度門檻嘅話：`node tools/diag-hue.js --assert` 要通過
+5. 動到實機面板條（`statbar.js`／`capture.html`）嘅話：
+   `node tools/diag-statbar.js --read --cropped --expect=226,54,139,85,102` → **5/5**
 
 任何改動令呢幾樣唔達標，就係改壞咗。
 
@@ -152,6 +163,8 @@ src/umascore/
 src/vision/
   inkmask.js      # ⭐ 背景受控墨點遮罩（顏色 + 「深色字喺淺色底」）＋ 文字行切分
   digitrow.js     # ⭐ 五維數字列偵測（密集帶、收窄、砌數字、揀 5 個、結構評分）
+  statbar.js      # ⭐⭐ **實機面板條**（畫面 A）：相對 ROI → 切大數值行/上限行 →
+                  #    只按右邊界間距揀 5 個 → 讀數 ＋ 信心閘（見地雷 #23/#24）
   glyphs.js       # 切字元 → 尺度歸一化 → 模板比對（NCC）＋ 由右邊貪心收剔徽章
   reader.js       # ⭐ 影像 → 五維 → 評價分；幀間多數投票（StatTracker）
   png.js          # 零依賴 PNG 解碼器（讀實機截圖用）
@@ -161,8 +174,8 @@ src/vision/
 src/cli.js        # 手動試算
 
 electron/
-  main.js         # 主程序：視窗列舉 → reader.readStats() → evaluate() → IPC
-  capture.html    # 擷取 renderer：getUserMedia → 縮圖 → 傳 raw pixels
+  main.js         # 主程序：視窗列舉 → statbar.readStatBar()（cropped）／reader.readStats() → evaluate() → IPC
+  capture.html    # 擷取 renderer：getUserMedia → **1:1 剪面板 ROI**（冇 ROI 就退回 640px 縮圖）
 
 tools/
   fetch-skill-db.js      # bwiki 技能庫抓取
@@ -170,9 +183,10 @@ tools/
   fit-score.js           # 對答案報表
   breakdown.js           # 逐招明細表
   read-stats.js          # ⭐ 截圖 → 五維（可 --gt 對答案、--trace 睇字元分數）
-  build-glyph-templates.js  # ⭐ 建字形模板（有「驗證唔過就唔寫檔」嘅閘）
+  build-glyph-templates.js  # ⭐ 建字形模板（面板截圖 ＋ 實機面板條；驗證唔過就唔寫檔）
   tune-detect.js         # 參數掃描（用 ground truth 做客觀評分；--hue = 色相窗口單軸掃描）
   diag-row.js            # ⭐ 純文字環境睇圖（--gray/--map/--lines/--profile/--templates）
+  diag-statbar.js        # ⭐ 實機面板條診斷（--read/--cropped/--trace/--bands）
   diag-hue.js            # ⭐ 量數字墨／徽章色相分佈（--assert = 色相回歸閘）
   diag-scale.js          # ⭐ 縮圖尺度診斷（--scale／--tune／--probe；見地雷 #22）
   diag-shots.js          # 列出所有截圖尺寸
@@ -181,8 +195,13 @@ data/
   skill-db-tw.json       # 1323 招技能（繁中）
   skill-overrides.json   # 主 DB 冇收錄嘅技能（繼承技）
   glyph-templates.json   # ⭐ 10 個數字字形模板（16×24，NCC 用）
+  live-truth.json        # ⭐ 實機面板條截圖嘅真值（226/54/139/85/102；上限 1946/1600/1600/1500/1450）
   calc-page-tw.html      # bwiki 頁面 cache
   ground-truth/*.json    # 4 條培育完成紀錄（誤差 0 嘅證據）
+
+shots/
+  gt/*.png               # ステータス面板排法（30/30 嘅證據）
+  live/*.png             # ⭐ 實機育成主畫面 1356→2560 五個解析度（5/5 嘅證據）
 
 docs/
   formula.md             # 公式推導、驗證、來源
@@ -265,8 +284,8 @@ oval > 0 → 再加 oval 部分；最後 floor
 | 19 | 假設 `shots/gt/uma2-*.png` 同 `02-西野花…UE2.json` 對應 | ⛔ **對唔應**。同一套模板喺 uma1/uma3/uma4 係 30/30 全中，但 uma2 兩張圖一致讀出 **1937/993/1077/848/1198**（相似度 0.78~0.99、次選分數明顯低 → 唔係讀錯），即五維分 24626、ランク UF1。JSON 嘅 note 自己寫「取代舊嘅 UE6 紀錄」，所以**截圖應該係舊一輪**。→ 建模板要 `--exclude=uma2`；長遠要補返對應嘅截圖或者更正 JSON |
 | 20 | **以為可以用色相視窗剔走ランク徽章** | ⛔ **徽章色相同數字墨重疊**（實測 8 張圖：徽章 hue **17–44°**、數字墨 hue **25–26°**；uma4 徽章 17–27° 幾乎一樣）。金／銅徽章色相落喺窗口內，亮度（0.34–0.60）都低過 0.62 → **色相＋亮度都剔唔走**。真正剔走徽章嘅係**結構條件**（徽章坐喺主題色漸變底 → 窗口淺色比例唔夠），成品殘墨只有 16~84 粒。→ 唔好靠色相做徽章判準；任何「徽章色相」推論（例如當讀數防錯）要用**位置／形狀**，唔好用色相。閘：`node tools/diag-hue.js --assert` |
 | 21 | 色相窗口「隨手調闊／調窄」當係無害微調 | ⛔ 色相窗口係**行偵測**嘅命脈，唔止係清潔度：實測色相／亮度**全開**（0–360°、唔限亮度）→ 偵測由 8/8 張跌到 **2/8 張**（暖色插畫淹沒）。反過來 `hueMin` 一過 25° 就 **0/8 張**（真數字墨就係 25–26°）。安全範圍：`hueMin` 0–25、`hueMax` 35–90、`lumMax` 0.50–0.70、`deltaMin` 0–60。→ 改之前跑 `node tools/tune-detect.js --hue` |
-| 22 | ⭐ **以為「縮圖 640px 冇問題，只係未試」** | ⛔ 實測（`node tools/diag-scale.js`）：整條管線**只喺原生尺度行得通**（1.0 → 30/40 全對；0.9 → 25/40；0.8 → 20/40；0.6 → 0/40；**0.336 = 實機 640px → 偵測 0/8、讀中 0/40**）。死因**唔係**色相窗口（探針顯示細尺度仲收到 14–22% 墨），而係下游寫死嘅像素門檻假設字高 ≈17px：`scoreNumberRow()` `minHeight 8`、`minGap 3`、`groupsToNumbers()` 固定 10px、`buildInkMask()` `windowRadius 6`。而且調參救唔返（`--tune=0.336` 45 個組合全部 0/8）。→ 動擷取端之前一定跑 `diag-scale.js`；見 `docs/vision-design.md` §2.2.2 |
-| 23 | ⭐⭐ **以為「gt 30/30 = 實機行得通」** | ⛔ **最嚴重嘅一個**。gt 截圖係**另一種排法**（5 個同位數、闊度相近嘅 4 位數字一行，格距 110px、字高 17px）。實機**育成主畫面**每個屬性格係「**大數值（上面）＋ `/上限`（下面細字）**」→ 現行「揀 5 個闊度最相近嘅等距數字」判準**一定揀到『上限』欄**（上限全部 4 位、闊度一致；數值 2–3 位、闊度唔一致）。實測 5 個解析度（1356→2560）**5/5 都讀錯欄**：讀出 `1946/1600/1600/1500/1450`（＝上限）而真值係 `226/54/139/85/102`，信心仲有 0.55–0.70 → **靜默報錯數**。而且 band 會把「大數值行＋細上限行」**合併**，砌數字時混行 → 連上限都讀唔準。→ 實機要**先切行（大數值 / 細上限）再砌數字**，唔可以靠「闊度相近」呢個判準 |
+| 22 | ⭐ **以為「縮圖 640px 冇問題，只係未試」** | ⛔ 實測（`node tools/diag-scale.js`）：整條管線**只喺原生尺度行得通**（1.0 → 30/40 全對；0.9 → 25/40；0.8 → 20/40；0.6 → 0/40；**0.336 = 實機 640px → 偵測 0/8、讀中 0/40**）。死因**唔係**色相窗口（探針顯示細尺度仲收到 14–22% 墨），而係下游寫死嘅像素門檻假設字高 ≈17px：`scoreNumberRow()` `minHeight 8`、`minGap 3`、`groupsToNumbers()` 固定 10px、`buildInkMask()` `windowRadius 6`。而且調參救唔返（`--tune=0.336` 45 個組合全部 0/8）。→ 動擷取端之前一定跑 `diag-scale.js`；見 `docs/vision-design.md` §2.2.2。 ✅ **2026-09-18 已修**：唔再縮全畫面，改為 renderer **1:1 剪面板 ROI**（原生像素，~0.5MB/幀），`main.js` 用 `readStatBar({ whole: true })` |
+| 23 | ⭐⭐ **以為「gt 30/30 = 實機行得通」** | ⛔ **最嚴重嘅一個**。gt 截圖係**另一種排法**（5 個同位數、闊度相近嘅 4 位數字一行，格距 110px、字高 17px）。實機**育成主畫面**每個屬性格係「**大數值（上面）＋ `/上限`（下面細字）**」→ 現行「揀 5 個闊度最相近嘅等距數字」判準**一定揀到『上限』欄**（上限全部 4 位、闊度一致；數值 2–3 位、闊度唔一致）。實測 5 個解析度（1356→2560）**5/5 都讀錯欄**：讀出 `1946/1600/1600/1500/1450`（＝上限）而真值係 `226/54/139/85/102`，信心仲有 0.55–0.70 → **靜默報錯數**。而且 band 會把「大數值行＋細上限行」**合併**，砌數字時混行 → 連上限都讀唔準。→ 實機要**先切行（大數值 / 細上限）再砌數字**，唔可以靠「闊度相近」呢個判準。 ✅ **2026-09-18 已修**：`src/vision/statbar.js`（相對 ROI → 切行 → 只按右邊界間距揀 5 個 → 信心閘），實機 5/5；另加 10 個合成測試（`test/statbar.test.js`）守住 |
 | 24 | **假設遊戲 UI 係固定像素大細** | ⛔ 賽馬娘桌面版**冇固定解析度，只有固定 16:9**（用戶確認）。實測 5 個解析度：cell pitch ÷ 圖闊 = **0.0494–0.0498（恆定）**、面板列 normalized y = **0.691–0.703（恆定）** → **UI 完全等比縮放、面板相對位置穩定**。即係：① 唔可以用固定 `THUMB_WIDTH`（1280 窗同 4K 窗行為完全唔同）；② **相對 ROI 係可行而且穩定**（同地雷 #10 嘅「寫死色相」唔同：寫死**相對座標**喺固定比例之下係安全嘅）；③ 字高 ∝ 圖闊（實機量到：數值 ≈ 0.0098×闊、上限 ≈ 0.0064×闊）→ 要「正規化字高」而唔係「固定解析度」 |
 
 ---
@@ -277,7 +296,24 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 > 用戶明確要求：**即時偵測**，唔係「開程式 → 拉框 → 確認」。
 
-**現行做法（2026-09 起）：完全唔靠面板顏色、唔靠預先量度 ROI，直接喺圖上捉「五個數字」。**
+**現行做法（2026-09-18 起有兩條路）**：
+
+**路 1（主力）畫面 A 育成主畫面 —— 相對 ROI 面板條**（`src/vision/statbar.js`）
+
+```
+contentBox()          由圖闊推 16:9 內容框（扣 Windows 標題列）
+locateStatBar()       相對 ROI（x 0.15–0.44、y 0.645–0.735）
+                      → ROI 內切帶：大數值行（最高）／上限行（喺大數值行之後）
+collectStatBarGlyphs() 遮罩喺**整個 ROI** 做（唔可以剪貼邊條帶，否則 6/8/9 會碎裂）
+                      像素門檻按字高比例縮放（切字群 3px、砌數字 10px、窗口半徑 6）
+pickFiveBySpacing()   只按**右邊界**間距揀 5 個（數值右對齊；唔用闊度，見地雷 #23）
+extractGlyphs()       每個字元 → 16×24 網格（尺度不變）
+readNumberTrimmed()   由右邊貪心收 → 數字；信心 < minConfidence 就唔出數
+```
+
+實測：`shots/live/` 1356→2560 五個解析度 **5/5 全中**（信心 0.80–0.89）。
+
+**路 2（後備）ステータス面板排法 —— 全畫面結構搜尋**（`src/vision/digitrow.js`）
 
 ```
 buildInkMask()      顏色（橙棕 hue 15–50°、偏暗）＋ 結構（深色字喺淺色底上面）→ 墨點遮罩
@@ -311,10 +347,13 @@ readNumberTrimmed() 由右邊貪心收（自動剔走徽章／雜訊）→ 數�
 ### 6.3 架構決定：CV 邏輯放 Node 主程序
 
 renderer 由 `file://` 載入，**ESM import 會被 Chromium CORS 擋**。
-所以 renderer 只做「擷取 → 縮圖（640px, 5fps）→ 傳 raw RGBA」，
-錨點偵測同之後嘅數字辨識全部喺 `electron/main.js`（Node）度跑。
+所以 renderer 只做「擷取 → **1:1 剪面板 ROI**（相對範圍由主程序經 IPC 傳落嚟，
+兩邊共用 `statbar.js` 嘅常數）→ 傳 raw RGBA」，所有影像辨識喺 `electron/main.js`（Node）度跑。
+冇 ROI（舊格式／未收到）就退回「縮圖全畫面」嘅舊行為。
 
-好處：**可以用 `node --test` 直接測試**，唔需要開 Electron。
+好處：**可以用 `node --test` 直接測試**，唔需要開 Electron；
+而 `tools/diag-statbar.js --cropped` 就係模擬 renderer 嗰個剪法，
+所以「執行時路徑」同「診斷路徑」永遠一致。
 
 ---
 
@@ -332,17 +371,17 @@ renderer 由 `file://` 載入，**ESM import 會被 Chromium CORS 擋**。
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **69 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **79 個測試必須全過**
 2. `node tools/fit-score.js` — 必須 `完全命中 4/4　總絕對誤差 0`
 3. 如果改咗五維／技能／ランク相關嘅嘢，`node tools/breakdown.js` 逐招核對一次
 4. **如果改咗影像相關嘅嘢**：
-   - `node tools/build-glyph-templates.js --exclude=uma2 --verify` → 必須 **30/30**
+   - `node tools/build-glyph-templates.js --exclude=uma2 --verify` → **30/30（面板截圖）＋ 5/5（實機面板條）**
    - `node tools/read-stats.js shots/gt/uma1-p1.png --gt=data/ground-truth/01-小栗帽-星光躍動-UD3.json` → 5/5
    - 上唔到 30/30 就**唔好**寫模板檔（工具自己會擋，唔好繞過）
    - 動到墨點／色相／亮度門檻：`node tools/diag-hue.js --assert` 要通過
      ＋ `node tools/tune-detect.js --hue` 睇下有冇踩到安全邊界（見 §6.1）
-   - 動到「實機主畫面」相關嘅嘢：`shots/live/` 5 張（1356→2560）要讀到
-     `226/54/139/85/102`（見地雷 #23／#24）
+   - 動到實機面板條（`statbar.js`／`capture.html`）：
+     `node tools/diag-statbar.js --read --cropped --expect=226,54,139,85,102` → **5/5**
 5. 更新 `docs/formula.md`（公式）或者 `docs/vision-design.md`（影像）
 6. **`git commit`**（見 §0：每次改動都要 commit，驗收唔過唔准 commit）
 
@@ -355,10 +394,9 @@ renderer 由 `file://` 載入，**ESM import 會被 Chromium CORS 擋**。
 
 | 優先 | 事項 |
 |---|---|
-| ⭐⭐⭐ 最高 | **實機主畫面讀錯欄（地雷 #23）**：判準揀到「/上限」而唔係數值（5/5 解析度都錯，靜默報錯數）。修法：① 用**相對 ROI**（0.10–0.46 × 0.66–0.72，地雷 #24 已證穩定）框住面板條；② ROI 內**先切兩行**（大數值 / 細上限），只讀大數值行；③ 依字高**正規化**（重採樣到字高 ~18px）再餵現有管線；④ 加**信心閘**（< 0.8 唔出數，寧願顯示讀唔到）。驗收：`shots/live/` 5 張 → `226/54/139/85/102` 全中 |
-| ⭐ 高 | **擷取尺度（地雷 #22）**：`capture.html` 縮到 640px → 數字得 5.7px 高 → 偵測 **0/8**。同上面一齊做：因為 UI 係等比縮放，正解係**傳面板 ROI（相對座標）**而唔係整個視窗縮圖 → 頻寬細（~0.8MB/幀）而且字高可以自己控制 |
-| ⭐ 高 | **HUD overlay ＋ 設定面板**：`reader.readStats()` 已經讀到五維並算好評價分，但仲只係 `console.log`。下一步要開透明置頂穿透視窗顯示，技能未讀到就老實顯示 `技能分 ？／總分 ≥ X` |
+| ⭐ 高 | **實機 `npm start` 測試**（下一步）：管線同截圖驗證（5/5、30/30）都通，但**未試過真正開 Electron 對住遊戲跑**。要度：① `capture.html` 收到嘅遊戲視窗有冇含標題列（`contentBox` 兩邊都食得住，但要確認）；② 5fps 之下延遲、CPU、記憶體；③ DPI／換視窗大細／轉場嘅行為；④ ROI 收唔到嘢嗰陣 HUD 有冇老實顯示「讀唔到」 |
+| ⭐ 高 | **HUD overlay ＋ 設定面板**：`readStatBar()`／`readStats()` 已經讀到五維並算好評價分，但仲只係 `console.log`。要開透明置頂穿透視窗顯示，技能未讀到就老實顯示 `技能分 ？／總分 ≥ X` |
 | ⭐ 高 | **確認 uma2 截圖同 JSON 邊個啱**（地雷 #19）：要麼補返對應 1937/993/1077/848/1198 嘅截圖，要麼確認 JSON 值然後重拍截圖 |
-| 中 | **模板覆蓋**：現時 10 個數字齊全，但每個數字樣本少（1–4 個）。再收幾張實機圖可以令信心由 0.78 升上去（uma2 最後一個位「5 vs 8」就差 0.03）|
-| 中 | **實機測試**：`shots/live/` 已經有 5 張真實解析度截圖，但仲未試過 `npm.cmd start` 嘅實時管線（延遲、CPU、DPI 變化）|
+| 中 | **模板覆蓋**：現時 10 個數字齊全（面板截圖 ＋ 實機面板條樣本），但每個數字樣本仍然偏少。再收幾張實機圖（唔同培育進度／唔同馬）可以令信心再升 |
+| 中 | **唔同畫面嘅面板條**：現時只驗證咗育成主畫面（畫面 A）。其他畫面（例如ステータス面板、比賽前）如果都有五維，要另外確認 ROI 定唔定位得到 |
 | 低 | Phase 2：技能 icon 識別（由截圖自動知學咗邊啲技能）|
