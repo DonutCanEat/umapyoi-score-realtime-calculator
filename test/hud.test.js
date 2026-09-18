@@ -33,29 +33,27 @@ test('hud contentRect：圖比 16:9 高 → 多出嘅部分係頂部標題列', 
   assert.equal(withChrome.x, 100);
 });
 
-test('hud anchorHud：喺遊戲內容區嘅左邊（用戶指定：拍攝掣下面）', () => {
+test('hud anchorHud：位置係用戶實機調好嘅（2026-09-18 DX 0.59 / DY −0.67 已寫成預設）', () => {
   const content = { x: 0, y: 0, width: 1920, height: 1080 };
   const rect = anchorHud(content);
-  // 左邊：x 由 0.008 開始（唔貼死邊）
   assert.equal(rect.x, Math.round(1920 * DEFAULT_HUD_LAYOUT.x[0]));
-  // 垂直：同面板條（y 0.691–0.703）**同水平**或者更低 → 一定唔會壓住數字
-  assert.ok(rect.y >= 1080 * 0.69, `應該喺面板條水平或更低，實得 y=${rect.y}`);
-  // 橫向仍然喺左邊（唔會頂住畫面中間嘅訓練掣）
-  assert.ok(rect.x + rect.width <= 1920 * 0.25, `要留喺左邊，實得右邊 ${rect.x + rect.width}`);
-  // 唔可以走出內容區
-  assert.ok(rect.y + rect.height <= 1080, '唔可以走出畫面底');
-  // ⭐ 最關鍵：HUD 嘅 y 範圍同面板條嘅 y 範圍**唔重疊** → 幾闊都唔會壓住數字
-  const hudTop = rect.y;
-  assert.ok(hudTop >= 1080 * 0.69, 'HUD 頂部要喺面板條之下（唯一真正嘅安全條件）');
+  assert.equal(rect.y, Math.round(1080 * DEFAULT_HUD_LAYOUT.y[0]));
+  // 大細：預設 size（唔係 x1−x0；offset／自訂位置移動咗但大細唔變）
+  assert.equal(rect.width, Math.max(80, Math.round(1920 * DEFAULT_HUD_SIZE.w)));
+  assert.equal(rect.height, Math.max(40, Math.round(1080 * DEFAULT_HUD_SIZE.h)));
+  // 唔可以走出內容區（安全網）
+  assert.ok(rect.x >= 0 && rect.y >= 0, '唔可以走出左上角');
+  assert.ok(rect.x + rect.width <= 1920, '唔可以走出右邊');
+  assert.ok(rect.y + rect.height <= 1080, '唔可以走出底部');
 });
 
 test('hud anchorHud：視窗大細／位置變都跟得住（等比縮放，見地雷 #24）', () => {
   const small = anchorHud({ x: 0, y: 0, width: 1280, height: 720 });
   const big = anchorHud({ x: 300, y: 120, width: 2560, height: 1440 });
   // HUD 係「內容區原點 + 大細×比例」→ 比例偏移會按視窗大細放大。
-  // 所以唔可以要求位移等於視窗位移，而係要**跟住內容區原點**（水平喺左邊、垂直喺下面）。
-  assert.ok(big.x >= 300 && big.x <= 300 + 2560 * 0.25, `要跟住內容區原點，實得 x=${big.x}`);
-  assert.ok(big.y >= 120 && big.y <= 120 + 1440 * 0.9, `垂直都要跟，實得 y=${big.y}`);
+  // 所以唔可以要求位移等於視窗位移，而係要**跟住內容區原點**。
+  assert.ok(big.x >= 300, `要跟住內容區原點，實得 x=${big.x}`);
+  assert.ok(big.y >= 120, `垂直都要跟，實得 y=${big.y}`);
   // 兩者都要喺自己嘅內容區入面
   assert.ok(big.x + big.width <= 300 + 2560 && big.y + big.height <= 120 + 1440, '唔可以走出內容區');
   assert.ok(big.width > small.width, '大視窗 HUD 要大啲（等比）');
@@ -167,7 +165,7 @@ test('hud hudState：對位模式 → state 變 edit 而且帶範圍／偏移', 
     layout,
   });
   assert.equal(s.state, 'edit');
-  assert.match(s.edit, /x 0\.008–0\.220/);
+  assert.match(s.edit, new RegExp(`x ${DEFAULT_HUD_LAYOUT.x[0].toFixed(3)}–${DEFAULT_HUD_LAYOUT.x[1].toFixed(3)}`));
   assert.match(s.edit, /大細/);
 });
 

@@ -432,16 +432,20 @@ src/hud/layout.js   anchorHud()   相對位置 + 大細 + 偏移（全部 ÷ 內
 electron/hud.html   透明無邊框頁面，只畫主程序推落嚟嘅 view（顯示邏輯唔喺 renderer 重複寫）
 ```
 
-用戶指定：擺**左邊空白位（拍攝掣下面）**、先做醜版；跟住擴充到**五維逐格 + 技能分 `？／總分 ≥ X`**。
+用戶指定：先做醜版 → 再擴充到**五維逐格 + 技能分 `？／總分 ≥ X`**；
+位置由用戶自己實機調（見下面）。
 
-**預設位置**：x 0.008–0.220、y 0.700–0.955。
-⚠️ 點解 x 可以去到 0.22：五維數字雖然由圖闊 0.164 起，但嗰橛喺 y 0.105–0.365（遊戲頂部），
-而 HUD 喺 y 0.70+ → 兩者**唔重疊**。**真正嘅安全條件係「HUD 頂部 ≥ 面板條頂（0.69）」**，
-唔係「右邊界 ≤ 0.15」（有測試守住）。
+**預設位置**：x 0.598–0.810、y 0.030–0.285（大細 0.212 × 0.255）。
+⭐ 呢個係**用戶 2026-09-18 自己調出嚟嘅**：原本基準 x 0.008–0.220、y 0.700–0.955，
+用戶用 `UMAPYOI_HUD_DX=0.59`、`UMAPYOI_HUD_DY=-0.67` 調到想要嘅位就話「OK」，
+所以直接寫成預設（附錄：唔使每次開程式打環境變數）。
+
+⚠️ **唔好見到位置數值「古怪」就當係 bug 去「修」（我犯過）**：
+用戶係**特登**要 HUD 擺嗰度（唔係擺錯位要補償）。要改位置只有兩個正路：
+`UMAPYOI_HUD_EDIT=1` 睇即時數值再調、或者直接改 `DEFAULT_HUD_LAYOUT`。
 
 ⚠️ **唔啱位唔使改 code**：`UMAPYOI_HUD_EDIT=1 npm start` 開對位模式
 （HUD 會顯示自己嘅 x／y 範圍、偏移、大細），或者直接用 `UMAPYOI_HUD_X`／`_Y`／`_DX`／`_DY`／`_W`／`_H`。
-定案之後可以照抄落 `DEFAULT_HUD_LAYOUT`。
 
 ⚠️ **一定要 `setContentProtection(true)`**：我哋用 `desktopCapturer` 擷取自己個螢幕，
 冇呢個設定 HUD **會入到自己嘅擷取畫面**（等於自己讀自己嘅字）。
@@ -500,8 +504,8 @@ electron/hud.html   透明無邊框頁面，只畫主程序推落嚟嘅 view（�
 
 | 優先 | 事項 |
 |---|---|
-| ⭐ 高 | **HUD 跟住遊戲視窗 ＋ 用家自己拖位**（用戶 2026-09-18 提出，「後話」，明講咗之後再處理）：<br>① **完全固定喺賽馬娘視窗**：而家 HUD 位置係用「前景顯示器工作區」推算（見 §6.4 已知限制），遊戲視窗一移 HUD 就唔跟。<br>　 ⚠️ 難點：`desktopCapturer` **只俾** id／標題／大細，冇螢幕座標 → 要另找來源（Win32 `GetWindowRect`／`SetWinEventHook` 監視 `EVENT_OBJECT_LOCATIONCHANGE`，或者用 node-ffi／powershell 撈）。<br>　 ✅ 可行做法：用擷取串流本身反推 —— 內容區大細已知（16:9 推算），配 Win32 讀遊戲視窗 rect 就得。<br>② **用家自己拖 HUD 定位置**：HUD 而家 `setIgnoreMouseEvents(true)`（穿透）→ 冇得拖。<br>　 ⚠️ 難點：一開返滑鼠事件就會擋住遊戲點擊。<br>　 ✅ 可行做法：**對位模式（`UMAPYOI_HUD_EDIT=1`）之下才**開滑鼠事件 + 顯示虛線框，拖完寫落一個 config 檔（`hud-position.json`），正常模式照穿透；或者用鍵盤微調（`Ctrl+Alt+方向鍵`）避免搶滑鼠。<br>（而家做得到嘅替代：`UMAPYOI_HUD_EDIT=1` ＋ `UMAPYOI_HUD_DX/_DY` 環境變數，見 §6.4）|
-| ⭐ 高 | **HUD 收尾**：① 確認偏移定案之後抄落 `DEFAULT_HUD_LAYOUT`；② 驗「HUD 有冇被自己擷取到」（`UMAPYOI_DUMP_FRAMES=5 npm start` → `node tools/raw-to-png.js shots/live-debug`）；③ 再定要唔要**設定面板** |
+| ⭐ 高 | **HUD 跟住遊戲視窗 ＋ 用家自己拖位**（用戶 2026-09-18 提出，明講「呢個係後話，你可以 mark 低咗先」）：<br>① **完全固定喺賽馬娘視窗**：而家 HUD 位置係用「前景顯示器工作區」推算（見 §6.4 已知限制），遊戲視窗一移 HUD 就唔跟。<br>　 ⚠️ 難點：`desktopCapturer` **只俾** id／標題／大細，**冇螢幕座標** → 要另找來源。<br>　 ✅ **已實測可行**（2026-09-18）：PowerShell + `Add-Type` 叫 Win32 `EnumWindows` + `GetWindowRect`，列舉全部可見視窗只用 **~365ms**（`powershell.exe -NoProfile -Command`，唔可以寫 `.ps1`，執行原則會擋）。實測讀到遊戲視窗係 **-34,141 1943×1123**。<br>　 ⚠️ 認遊戲視窗**唔可以用「比例 ≈ 16:9」**：實測同一部機有 4 個窗口都接近 16:9（遊戲、cmd、Windows 輸入體驗、Program Manager）→ 要用**標題**（`desktopCapturer` 嘅 source name 同 Win32 標題一樣）或者**大細**配對。<br>　 ⚠️ 沙盒注意：唔可以用 `spawn`／`execFileSync` **擷取子程序輸出**（具名管道 EPERM）→ 叫 PowerShell 自己寫落檔案再讀。<br>② **用家自己拖 HUD 定位置**：HUD 而家 `setIgnoreMouseEvents(true)`（穿透）→ 冇得拖。<br>　 ⚠️ 難點：一開返滑鼠事件就會擋住遊戲點擊。<br>　 ✅ 可行做法：**對位模式（`UMAPYOI_HUD_EDIT=1`）之下才**開滑鼠事件 + 顯示虛線框，拖完寫落 config 檔（`hud-position.json`），正常模式照穿透；或者用鍵盤微調（`Ctrl+Alt+方向鍵`）避免搶滑鼠。<br>（而家做得到嘅替代：`UMAPYOI_HUD_EDIT=1` ＋ `UMAPYOI_HUD_DX/_DY` 環境變數，見 §6.4）|
+| ⭐ 高 | **HUD 收尾**：① 驗「HUD 有冇被自己擷取到」（`UMAPYOI_DUMP_FRAMES=5 npm start` → `node tools/raw-to-png.js shots/live-debug`）；② 再定要唔要**設定面板** |
 | ⭐ 高 | **確認 uma2 截圖同 JSON 邊個啱**（地雷 #19）：要麼補返對應 1937/993/1077/848/1198 嘅截圖，要麼確認 JSON 值然後重拍截圖 |
 | 中 | **模板覆蓋**：實機樣本仍然偏少（每個數字十幾個）。再收幾張實機圖（唔同培育進度／唔同馬／唔同主題色）可以令相似度同信心再升 |
 | 中 | **其他畫面／其他狀態嘅面板條**：現時只驗證咗育成主畫面（畫面 A）。仲未試：ステータス面板、比賽前後、訓練動畫期間 |
