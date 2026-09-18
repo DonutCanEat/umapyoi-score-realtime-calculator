@@ -20,32 +20,42 @@ export const CONTENT_ASPECT = 9 / 16;
 /**
  * HUD 喺**內容區**入面嘅相對位置（0–1）。
  *
- * 預設：左下角空白位（x 0.008–0.145、y 0.735–0.865）。
+ * 需要嘅闊度係**推算**出嚟（唔係隨手寫）：五維數字由圖闊 0.164 開始
+ * （`statbar.js` 嘅 ROI 由 0.15 開始）→ 但 HUD 係疊喺 x 0.02–0.22 嘅**左邊空白位**，
+ * 而 0.164–0.22 嗰橛喺 y 0.105–0.365（遊戲頂部）→ 同 y 0.70+ 嘅面板條**完全冇重疊**
+ * → 所以 x 可以去到 0.22，換嚟「五維逐格」夠位寫。
  *
- * ⚠️ 右邊界要**嚴守**：五維數字由圖闊 0.164 開始（見 AGENTS 地雷 #24），
- * 而 `statbar.js` 嘅 ROI 由 0.15 開始 → HUD 右邊界**唔可以過 0.15**，
- * 否則會壓住第一格嘅ランク徽章／數字。
- * 呢兩個數字係「醜版」先求有得睇，實機對位之後改呢一個地方就得。
+ * y 0.700–0.955：橫向仍然喺左邊（唔會頂住畫面中間嘅訓練掣），
+ * 垂直由面板條水平（0.691–0.703）稍低開始、落到接近底。
+ *
+ * ⚠️ 呢啲數字係「定案之前嘅最佳估計」；實機唔啱位有兩個唔使改 code 嘅方法：
+ *   ① 對位模式：`UMAPYOI_HUD_EDIT=1 npm start`（即時顯示範圍／偏移，自己目測）
+ *   ② 環境變數：`UMAPYOI_HUD_X` / `_Y` / `_DX` / `_DY` / `_W` / `_H`
  */
 export const DEFAULT_HUD_LAYOUT = Object.freeze({
-  x: [0.008, 0.145],
-  y: [0.735, 0.865],
+  x: [0.008, 0.220],
+  y: [0.700, 0.955],
 });
 
 /**
  * 由遊戲視窗嘅內容區推算 HUD 視窗嘅螢幕位置（像素）。
  *
+ * `layout.size`／`layout.offset` 係選填（舊呼叫唔傳都用得）。
+ * 加咗大細同偏移係為咗**對位模式**：唔使改 code 就拖得到位。
+ *
  * @param {{x:number,y:number,width:number,height:number}} content
  *        遊戲**內容區**嘅螢幕範圍（已經扣走標題列）
- * @param {{x:number[],y:number[]}} [layout]
+ * @param {{x:number[],y:number[],size?:{w:number,h:number},offset?:{dx:number,dy:number}}} [layout]
  * @returns {{x:number,y:number,width:number,height:number}} 螢幕像素（整數）
  */
 export function anchorHud(content, layout = DEFAULT_HUD_LAYOUT) {
-  const width = Math.max(80, Math.round(content.width * (layout.x[1] - layout.x[0])));
-  const height = Math.max(40, Math.round(content.height * (layout.y[1] - layout.y[0])));
+  const size = layout.size ?? { w: layout.x[1] - layout.x[0], h: layout.y[1] - layout.y[0] };
+  const offset = layout.offset ?? { dx: 0, dy: 0 };
+  const width = Math.max(80, Math.round(content.width * size.w));
+  const height = Math.max(40, Math.round(content.height * size.h));
   return {
-    x: Math.round(content.x + content.width * layout.x[0]),
-    y: Math.round(content.y + content.height * layout.y[0]),
+    x: Math.round(content.x + content.width * (layout.x[0] + offset.dx)),
+    y: Math.round(content.y + content.height * (layout.y[0] + offset.dy)),
     width,
     height,
   };
@@ -74,41 +84,143 @@ export function contentRect(windowRect, aspect = CONTENT_ASPECT) {
 /** 數據幾久冇更新就當「過期」（毫秒）。5fps 之下，2.5 秒 = 12 幀冇新資料。 */
 export const STALE_MS = 2500;
 
+/** 五維嘅繁中標籤（跟遊戲ステータス面板由左至右：速度／持久力／力量／毅力／智力）。 */
+export const STAT_LABELS_ZH = Object.freeze(['速度', '持久', '力量', '毅力', '智力']);
+
+/**
+ * 對位模式（`UMAPYOI_HUD_EDIT=1`）：把範圍／偏移交晒俾用戶自己調，
+ * 調好之後可以照抄落 `DEFAULT_HUD_LAYOUT` 或者經環境變數長用。
+ *
+ * 為何要（唔係「可有可無嘅花巧嘢」）：HUD 位置係**主觀**嘅（用戶指定「拍攝掣下面」），
+ * 而每次微調都要改 code ＋ 重開遊戲好煩 —— 有個可以即時拖嘅對位模式，改一次就定案。
+ */
+export const DEFAULT_HUD_OFFSET = Object.freeze({ dx: 0, dy: 0 });
+export const DEFAULT_HUD_SIZE = Object.freeze({ w: 0.315, h: 0.225 });
+
+/**
+ * 解析環境變數（`UMAPYOI_HUD_X=0.01,0.16` 之類）→ HUD 佈局。
+ *
+ * 全部係選填；冇俾就用預設。數字唔合法就**唔會**靜靜當 0 —— 會 throw，
+ * 因為靜默用錯位置比起跑唔到更難查（同本專案「唔可以靜默出錯」一致）。
+ *
+ * @param {Record<string,string|undefined>} [env]
+ * @returns {{x:number[],y:number[],offset:{dx:number,dy:number},size:{w:number,h:number}}}
+ */
+export function layoutFromEnv(env = {}) {
+  const pair = (name, fallback) => {
+    const raw = env[name];
+    if (!raw) return fallback;
+    const parts = String(raw).split(',').map((s) => Number(s.trim()));
+    if (parts.length !== 2 || parts.some((n) => !Number.isFinite(n))) {
+      throw new Error(`${name} 要係「a,b」兩個數字，實得「${raw}」`);
+    }
+    return parts;
+  };
+  const num = (name, fallback) => {
+    const raw = env[name];
+    if (raw === undefined || raw === '') return fallback;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) throw new Error(`${name} 要係數字，實得「${raw}」`);
+    return n;
+  };
+  return {
+    x: pair('UMAPYOI_HUD_X', DEFAULT_HUD_LAYOUT.x),
+    y: pair('UMAPYOI_HUD_Y', DEFAULT_HUD_LAYOUT.y),
+    offset: {
+      dx: num('UMAPYOI_HUD_DX', DEFAULT_HUD_OFFSET.dx),
+      dy: num('UMAPYOI_HUD_DY', DEFAULT_HUD_OFFSET.dy),
+    },
+    size: {
+      w: num('UMAPYOI_HUD_W', DEFAULT_HUD_SIZE.w),
+      h: num('UMAPYOI_HUD_H', DEFAULT_HUD_SIZE.h),
+    },
+  };
+}
+
 /**
  * HUD 而家應該顯示咩（純函數）。
  *
- * 三種狀態（對應用戶要求「唔好閃走」）：
- *   - `ok`     ：有穩定值 → 大數顯示
- *   - `stale`  ：而家讀唔到，但未夠 `STALE_MS` → 照顯示上一個穩定值，加個提示
- *   - `none`   ：從來未讀到過（或者過期）→ 老實講「等待面板」
+ * 四種狀態：
+ *   - `ok`     ：有穩定值 → 顯示全部
+ *   - `stale`  ：而家讀唔到，但未夠 `STALE_MS` → 照顯示上一個穩定值（變黃提示）
+ *   - `none`   ：從來未讀到 → 老實講「等待面板條」
+ *   - `edit`   ：對位模式（`UMAPYOI_HUD_EDIT=1`）→ 除咗數值，仲顯示範圍／偏移
  *
  * ⚠️ 呢個專案嘅底線係**唔可以出錯數**（見 AGENTS §8）。所以：
  * 讀唔到嗰陣**唔會**改變顯示嘅數值，只會改個「新鮮度」標記。
  *
- * @param {{score?:{total:number,rank:string}|null, updatedAt?:number, now?:number}} input
- * @returns {{state:'ok'|'stale'|'none', total:number|null, rank:string|null, ageMs:number|null, text:string, note:string}}
+ * ⚠️ **技能分未讀到嘅時候唔可以報一個實數**（唔可以「假設 0」，亦唔可以估）。
+ * 只可以出「`？／總分 ≥ 五維分`」—— `skills` 係 null 就係呢個情況。
+ *
+ * @param {{
+ *   score?: {total:number, rank:string, statScore:number, skillScore?:number|null}|null,
+ *   stats?: number[]|null,
+ *   updatedAt?: number,
+ *   now?: number,
+ *   edit?: boolean,
+ *   layout?: {x:number[],y:number[],offset:{dx:number,dy:number},size:{w:number,h:number}},
+ * }} input
+ * @returns {{state:string, total:number|null, rank:string|null, ageMs:number|null,
+ *            lines:Array<{key:string,label:string,value:string}>, note:string,
+ *            summary:Array<{key:string,label:string,value:string}>, edit:string|null}}
  */
-export function hudState({ score = null, updatedAt = 0, now = 0 } = {}) {
+export function hudState({
+  score = null,
+  stats = null,
+  updatedAt = 0,
+  now = 0,
+  edit = false,
+  layout = null,
+} = {}) {
+  const editLine = edit && layout
+    ? `x ${layout.x[0].toFixed(3)}–${layout.x[1].toFixed(3)}　y ${layout.y[0].toFixed(3)}–${layout.y[1].toFixed(3)}` +
+      `　偏移 ${layout.offset.dx >= 0 ? '+' : ''}${layout.offset.dx.toFixed(3)}/${layout.offset.dy >= 0 ? '+' : ''}${layout.offset.dy.toFixed(3)}` +
+      `　大細 ${layout.size.w.toFixed(3)}×${layout.size.h.toFixed(3)}`
+    : null;
+
   if (!score) {
     return {
-      state: 'none',
+      state: edit ? 'edit' : 'none',
       total: null,
       rank: null,
       ageMs: null,
-      text: '評價点 —',
+      lines: [{ key: 'total', label: '評價点', value: '—' }],
       note: '等待面板條（開育成主畫面）',
+      summary: [],
+      edit: editLine,
     };
   }
+
   const ageMs = Math.max(0, now - updatedAt);
   const stale = ageMs > STALE_MS;
+  const lines = [{ key: 'total', label: '評價点', value: String(score.total) }];
+
+  // 技能分未讀到 → 老實出「？／總分 ≥ 五維分」（唔可以假設 0）
+  const skills = typeof score.skillScore === 'number' ? score.skillScore : null;
+  const summary = [
+    { key: 'stat', label: '五維分', value: String(score.statScore ?? '—') },
+    skills === null
+      ? { key: 'skill', label: '技能分', value: `？／總分 ≥ ${score.total}` }
+      : { key: 'skill', label: '技能分', value: String(skills) },
+  ];
+
+  // 逐格五維（有 stats 就出，唔夠 5 個就唔出，免得顯示半截資料）
+  if (Array.isArray(stats) && stats.length === STAT_LABELS_ZH.length) {
+    for (const [i, label] of STAT_LABELS_ZH.entries()) {
+      lines.push({ key: `stat${i}`, label, value: String(stats[i]) });
+    }
+  }
+
   return {
-    state: stale ? 'stale' : 'ok',
+    state: edit ? 'edit' : stale ? 'stale' : 'ok',
     total: score.total,
     rank: score.rank,
     ageMs,
-    text: `評價点 ${score.total}`,
+    lines,
     note: stale
       ? `唔見面板條 ${(ageMs / 1000).toFixed(0)} 秒 → 顯示上一個穩定值`
       : `ランク ${score.rank}`,
+    summary,
+    edit: editLine,
   };
 }

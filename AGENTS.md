@@ -125,10 +125,15 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay
-npm.cmd test              # 單元測試（96 個，必須全過）
+npm.cmd test              # 單元測試（102 個，必須全過）
 
 # HUD 相關開關（環境變數）
 #   UMAPYOI_NO_HUD=1            唔開 HUD（淨係要 console log 嗰陣用）
+#   UMAPYOI_HUD_EDIT=1          ⭐ 對位模式：HUD 顯示自己嘅範圍／偏移（唔使改 code 就調得）
+#   UMAPYOI_HUD_X=0.01,0.20     HUD 左／右邊界（÷ 內容區闊度）
+#   UMAPYOI_HUD_Y=0.70,0.95     HUD 上／下邊界
+#   UMAPYOI_HUD_DX=-0.005       額外橫向偏移（同 _DY 一樣係相對值，可以負）
+#   UMAPYOI_HUD_W=0.30 / _H=0.24  大細（唔俾就用預設 size）
 #   UMAPYOI_DUMP_FRAMES=5       頭 5 幀每幀都 dump（⭐ 驗「HUD 有冇被自己擷取到」用）
 
 node src/cli.js 600 600 600 600 600        # 手動試算 → 5715 / C+
@@ -168,7 +173,7 @@ node tools/diag-shots.js                   # 列出所有截圖尺寸
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **96 個**）
+1. `npm.cmd test` 全過（現時 **102 個**）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 4/4　完全命中 4/4　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（雙閘：**實機面板條 9/9**），兩個都要中
@@ -419,24 +424,36 @@ renderer 由 `file://` 載入，**ESM import 會被 Chromium CORS 擋**。
 ### 6.4 HUD overlay（透明置頂、穿透點擊）
 
 ```
-src/hud/layout.js   anchorHud()  相對位置（內容區 × 0.008–0.145、0.735–0.865 = 左下角空白位）
+src/hud/layout.js   anchorHud()   相對位置 + 大細 + 偏移（全部 ÷ 內容區；見下面）
                     contentRect() 由視窗範圍推內容區（扣 Windows 標題列，同 contentBox() 一樣）
-                    hudState()   三態：ok（即時）／stale（讀唔到但保留上一個值）／none（未有數）
+                    hudState()    四態：ok／stale（讀唔到但保留上一個值）／none／edit（對位模式）
+                                  同時組好顯示行：評價点、五維逐格、五維分、技能分
+                    layoutFromEnv() 讀 UMAPYOI_HUD_* 環境變數（唔合法會 throw，唔會靜默當 0）
 electron/hud.html   透明無邊框頁面，只畫主程序推落嚟嘅 view（顯示邏輯唔喺 renderer 重複寫）
 ```
 
-用戶指定：只顯示「**評價点 + ランク**」、擺**左邊空白位（拍攝掣下面）**、先做醜版。
+用戶指定：擺**左邊空白位（拍攝掣下面）**、先做醜版；跟住擴充到**五維逐格 + 技能分 `？／總分 ≥ X`**。
+
+**預設位置**：x 0.008–0.220、y 0.700–0.955。
+⚠️ 點解 x 可以去到 0.22：五維數字雖然由圖闊 0.164 起，但嗰橛喺 y 0.105–0.365（遊戲頂部），
+而 HUD 喺 y 0.70+ → 兩者**唔重疊**。**真正嘅安全條件係「HUD 頂部 ≥ 面板條頂（0.69）」**，
+唔係「右邊界 ≤ 0.15」（有測試守住）。
+
+⚠️ **唔啱位唔使改 code**：`UMAPYOI_HUD_EDIT=1 npm start` 開對位模式
+（HUD 會顯示自己嘅 x／y 範圍、偏移、大細），或者直接用 `UMAPYOI_HUD_X`／`_Y`／`_DX`／`_DY`／`_W`／`_H`。
+定案之後可以照抄落 `DEFAULT_HUD_LAYOUT`。
 
 ⚠️ **一定要 `setContentProtection(true)`**：我哋用 `desktopCapturer` 擷取自己個螢幕，
 冇呢個設定 HUD **會入到自己嘅擷取畫面**（等於自己讀自己嘅字）。
 驗法：`UMAPYOI_DUMP_FRAMES=5 npm start` → `node tools/raw-to-png.js shots/live-debug`
 → 睇 dump 出嚟嘅幀有冇 HUD 嘅字。
 
-⚠️ 位置用**相對座標**（唔係固定像素）：遊戲冇固定解析度、只有 16:9（地雷 #24）。
-HUD 右邊界**唔可以過圖闊 0.15**，否則會壓住 statbar ROI／第一格數字（有測試守住）。
-
 ⚠️ 讀唔到嗰陣**保留上一個穩定值**（`stale` 態，變黃色提示），唔會閃走或者顯示空白 ——
 「唔見面板條」係常態（47 幀 dump 入面 35 幀都係），閃走會令 HUD 冇用。
+五維逐格都要一齊留住（唔止總分）。
+
+⚠️ **技能分未讀到唔可以出 0**：一定係 `技能分 ？／總分 ≥ 五維分`。
+呢個係本專案底線（見 §8）——估一個數比起唔顯示更差。
 
 ---
 
@@ -454,7 +471,7 @@ HUD 右邊界**唔可以過圖闊 0.15**，否則會壓住 statbar ROI／第一�
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **96 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **102 個測試必須全過**
 2. `node tools/fit-score.js` — 必須 `完全命中 4/4　總絕對誤差 0`
 3. 如果改咗五維／技能／ランク相關嘅嘢，`node tools/breakdown.js` 逐招核對一次
 4. **如果改咗影像相關嘅嘢**：

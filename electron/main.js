@@ -23,7 +23,7 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { loadTemplates, readStats, StatTracker, scoreStats } from '../src/vision/reader.js';
 import { readStatBar, DEFAULT_STATBAR_OPTIONS } from '../src/vision/statbar.js';
 import { STAT_LABELS, STAT_KEYS } from '../src/umascore/evaluate.js';
-import { anchorHud, contentRect, hudState, DEFAULT_HUD_LAYOUT } from '../src/hud/layout.js';
+import { anchorHud, contentRect, hudState, layoutFromEnv } from '../src/hud/layout.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -62,6 +62,11 @@ let lastScoreAt = 0;
 let lastHudKey = '';
 /** 遊戲視窗大細（由擷取串流報返嚟），用嚟幫 HUD 對位。 */
 let hudGameSize = { width: 0, height: 0 };
+/** HUD 佈局（可以由環境變數覆寫；`UMAPYOI_HUD_EDIT=1` 開對位模式）。 */
+let hudLayout = null;
+const HUD_EDIT = Boolean(process.env.UMAPYOI_HUD_EDIT);
+/** 最近一次顯示嘅五維數值（HUD 要逐格顯示）。 */
+let lastStats = null;
 
 function createHudWindow() {
   const win = new BrowserWindow({
@@ -104,12 +109,16 @@ function createHudWindow() {
  *
  * 我哋冇 Win32 API 直接讀「遊戲視窗嘅螢幕座標」（`desktopCapturer` 只俾 id／標題／大細），
  * 而賽馬娘桌面版通常係全螢幕／最大化 → 用**前景顯示器嘅工作區**做基準係穩陣嘅近似。
- * 實測唔啱位嘅話，改 `src/hud/layout.js` 嘅 `DEFAULT_HUD_LAYOUT` 就得（有測試守住邊界）。
+ *
+ * 唔啱位有兩個唔使改 code 嘅方法（見 AGENTS §6.4）：
+ *   ① `UMAPYOI_HUD_EDIT=1 npm start` → HUD 會顯示自己嘅範圍／偏移，自己目測調
+ *   ② `UMAPYOI_HUD_X=0.01,0.20` 之類嘅環境變數
  *
  * @param {{width:number,height:number}} game 遊戲視窗大細（由擷取串流量到）
  */
 function placeHud(game) {
   if (!hudWindow) return;
+  if (!hudLayout) hudLayout = layoutFromEnv(process.env);
   const display = screen.getPrimaryDisplay();
   const area = display.workArea;
   // 遊戲視窗通常同工作區一樣大；大細唔同時（例如視窗化）以擷取到嘅大細為準。
@@ -119,15 +128,22 @@ function placeHud(game) {
     width: Math.min(area.width, Math.round(game.width || area.width)),
     height: Math.min(area.height, Math.round(game.height || area.height)),
   };
-  const rect = anchorHud(contentRect(windowRect), DEFAULT_HUD_LAYOUT);
+  const rect = anchorHud(contentRect(windowRect), hudLayout);
   hudWindow.setBounds(rect);
 }
 
 /** 推 HUD 顯示狀態（主程序計好，renderer 只畫）。 */
 function pushHud(now = Date.now()) {
   if (!hudWindow || hudWindow.isDestroyed()) return;
-  const view = hudState({ score: lastScore, updatedAt: lastScoreAt, now });
-  const key = `${view.state}|${view.text}|${view.note}`;
+  const view = hudState({
+    score: lastScore,
+    stats: lastStats,
+    updatedAt: lastScoreAt,
+    now,
+    edit: HUD_EDIT,
+    layout: hudLayout,
+  });
+  const key = JSON.stringify([view.state, view.lines, view.summary, view.note, view.edit]);
   if (key === lastHudKey) return; // 冇變就唔好每幀 send
   lastHudKey = key;
   hudWindow.webContents.send('hud', view);
@@ -208,7 +224,11 @@ app.whenReady().then(async () => {
   // 唔想要可以 `UMAPYOI_NO_HUD=1 npm start`。
   if (!process.env.UMAPYOI_NO_HUD) {
     hudWindow = createHudWindow();
-    console.log('[HUD] 已開（左下角空白位；要閂就 UMAPYOI_NO_HUD=1）');
+    hudLayout = layoutFromEnv(process.env);
+    console.log(
+      `[HUD] 已開（左下角空白位；要閂就 UMAPYOI_NO_HUD=1）` +
+        (HUD_EDIT ? '　⭐ 對位模式：HUD 會顯示自己嘅範圍／偏移' : ''),
+    );
   }
 
   win.webContents.once('did-finish-load', async () => {
@@ -327,6 +347,7 @@ ipcMain.on('frame', (_event, frame) => {
   // ⭐ 每次都更新（唔理 `changed`）：HUD 嘅「新鮮度」靠呢個時間戳，
   //    數值一樣都要更新，否則 HUD 會以為數據過期而轉 `stale`。
   lastScore = score;
+  lastStats = stats;
   lastScoreAt = Date.now();
 
   if (!changed) return;
