@@ -28,6 +28,7 @@ import { STAT_LABELS, STAT_KEYS } from '../src/umascore/evaluate.js';
 import { anchorHud, contentRect, hudState, clampLayout, layoutFromBounds, HUD_ENV_KEYS } from '../src/hud/layout.js';
 import { loadConfig, saveConfig, resolveHudConfig, validateConfig, assertFullDisplay } from '../src/hud/config.js';
 import { configPathFor } from '../src/hud/config-path.js';
+import { envFlag } from '../src/hud/env-flag.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -95,32 +96,13 @@ let settingsWindow = null;
 let hudContent = null;
 
 /**
- * ⭐ 環境變數「開關旗標」嘅**唯一**讀法（唔准再用 `Boolean(process.env.X)`）。
+ * 環境變數「開關旗標」（`UMAPYOI_NO_HUD`／`UMAPYOI_NO_SETTINGS`／`UMAPYOI_HUD_EDIT`）
+ * 一律經 `envFlag()` 讀（**唔准**再用 `Boolean(process.env.X)` 嗰種 truthiness）。
  *
- * 為何要（獨立審計發現）：以前三個旗標都係 truthiness → `UMAPYOI_NO_HUD=0` 竟然會**閂咗 HUD**
- * （`'0'` 係非空字串 = truthy），同文件寫嘅「=1」完全對唔上 → 用戶一踩就中。
- *
- * 規則（**唔准**放寬）：
- *   - 只有 `'1'`／`'true'`（**大小寫唔敏感**、前後空白忽略）＝ **開**
- *   - `'0'`／`'false'`／空字串／**冇 set** ＝ 閂（明確講咗閂）
- *   - **其他值（例如 `yes`／`on`／`2`）＝ 閂，而且一定要大聲警告**
- *     —— 唔認識嘅值唔可以靜默當「開」或者「閂」（寧願嘈，都唔好靜默做錯事）。
- *
- * @param {string} name 環境變數名
- * @returns {boolean} 係唔係開
+ * ⚠️ 實作喺 `src/hud/env-flag.js`（純函數、零 Electron；規則同 `onWarn` 用法見嗰個檔）：
+ * 原本住喺呢個檔，而 `main.js` import 咗 `electron` → **入唔到 `node --test`**
+ * → 行為正確（21/21 手動核對）但零自動測試覆蓋。今次搬遷**行為 100% 唔變**。
  */
-function envFlag(name) {
-  const raw = process.env[name];
-  if (raw === undefined || raw === null) return false;
-  const value = String(raw).trim().toLowerCase();
-  if (value === '1' || value === 'true') return true;
-  if (value === '0' || value === 'false' || value === '') return false;
-  console.warn(
-    `[旗標] ⚠️ ${name}＝「${raw}」係唔認識嘅值 → 當**冇開**。` +
-    '只認 1／true（大小寫唔敏感）；0／false／空字串 = 冇開。',
-  );
-  return false;
-}
 
 /** HUD 佈局（可以由環境變數覆寫；`UMAPYOI_HUD_EDIT=1` 開對位模式）。 */
 const HUD_EDIT = envFlag('UMAPYOI_HUD_EDIT');
