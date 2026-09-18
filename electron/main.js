@@ -26,7 +26,7 @@ import { readStatBar, DEFAULT_STATBAR_OPTIONS } from '../src/vision/statbar.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
 import { encodePng } from '../src/vision/pngwrite.js';
 import { STAT_LABELS, STAT_KEYS } from '../src/umascore/evaluate.js';
-import { anchorHud, contentRect, hudState, clampLayout, layoutFromBounds, HUD_ENV_KEYS } from '../src/hud/layout.js';
+import { anchorHud, contentRect, hudState, clampLayout, layoutFromBounds, relativeFromBounds, HUD_ENV_KEYS } from '../src/hud/layout.js';
 import { loadConfig, saveConfig, resolveHudConfig, validateConfig, assertFullDisplay } from '../src/hud/config.js';
 import { configPathFor } from '../src/hud/config-path.js';
 import { envFlag } from '../src/hud/env-flag.js';
@@ -529,7 +529,9 @@ function finishDrag(commit) {
       console.error('[HUD] ⚠️ 未對位（未有 contentRect）→ 拖位結果反推唔到，唔存檔。');
       return;
     }
-    // 由實際 bounds 反推相對值（只改 offset；見 layout.js `layoutFromBounds()` 註解）。
+    // 由實際 bounds 反推相對值（位置寫入 `x[0]`／`y[0]`、`size` 唔郁、`offset` 歸零；
+    // ⚠️ 點解唔再用「只改 offset」見 layout.js `layoutFromBounds()` 嘅註解 —— 簡單講：
+    //    offset 有 ±1 上限，拖到某個位就飽和，用戶會見到「右半邊拖唔到」）。
     // ⚠️ 一定要寫入 `hudConfig.layout` 再 `placeHud()`：直接 `setBounds()` 會俾
     //    下一幀／`display-metrics-changed` 嗰個 `placeHud()` 蓋走（AGENTS §6.4）。
     // ⚠️ `layoutFromBounds()` 回嘅係**一個 layout**，而 `applyHudConfig()`／`saveConfig()`
@@ -539,10 +541,26 @@ function finishDrag(commit) {
       layout: layoutFromBounds(hudContent, bounds, hudConfig.layout),
       display: { ...hudConfig.display },
     };
+    // ⚠️ 用戶拖出內容區外面 → `layoutFromBounds()` 已經**夾返入去**（HUD 一定要擺得返出嚟，
+    //    見 layout.js 嗰段註解）。呢度要**講出嚟**（唔准靜默改用戶拖到嘅位）。
+    try {
+      const rel = relativeFromBounds(hudContent, bounds);
+      const clampedX = Math.abs(rel.x0 - config.layout.x[0]) > 1e-6;
+      const clampedY = Math.abs(rel.y0 - config.layout.y[0]) > 1e-6;
+      if (clampedX || clampedY) {
+        console.warn(
+          `[HUD] ⚠️ 拖到內容區外面（${clampedX ? `x ${rel.x0.toFixed(3)}` : ''}` +
+          `${clampedX && clampedY ? '、' : ''}${clampedY ? `y ${rel.y0.toFixed(3)}` : ''}）` +
+          `→ 已夾返入去（x ${config.layout.x[0]}、y ${config.layout.y[0]}）。` +
+          ' 理由：HUD 擺出內容區就會超出螢幕／搵唔返，所以拖位一律夾入去。',
+        );
+      }
+    } catch {
+      /* 反推唔到就唔嘈（上面 `layoutFromBounds()` 一樣會 throw 落 catch） */
+    }
     applyHudConfig(config, {
       why: `拖位：x0=${config.layout.x[0]} y0=${config.layout.y[0]}　` +
-        `偏移 ${config.layout.offset.dx}/${config.layout.offset.dy}　` +
-        `大細 ${config.layout.size.w}×${config.layout.size.h}`,
+        `大細 ${config.layout.size.w}×${config.layout.size.h}　（offset 已歸零）`,
     });
     try {
       saveHudConfigFile(config);

@@ -58,42 +58,85 @@ test('拖位反推：round-trip 之後像素位置一樣（容許 ±1px 圓整�
   assert.equal(cases, CONTENTS.length * LAYOUTS.length);
 });
 
-test('拖位反推：位置基準 x0／y0 同 size 原封不動（x1 會被正規化）', () => {
+test('拖位反推：位置寫入 x0／y0、size 原封不動、offset 歸零', () => {
   const content = contentRect({ x: 0, y: 0, width: 1920, height: 1080 });
   for (const { l } of LAYOUTS) {
     // 模擬「用戶拖去內容區嘅 (0.42, 0.66)」
     const dragged = { x: content.x + Math.round(content.width * 0.42), y: content.y + Math.round(content.height * 0.66), width: anchorHud(content, l).width, height: anchorHud(content, l).height };
     const out = layoutFromBounds(content, dragged, l);
-    assert.equal(out.x[0], l.x[0], 'x0（位置基準）唔應該被拖位改到');
-    assert.equal(out.y[0], l.y[0], 'y0（位置基準）唔應該被拖位改到');
     assert.deepEqual(out.size, l.size, 'size 唔應該被拖位改到（見 layoutFromBounds 註解①）');
-    // ⚠️ `clampLayout()` 會維持不變式 x1 = x0 + size.w。呢個係**刻意**嘅正規化：
-    //    `x[1]` 只喺 `size` 缺席嗰陣做 fallback（而 validateConfig 永遠會補 size）
-    //    → 所以 x1 改咗完全唔影響任何幾何（下面 anchorHud 一比就知）。
-    assert.equal(out.x[1], Math.round((l.x[0] + l.size.w) * 1e6) / 1e6, 'x1 要正規化成 x0 + w');
-    assert.equal(out.y[1], Math.round((l.y[0] + l.size.h) * 1e6) / 1e6, 'y1 要正規化成 y0 + h');
-    if (l.x[1] === l.x[0] + l.size.w) assert.deepEqual(out.x, l.x, '本身已符合不變式 → 範圍要完全唔郁');
-    assert.equal(anchorHud(content, out).width, anchorHud(content, l).width, '正規化 x1 唔可以改到實際闊度');
-
-    assert.ok(Math.abs(out.offset.dx - (0.42 - l.x[0])) < 0.001, `dx 要反映拖到嘅位置：${out.offset.dx}`);
-    assert.ok(Math.abs(out.offset.dy - (0.66 - l.y[0])) < 0.001, `dy 要反映拖到嘅位置：${out.offset.dy}`);
+    // ⭐ 2026-09-19 起：位置**直接寫 x0／y0**（唔再靠 `offset`）——
+    //    `offset` 有 ±1 上限，舊做法拖到某個位就飽和（用戶實機存檔真係寫死 dx=1）
+    //    → 用戶報「右半邊拖唔到」。所以呢兩句係新契約，唔准改返做 offset 版本。
+    assert.ok(Math.abs(out.x[0] - 0.42) < 0.002, `x0 要跟拖到嘅位置，實得 ${out.x[0]}`);
+    // ⚠️ 大細唔同嘅佈局（例如 h = 0.4）拖到 y0 = 0.66 會令下邊界 1.06 > 1 → **夾返入去**
+    //    （呢個就係「HUD 永遠唔會走失」嘅代價：貼住邊為止，唔會消失喺螢幕外）
+    const expectY = Math.min(0.66, 1 - l.size.h);
+    assert.ok(Math.abs(out.y[0] - expectY) < 0.002, `y0 要跟拖到嘅位置（會夾入內容區），實得 ${out.y[0]}`);
+    assert.deepEqual(out.offset, { dx: 0, dy: 0 }, 'offset 要歸零（佢係 env 微調旋鈕，唔應該同拖位疊加）');
+    assert.equal(out.x[1], Math.round((out.x[0] + l.size.w) * 1e6) / 1e6, 'x1 要維持 = x0 + w');
+    assert.equal(out.y[1], Math.round((out.y[0] + l.size.h) * 1e6) / 1e6, 'y1 要維持 = y0 + h');
+    const back = anchorHud(content, out);
+    // ⚠️ 只有「拖到嘅位放得落內容區」嗰陣，擺返出嚟先會一模一樣；
+    //    放唔落就會貼住邊（呢個係刻意嘅夾法，上面嗰句已經驗過夾出嚟嘅值）。
+    const fits = 0.42 + l.size.w <= 1 + 1e-9 && 0.66 + l.size.h <= 1 + 1e-9;
+    if (fits) {
+      assert.ok(
+        Math.abs(back.x - dragged.x) <= 1 && Math.abs(back.y - dragged.y) <= 1,
+        `擺返出嚟要同拖到嘅位一樣（±1px）：${dragged.x},${dragged.y} → ${back.x},${back.y}`,
+      );
+    }
+    assert.equal(back.width, dragged.width, '大細一律唔郁');
+    assert.equal(back.height, dragged.height, '大細一律唔郁');
   }
 });
 
-test('拖位反推：反推出嚟嘅 offset 一定過 clampLayout（可以即刻存檔）', () => {
-  const content = contentRect({ x: 0, y: 0, width: 1920, height: 1080 });
+test('⭐ 拖出界一定要夾返入內容區（HUD 永遠唔會走失、唔會再飽和卡死）', () => {
+  const content = contentRect({ x: 100, y: 60, width: 1920, height: 1111 });
   const l = LAYOUTS[0].l;
-  // 拖去最右／最底（甚至出界）→ offset 唔可以爆出 ±1
-  for (const [rx, ry] of [[1, 1], [1.4, 1.6], [-0.3, -0.2]]) {
+  const win = anchorHud(content, l);
+  for (const [rx, ry] of [[1, 1], [1.4, 1.6], [-0.3, -0.2], [2, 3], [0.5, -1]]) {
     const out = layoutFromBounds(content, {
       x: Math.round(content.x + content.width * rx),
       y: Math.round(content.y + content.height * ry),
-      width: 400, height: 300,
+      width: win.width,
+      height: win.height,
     }, l);
     assert.deepEqual(out, clampLayout(out), '反推結果必須已經係 clamp 過嘅（唔可以再被夾）');
-    assert.ok(out.offset.dx >= -1 && out.offset.dx <= 1 && out.offset.dy >= -1 && out.offset.dy <= 1);
-    assert.ok(out.x[0] < out.x[1] && out.y[0] < out.y[1]);
+    assert.deepEqual(out.offset, { dx: 0, dy: 0 }, '拖位一律唔准留 offset（舊 bug 就係佢飽和）');
+    assert.ok(out.x[0] <= 1 - out.size.w + 1e-9, `x0 唔可以令右邊界走出內容區：${out.x[0]}`);
+    assert.ok(out.y[0] <= 1 - out.size.h + 1e-9, `y0 唔可以令下邊界走出內容區：${out.y[0]}`);
+    const px = anchorHud(content, out);
+    assert.ok(
+      px.x >= content.x && px.x + px.width <= content.x + content.width + 1,
+      `HUD 一定要留喺內容區內（水平）：${px.x}..${px.x + px.width} vs ${content.x}..${content.x + content.width}`,
+    );
+    assert.ok(
+      px.y >= content.y && px.y + px.height <= content.y + content.height + 1,
+      `HUD 一定要留喺內容區內（垂直）：${px.y}..${px.y + px.height} vs ${content.y}..${content.y + content.height}`,
+    );
   }
+});
+
+test('⭐ 回歸：舊檔嘅飽和 offset（dx=1／dy=−0.82）唔會再令拖位卡死', () => {
+  // 用戶 2026-09-19 實機寫落嘅狀態（dx 飽和成 1、dy 係「內容區高度 315」之下嘅產物）
+  const content = contentRect({ x: 0, y: 0, width: 1920, height: 1080 });
+  const broken = {
+    x: [0.665, 1],
+    y: [0, 0.464],
+    offset: { dx: 1, dy: -0.8235294117647058 },
+    size: { w: 0.335, h: 0.464 },
+  };
+  const out = layoutFromBounds(content, {
+    x: content.x + Math.round(content.width * 0.5),
+    y: content.y + Math.round(content.height * 0.5),
+    width: Math.round(content.width * 0.335),
+    height: Math.round(content.height * 0.464),
+  }, broken);
+  assert.ok(Math.abs(out.x[0] - 0.5) < 0.002, `拖到中間就要擺中間（唔可以受舊 offset 影響）：${out.x[0]}`);
+  assert.ok(Math.abs(out.y[0] - 0.5) < 0.002, `拖到中間就要擺中間（唔可以受舊 offset 影響）：${out.y[0]}`);
+  assert.deepEqual(out.offset, { dx: 0, dy: 0 }, '舊嘅飽和 offset 要被清走');
+  assert.deepEqual(out.size, broken.size, 'size 照舊唔郁');
 });
 
 test('拖位反推：大細被 `anchorHud` 嘅 80px 下限夾過都唔會改壞 size', () => {

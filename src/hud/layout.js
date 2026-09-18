@@ -192,18 +192,34 @@ export function relativeFromBounds(content, bounds) {
 }
 
 /**
- * 拖完之後嘅**新佈局**：只改 `offset`，`x`／`y` 範圍同 `size` 一律唔郁。
+ * 拖完之後嘅**新佈局**：位置寫入 `x[0]`／`y[0]`，`size` 一律唔郁，`offset` 歸零。
  *
- * ## 為何係改 offset 而唔係改 x0／size（唔好「順手改返」）
+ * ## ⚠️ 2026-09-19 改動（用戶實機報「淨係可以喺左半邊拖嚟拖去，右半邊唔得」）
  *
- * `anchorHud()` 嘅位置 ＝ `content.x + content.width × (x[0] + offset.dx)`，
- * 所以「拖到邊」有兩個等價講法：改 `x[0]`、或者改 `offset.dx`。揀 offset 嘅原因：
+ * 舊版係「**只改 `offset`**」（`dx = rel.x0 − x[0]`），而 `offset` 有 **±1** 上限
+ *（`config.js` 契約）→ 拖到某個位之後 `dx` **飽和**，之後點拖都彈返原位。
+ * 實測用戶個 `hud-position.json`：`offset.dx` **寫死成 1**（飽和值）、
+ * `offset.dy = −0.8235294117647058`（＝要個窗擺喺內容區上方 0.8235×高，
+ * 用真內容區（1080）根本做唔到 —— 最多 `−size.h`）。兩個數都係「嚴重狀態」嘅指紋。
  *
+ * 而家：
+ *   ① **位置直接寫 `x[0]`／`y[0]`** —— 呢兩個欄位本來就係「位置」嘅意思，
+ *      而且佢哋冇 ±1 上限（上限係「夾入內容區」，見 ②），所以拖到邊都跟得到。
+ *   ② `clampLayout()` 會將位置**夾入內容區**（`x0 ∈ [0, 1−size.w]`）——
+ *      **HUD 永遠唔會擺到用戶搵唔返嘅地方**（拖出界只會貼住邊，唔會消失喺螢幕外）。
+ *   ③ **`offset` 歸零**：佢嘅角色係「環境變數／微調旋鈕」（`UMAPYOI_HUD_DX`），
+ *      拖位嘅結果唔應該同一個舊 offset **疊加**（疊加就係上面嗰個飽和狀態嘅來源）。
+ *      ⚠️ 有 set `UMAPYOI_HUD_*` 嘅話，檔案照樣會被 env 蓋過（優先次序係咁設計，
+ *      `main.js` 已經會 log 警告）。
+ *
+ * ## 為何「只改 offset」唔係為咗 `size`（唔准誤會呢點）
+ *
+ * 下面兩點係講**唔准改 `size`**，同「位置放邊個欄位」無關：
  *   ① **`anchorHud()` 有大細下限**（`max(80, …)`／`max(40, …)`）。若果個窗細到被夾過，
  *      `bounds.width / content.width` 就**唔等於** `size.w` —— 攞佢寫返 `size` 會令
  *      「拖一拖，大細自己變咗」（用戶冇要求改大細）。
  *   ② **整數 round**：`bounds` 係整數像素，反推返 `size.w` 會有 0.5px 級嘅誤差，
- *      來回幾次就係一條漂移路徑。offset 只影響位置，而位置誤差 ≤1px 唔會累積
+ *      來回幾次就係一條漂移路徑。而位置誤差 ≤1px 唔會累積
  *      （因為每次都係由**實際 bounds** 重算，唔係疊加）。
  *
  * ⚠️ 唔准用 `clientX/clientY` 嗰類「相對視窗」嘅座標嚟計 —— `setBounds()` 一移窗
@@ -211,24 +227,20 @@ export function relativeFromBounds(content, bounds) {
  *
  * @param {object} content `placeHud()` 計出嚟嘅內容區（螢幕像素）
  * @param {object} bounds 拖完之後 `hudWindow.getBounds()`
- * @param {object} [layout] 而家生效嘅佈局（x／y／size 由佢借過嚟）
+ * @param {object} [layout] 而家生效嘅佈局（**只借 `size`**）
  * @returns {{x:number[],y:number[],offset:{dx:number,dy:number},size:{w:number,h:number}}}
- *          已經過 `clampLayout()` → 一定合法、可以即刻存檔
- *
- * ⚠️ `clampLayout()` 會維持不變式 `x[1] = x[0] + size.w`，所以若果交入嚟嘅 `x[1]`
- * 唔等於 `x[0] + size.w`，佢會被**正規化**。呢個係刻意嘅（`x[1]` 只喺 `size` 缺席嗰陣
- * 做 fallback，而 `validateConfig()` 永遠會補 `size` → 改 `x[1]` 完全唔影響任何幾何）。
+ *          已經過 `clampLayout()` → 一定合法、位置一定喺內容區內、可以即刻存檔
  */
 export function layoutFromBounds(content, bounds, layout = DEFAULT_HUD_LAYOUT) {
   const rel = relativeFromBounds(content, bounds);
   const base = layout ?? DEFAULT_HUD_LAYOUT;
-  const bx = Array.isArray(base.x) ? base.x : DEFAULT_HUD_LAYOUT.x;
-  const by = Array.isArray(base.y) ? base.y : DEFAULT_HUD_LAYOUT.y;
+  // ⚠️ 只借 `size`（同以前一樣）：`x`／`y` 要用**拖到嘅實際位置**，唔可以借舊值。
+  const size = { ...(base.size ?? DEFAULT_HUD_SIZE) };
   return clampLayout({
-    x: [...bx],
-    y: [...by],
-    offset: { dx: rel.x0 - num(bx[0], DEFAULT_HUD_LAYOUT.x[0]), dy: rel.y0 - num(by[0], DEFAULT_HUD_LAYOUT.y[0]) },
-    size: { ...(base.size ?? DEFAULT_HUD_SIZE) },
+    x: [rel.x0, rel.x0 + size.w],
+    y: [rel.y0, rel.y0 + size.h],
+    offset: { dx: 0, dy: 0 },
+    size,
   });
 }
 
