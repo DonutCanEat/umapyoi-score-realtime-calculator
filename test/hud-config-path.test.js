@@ -58,6 +58,13 @@ test('設定檔路徑：檔名可以被覆寫，但唔准帶路徑分隔符', ()
 });
 
 test('設定檔路徑：預設檔名同 config.js 嘅 HUD_CONFIG_FILENAME 一致（兩邊唔可以走樣）', () => {
+  // ⚠️ 呢兩條係**硬編字面值**斷言：`CONFIG_PATH_WHERE` 嘅值以前只同「自己」比較
+  //    （`assert.equal(r.where, CONFIG_PATH_WHERE.devRoot)`）→ 把 `devRoot` 由
+  //    `'dev-root'` 改成任何字串都捉唔到（測試同常數一齊壞，靜默）。呢個值係
+  //    log 同設定窗顯示用嘅「我讀咗邊條路徑規則」，改壞 = 診斷訊息講錯嘢。
+  assert.equal(CONFIG_PATH_WHERE.devRoot, 'dev-root');
+  assert.equal(CONFIG_PATH_WHERE.packagedUserData, 'packaged-userData');
+  assert.equal(Object.keys(CONFIG_PATH_WHERE).length, 2, '唔可以靜默加第三種路徑規則（要同步更新測試同 log）');
   assert.equal(HUD_CONFIG_FILENAME, 'hud-position.json');
   const r = configPathFor({ isPackaged: false, rootDir: 'D:\\proj' });
   assert.ok(r.path.endsWith(HUD_CONFIG_FILENAME));

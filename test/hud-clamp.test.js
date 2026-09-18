@@ -62,7 +62,35 @@ test('clampLayout：負數／超出範圍／NaN 一律夾返合法範圍', () =>
 
   const nan = clampLayout({ x: [NaN, 0.9], y: [undefined, 0.9], offset: {}, size: {} });
   assert.ok(Number.isFinite(nan.x[0]) && Number.isFinite(nan.y[0]) && Number.isFinite(nan.size.w));
+  // ⚠️ 唔可以只斷言 `Number.isFinite` —— 審計實測：把 `clamp()` 內嘅
+  //    `if (!Number.isFinite(v)) return lo;` 改成 `return hi`，**舊測試照樣全綠**。
+  //    所以呢度要斷言**實際值**（下面三個實測值各自綁住一條路）：
+  //      ① `x[0] = NaN` → `num(x[0], DEFAULT_HUD_LAYOUT.x[0])` → **0.598**（預設，唔係 0／1）
+  //      ② `y[0] = undefined` → **0.03**（同上）
+  //      ③ `size` 係 `{}`（＝兩邊都唔係有限數字）→ `size.w` 由 span 推唔到
+  //         （span 係 NaN）→ 落 **DEFAULT_HUD_SIZE.w = 0.212**
+  //    ⚠️ 註：`clamp()` 自己嗰個非有限值 guard 喺呢啲輸入之下係**到唔到**嘅
+  //    （`num()` 已經攔咗）—— 所以「guard 改成 return hi」冇任何純函數測試捉得到。
+  //    呢度可以做嘅係綁死**回傳值**：任何人改壞 `clamp()` 嘅 lo／hi 或者預設值都會 fail。
+  assert.equal(nan.x[0], DEFAULT_HUD_LAYOUT.x[0], 'NaN → 落預設 x0（唔係 0／1）');
+  assert.equal(nan.y[0], DEFAULT_HUD_LAYOUT.y[0], 'undefined → 落預設 y0（唔係 0／1）');
+  assert.equal(nan.size.w, DEFAULT_HUD_SIZE.w, '推唔到嘅大細要落預設大細（唔係 1、亦唔係 0）');
+  assert.equal(nan.size.h, DEFAULT_HUD_SIZE.h);
+  assert.deepEqual(nan.offset, { dx: 0, dy: 0 });
   assertValid(nan);
+
+  // ⚠️ 承上：`clamp()` 嘅**上下限**都要綁實際值（上面 `x[0] = NaN` 行嘅係 `num()` 嘅
+  //    fallback，唔係 `clamp()` 嘅界）。呢度用「唔係 NaN 但超出範圍」嘅值去行 `clamp()`。
+  //    上界：`x = [1, 1.5]`（span 0.5 → w = 0.5）→ 上界係 `1 − 0.5 = 0.5`。
+  const clampHi = clampLayout({ x: [1, 1.5], y: [1, 1.5], offset: {}, size: {} });
+  assert.equal(clampHi.size.w, 0.5, '（前提）大細由範圍推 = 0.5');
+  assert.equal(clampHi.x[0], 0.5, '超出上界 → 夾去 `1 − size.w`（唔係 0、亦唔係 1）');
+  assert.equal(clampHi.x[1], 1);
+  //    下界：負數 → 0。
+  const clampLo = clampLayout({ x: [-99, 0.1], y: [-99, 0.1], offset: {}, size: {} });
+  assert.equal(clampLo.x[0], 0, '低過下界 → 夾去 0');
+  assertValid(clampHi);
+  assertValid(clampLo);
 
   // 大細 0／負數：一定要夾到大過 0（validateConfig 要求 size > 0）
   const zero = clampLayout({ x: [0, 0.5], y: [0, 0.5], offset: {}, size: { w: 0, h: -1 } });
@@ -95,6 +123,7 @@ test('clampLayout：缺席嘅 size 用範圍做 fallback（同 anchorHud 同一�
 
 test('clampLayout：小數位數唔會令像素位置漂（@1920 之下 1px = 0.00052）', () => {
   assert.ok(LAYOUT_DECIMALS >= 4, `小數位要夠多（建議 ≥4），實得 ${LAYOUT_DECIMALS}`);
+
   const content = { x: 0, y: 0, width: 1920, height: 1080 };
   // 重複 20 次「夾 → 反推 → 再夾」，位置唔應該慢慢飄走
   let layout = clampLayout({
