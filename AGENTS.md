@@ -125,7 +125,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（180 個，必須全過）
+npm.cmd test              # 單元測試（181 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 
 # HUD 相關開關（環境變數）
 #   ⚠️ 三個旗標（UMAPYOI_NO_HUD／UMAPYOI_NO_SETTINGS／UMAPYOI_HUD_EDIT）嘅**確切**語意
@@ -233,7 +233,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **180 個**）
+1. `npm.cmd test` 全過（現時 **181 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 4/4　完全命中 4/4　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（雙閘：**實機面板條 9/9**），兩個都要中
@@ -310,6 +310,10 @@ test/
                       #    經 caller 嘅 `onWarn`（caller 收 1 個、裸 `console.warn` 收 0 個、
                       #    檔案／env 兩條路嘅措辭要一致）＋ `loadConfig()` 舊呼叫寫法唔准破
                       #    （冇參數／`{}`／`{filePath}`／多傳 onWarn／檔案唔存在／舊式字串）
+                      #    ⭐ 另有「冇 filePath ＝ 讀 cwd 嗰個 `hud-position.json`」：
+                      #    **自己 `process.chdir()` 去 `os.tmpdir()` 嘅臨時目錄**，兩個分支都真驗
+                      #    （冇檔 → 回預設、唔准 throw；有檔 → 真係讀到嗰個檔）—— 理由：唔准斷言
+                      #    「repo 根有 `hud-position.json`」（嗰個檔唔入 git，乾淨 checkout 冇 → 見 §8）
   hud-config-path.test.js # ⭐ 設定檔路徑決策（開發 vs 打包 vs asar）
   hud-settings-html.test.js # ⭐ 「設定窗 ↔ config.js 欄位對齊」：**真係由 `electron/settings.html` 抽**
                       #    `DISPLAY_FIELDS`／`NUM_FIELDS` 再同 `HUD_DISPLAY_KEYS`／layout 欄位比對
@@ -773,7 +777,16 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **180 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **181 個測試必須全過**
+   ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
+   （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
+   `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
+   （實測 2026-09-19：修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js` 要求 repo 根
+   有 `hud-position.json`），修好之後兩邊都 **181／0**）。
+   ⚠️ **唔准**用 `skip`／`if (!existsSync(...)) return;` 迴避 —— 咁樣只係把「驗唔到」
+   變成「靜默通過」。要用嘅話就**自己控制環境**（例如 `os.tmpdir()` ＋ `process.chdir()`）。
+   ⚠️ 涉及 cwd 嘅測試一定要**同步** ＋ `finally` 還原（`--test-isolation=none` 之下
+   所有測試共用一個 process，`chdir` 係全域狀態）。
 2. `node tools/fit-score.js` — 必須 `完全命中 4/4　總絕對誤差 0`
 3. 如果改咗五維／技能／ランク相關嘅嘢，`node tools/breakdown.js` 逐招核對一次
 4. **如果改咗影像相關嘅嘢**：
