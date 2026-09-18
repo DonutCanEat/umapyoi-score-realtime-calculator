@@ -95,10 +95,28 @@ export const DEFAULT_HUD_OFFSET = Object.freeze({ dx: 0, dy: 0 });
 export const DEFAULT_HUD_SIZE = Object.freeze({ w: 0.212, h: 0.255 });
 
 /**
+ * `layoutFromEnv()` 讀嘅環境變數名 → 佈局欄位。
+ *
+ * 為何要 export：`src/hud/config.js` 要知「用戶到底有冇 set 呢個 env」
+ * （env 優先過 config 檔，所以要逐個欄位判斷），而解析邏輯唔准複製一份
+ * → 名稱集中喺度，兩邊共用同一個 source of truth。
+ */
+export const HUD_ENV_KEYS = Object.freeze({
+  x: 'UMAPYOI_HUD_X',
+  y: 'UMAPYOI_HUD_Y',
+  dx: 'UMAPYOI_HUD_DX',
+  dy: 'UMAPYOI_HUD_DY',
+  w: 'UMAPYOI_HUD_W',
+  h: 'UMAPYOI_HUD_H',
+});
+
+/**
  * 解析環境變數（`UMAPYOI_HUD_X=0.01,0.16` 之類）→ HUD 佈局。
  *
  * 全部係選填；冇俾就用預設。數字唔合法就**唔會**靜靜當 0 —— 會 throw，
  * 因為靜默用錯位置比起跑唔到更難查（同本專案「唔可以靜默出錯」一致）。
+ *
+ * 變數名見 `HUD_ENV_KEYS`。
  *
  * @param {Record<string,string|undefined>} [env]
  * @returns {{x:number[],y:number[],offset:{dx:number,dy:number},size:{w:number,h:number}}}
@@ -121,15 +139,15 @@ export function layoutFromEnv(env = {}) {
     return n;
   };
   return {
-    x: pair('UMAPYOI_HUD_X', DEFAULT_HUD_LAYOUT.x),
-    y: pair('UMAPYOI_HUD_Y', DEFAULT_HUD_LAYOUT.y),
+    x: pair(HUD_ENV_KEYS.x, DEFAULT_HUD_LAYOUT.x),
+    y: pair(HUD_ENV_KEYS.y, DEFAULT_HUD_LAYOUT.y),
     offset: {
-      dx: num('UMAPYOI_HUD_DX', DEFAULT_HUD_OFFSET.dx),
-      dy: num('UMAPYOI_HUD_DY', DEFAULT_HUD_OFFSET.dy),
+      dx: num(HUD_ENV_KEYS.dx, DEFAULT_HUD_OFFSET.dx),
+      dy: num(HUD_ENV_KEYS.dy, DEFAULT_HUD_OFFSET.dy),
     },
     size: {
-      w: num('UMAPYOI_HUD_W', DEFAULT_HUD_SIZE.w),
-      h: num('UMAPYOI_HUD_H', DEFAULT_HUD_SIZE.h),
+      w: num(HUD_ENV_KEYS.w, DEFAULT_HUD_SIZE.w),
+      h: num(HUD_ENV_KEYS.h, DEFAULT_HUD_SIZE.h),
     },
   };
 }
