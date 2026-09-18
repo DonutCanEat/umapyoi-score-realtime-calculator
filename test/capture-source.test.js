@@ -105,6 +105,22 @@ test('瀏覽器攻略頁（只係「包含」）唔可以贏遊戲本體（「�
   assert.deepEqual(candidates.map((c) => c.score), [3, 1]);
 });
 
+test('⭐ 回歸：實機見到嘅遊戲標題要係「完全相符」，唔可以同攻略頁同分', () => {
+  // 用戶 2026-09-18 實機 log：`[來源] 揀咗：賽馬娘Pretty Derby（分數 2）`
+  // → 2 分 = 同「賽馬娘 攻略…」嘅瀏覽器窗**同分**，同分就跟 z-order 亂咁揀。
+  assert.equal(matchScore('賽馬娘Pretty Derby', GAME_TITLE_HINTS), 3,
+    '實機遊戲標題一定要係「完全相符」（3 分）');
+  assert.equal(matchScore('ウマ娘 プリティーダービー', GAME_TITLE_HINTS), 2);
+  assert.ok(matchScore('賽馬娘 攻略wiki - Google Chrome', GAME_TITLE_HINTS) < 3,
+    '瀏覽器攻略頁一定要低過遊戲本體');
+  // 實機情況：遊戲同攻略頁同一個 z-order 清單入面，攻略頁排前面都唔可以贏
+  const { hit } = pickGameSource([
+    src('賽馬娘 攻略wiki - Google Chrome', 111),
+    src('賽馬娘Pretty Derby', 222),
+  ]);
+  assert.equal(hit.name, '賽馬娘Pretty Derby');
+});
+
 test('同分保留 `getSources()` 原本次序（穩定排序，唔准「有時 A 有時 B」）', () => {
   const sources = [
     src('賽馬娘 A', 111),
