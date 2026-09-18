@@ -125,33 +125,57 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（155 個，必須全過）
+npm.cmd test              # 單元測試（177 個，必須全過）
 
 # HUD 相關開關（環境變數）
 #   ⚠️ 三個旗標（UMAPYOI_NO_HUD／UMAPYOI_NO_SETTINGS／UMAPYOI_HUD_EDIT）嘅**確切**語意
-#      （唯一讀法 = `electron/main.js` 嘅 `envFlag()`，唔准用 truthiness）：
-#        開  ＝ 只有 "1" 或者 "true"（**大小寫唔敏感**，"TRUE"/"True" 都算；前後空白忽略）
+#      （唯一讀法 = `src/hud/env-flag.js` 嘅 `envFlag()`，唔准用 truthiness）：
+#        開  ＝ 只有 "1" 或者 "true"（**大小寫唔敏感**，"TRUE"/"True"/"TrUe" 都算；前後空白忽略）
 #        閂  ＝ "0"／"false"／空字串／**冇 set**
-#        ⚠️ 其他值（"yes"／"on"／"2"…）＝ **當冇開，而且會 log 警告**
+#        ⚠️ 其他值（"yes"／"on"／"2"／"tru"／"-1"…）＝ **當冇開，而且會 log 警告**
 #           （唔認識嘅值唔准靜默當開或者當閂）
+#        ⚠️ 純空白（"  "）trim() 之後就係空字串 → 同 "" 一樣當閂而**唔警告**（刻意一致）
 #        ⚠️ 以前用 truthiness → `UMAPYOI_NO_HUD=0` 竟然會**閂咗 HUD**（'0' 係非空字串 = truthy），
 #           同文件寫嘅「=1」對唔上（已修，見 §9.1）
 #   UMAPYOI_NO_HUD=1            唔開 HUD（⭐ 連設定窗都唔開；淨係要 console log 嗰陣用）
 #   UMAPYOI_NO_SETTINGS=1       唔開設定窗（HUD 照開）—— 做防擷取測試時想畫面乾淨就用
 #   UMAPYOI_HUD_EDIT=1          ⭐ 對位模式：HUD 顯示自己嘅範圍／偏移，而且可以直接拖（放手即存檔）
 #                               ⚠️ 對位模式下 HUD **全程**食滑鼠事件（唔止拖緊嗰陣）—— 見 §6.4
-#   UMAPYOI_HUD_X=0.01,0.20     HUD 左／右邊界（÷ 內容區闊度）
+#
+#   ── 位置／大細：⚠️ 2026-09-19 起 **`size` 為準**（`x[1]` 由 `x[0] + size.w` 推導）──
+#   UMAPYOI_HUD_X=0.01,0.20     HUD 左／右邊界（÷ 內容區闊度）＝「範圍」
 #   UMAPYOI_HUD_Y=0.70,0.95     HUD 上／下邊界
+#   UMAPYOI_HUD_W=0.30 / _H=0.24  大細（＝「size」；同一個軸有寫就係 source of truth）
 #   UMAPYOI_HUD_DX=-0.005       額外橫向偏移（同 _DY 一樣係相對值，可以負）
-#   UMAPYOI_HUD_W=0.30 / _H=0.24  大細（唔俾就用預設 size）
+#
+#   逐軸（`x` 對 `size.w`、`y` 對 `size.h`）獨立判斷，規則**只有四條**：
+#     ① **只 set 範圍**（`_X`／`_Y`）→ 大細**由範圍推**（`size.w = x[1] − x[0]`）。
+#        ⚠️ 唔會維持預設 0.212×0.255：實測 `UMAPYOI_HUD_X=0.1,0.3` 舊行為 size.w = 0.212
+#        （＝靜默改咗用戶寫嘅範圍），新行為 size.w = **0.19**（＝0.3 − 0.1，範圍講咩就係咩）
+#     ② **只 set 大細**（`_W`／`_H`）→ `x[1]`／`y[1]` 跟住推（起點唔變：env 範圍 → 檔案 → 預設）
+#     ③ **同軸同時寫死範圍同大細而唔一致** → ⭐ **以 `size` 為準 ＋ 大聲警告**（`[設定] ⚠️ …`）
+#        **唔會 throw**。理由：`anchorHud()` 只用 `x[0]` 定位、用 `size` 決定大細，
+#        `x[1]` **根本唔影響渲染** → 為一個被忽略嘅冗餘欄位令程式開唔到係錯方向
+#        （舊行為：throw → `main.js` catch → `app.exit(1)` → **完全開唔到程式**）
+#     ④ 兩樣都冇寫 → 預設（0.598–0.810 × 0.030–0.285，即 0.212 × 0.255）
+#   ⚠️ **真正會 throw** 只有「**推導出嚟嘅範圍唔合法**」：
+#        `x[0] + size.w > 1`（訊息含「右邊界」）、`size.w <= 0`（訊息含 `size.w`）、
+#        `x[0] < 0`、`offset` 超出 ±1、範圍唔夠兩個數字／前後倒轉
+#   ⭐ **正例（唔會 throw，實測過）**：下面六行**一齊用係合法嘅** ——
+#        `UMAPYOI_HUD_X=0.01,0.20` ＋ `UMAPYOI_HUD_Y=0.70,0.95` ＋ `UMAPYOI_HUD_W=0.30`
+#        ＋ `UMAPYOI_HUD_H=0.24` ＋ `UMAPYOI_HUD_DX=-0.005` ＋ `UMAPYOI_HUD_DY=-0.67`
+#        → 實測 `x=[0.01,0.31]`、`y=[0.70,0.94]`、`size 0.30×0.24`、`dx=-0.005`、`dy=-0.67`
+#        ＋ 兩個警告（`x[1]` 寫死 0.20 vs 推導 0.31；`y[1]` 寫死 0.95 vs 推導 0.94）
 #   UMAPYOI_DUMP_FRAMES=5       頭 5 幀每幀都 dump（⭐ 驗「HUD 有冇被自己擷取到」用）
 
 # HUD 設定檔（`hud-position.json`）—— 位置／大細／顯示選項
 #   優先次序：**環境變數 > 設定檔 > 預設**（全部經 `resolveHudConfig()`）
 #   路徑：開發模式 = <專案根>/hud-position.json；打包（或 ROOT 落喺 .asar）= app.getPath('userData')
 #   ⚠️ 實際用邊條路徑一定 log（`[設定] 檔案：…`），唔准靜默 fallback
-#   ⚠️ 合併之後會再 validate → `UMAPYOI_HUD_X=0.9,0.5`（倒轉）／`_W=0` 而家會 **throw + 即刻收工**
-#      （以前係靜默擺去唔可能嘅位置）—— 呢個係刻意嘅（見 §6.4）
+#   ⚠️ 合併之後會再 validate → `UMAPYOI_HUD_X=0.9,0.5`（倒轉）**會 throw + 即刻收工**
+#      （以前係靜默擺去唔可能嘅位置）；但「範圍同大細唔一致」只會**警告**（見上面 ③）
+#   ⚠️ 推導出嚟嘅 `size`／`x[1]`／`y[1]` 一律收斂到 6 位小數（`layout.js` `round6()`）——
+#      唔係嘅話「還原預設 → 拖 → 存」會把 `0.21200000000000008` 寫入用戶個檔
 #   ⚠️ `hud-position.json` 唔入 git（runtime 用戶狀態，人人唔同）
 
 node src/cli.js 600 600 600 600 600        # 手動試算 → 5715 / C+
@@ -209,7 +233,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **155 個**）
+1. `npm.cmd test` 全過（現時 **177 個**）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 4/4　完全命中 4/4　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（雙閘：**實機面板條 9/9**），兩個都要中
@@ -253,10 +277,18 @@ src/hud/
   layout.js       # ⭐ HUD overlay 嘅**幾何 + 顯示狀態**（純函數，可 node --test）：
                   #    相對位置、內容框推算、四態（ok／stale／none／edit）、顯示選項、
                   #    clampLayout()（用戶郁過嘅值一律夾成合法）、
-                  #    layoutFromBounds()／relativeFromBounds()（拖完反推）
+                  #    layoutFromBounds()／relativeFromBounds()（拖完反推）、
+                  #    round6()（6 位小數收斂；config.js 推導 size／x[1] 都用佢，避免寫浮點噪音入用戶個檔）
   config.js       # ⭐ HUD 設定存檔層（`hud-position.json`）：DEFAULT_HUD_CONFIG／
-                  #    validateConfig()／loadConfig()／saveConfig()／resolveHudConfig()（env > 檔案 > 預設）
+                  #    validateConfig()／loadConfig()／saveConfig()／resolveHudConfig()（env > 檔案 > 預設）／
+                  #    assertFullDisplay()（7 個 display key 齊全嘅閘，applyHudConfig 用）
+                  #    ⚠️ 語意（2026-09-19）：**size 為準**，x[1] = x[0] + size.w 由推導得出；
+                  #       寫死嘅 x[1] 同推導值唔一致 → 警告（onWarn，唔 throw）；
+                  #       只有「推導出嚟嘅範圍唔合法」才 throw（見 §2／§6.4）
   config-path.js  # ⭐ 設定檔擺邊（純函數）：開發 = 專案根；打包／asar = app.getPath('userData')
+  env-flag.js     # ⭐ 環境變數開關旗標嘅**唯一**讀法（`envFlag()`，純函數可 node --test）：
+                  #    只有 "1"／"true"（大小寫唔敏感）＝ 開；0／false／空字串／冇 set ＝ 閂；
+                  #    其他值 ＝ 閂 ＋ 警告（`onWarn` 可收集）。main.js 三個旗標都用佢
 
 electron/
   main.js         # 主程序：視窗列舉 → statbar.readStatBar()（cropped）／reader.readStats()
@@ -271,8 +303,15 @@ test/
   hud-display.test.js # ⭐ 顯示選項（7 個 boolean）＋ 金色格嘅**真實粒度**（整體 boolean）
   hud-clamp.test.js   # ⭐ clampLayout()（slider 拉爆／拖位反推共用嘅夾法）
   hud-drag.test.js    # ⭐ 拖完反推：round-trip（±1px）、唔改 size、30 次唔漂
-  hud-config.test.js  # HUD 設定存檔層（env > 檔案 > 預設；唔合法一律 throw）
+  hud-config.test.js  # HUD 設定存檔層（env > 檔案 > 預設；唔合法一律 throw；
+                      #    ⭐ 含「AGENTS §2 六行環境變數一齊用唔准 throw」回歸測試
+                      #    ＋ assertFullDisplay()／onWarn 警告收集）
   hud-config-path.test.js # ⭐ 設定檔路徑決策（開發 vs 打包 vs asar）
+  hud-settings-html.test.js # ⭐ 「設定窗 ↔ config.js 欄位對齊」：**真係由 `electron/settings.html` 抽**
+                      #    `DISPLAY_FIELDS`／`NUM_FIELDS` 再同 `HUD_DISPLAY_KEYS`／layout 欄位比對
+                      #    （之前呢兩份清單係人手抄嘅，加一格／少一格冇人知）
+  hud-env-flag.test.js # ⭐ `envFlag()` 21 個值嘅行為（1／true 系 7 個開、7 個閂、7 個唔認識要警告）
+                      #    ＋ 預設 env＝process.env、預設 onWarn＝console.warn
 
 tools/
   fetch-skill-db.js      # bwiki 技能庫抓取
@@ -533,9 +572,12 @@ UMAPYOI_NO_HUD=1 npm.cmd start       # ⭐ 兩個窗都唔開（淨係要 consol
 - ⚠️ **閂咗設定窗就要重開程式先開得返**（冇選單／快捷鍵，因為 `focusable:false` 嗰種限制
   喺設定窗唔存在但唔想加額外 UI）—— 同對位模式一樣係「開程式時決定」嘅設定。
 - ⚠️ 不變式：`x1 = x0 + w`、`y1 = y0 + h`（設定窗同拖位共用同一個模型）。
-  `x[1]` 只喺 `size` 缺席嗰陣做 fallback（而 `validateConfig()` 永遠會補 `size`）
-  → 所以邊個做「大細」都唔會唔一致。`clampLayout()` 係**唯一**做夾嘅地方
-  （用戶拉爆 slider／拖出界一律夾返合法，唔會出現「拉咗但冇反應」）。
+  ⚠️ **2026-09-19 起嘅確切語意**：`x[1]`／`y[1]` 係**由 `size` 推導出嚟嘅**（`x[1] = x[0] + size.w`）——
+  `anchorHud()` 只用 `x[0]` 定位、用 `size` 決定大細，所以 `x[1]` **唔影響渲染**。
+  設定窗送嘅值如果「範圍末端」同「起點 + 大細」唔一致 → **以 `size` 為準 ＋ 大聲警告**
+  （`main.js` `configFromUi()` 經 `onWarn` → `[設定] ⚠️ …`），**唔會** throw。
+  真正 throw 只有「推導出嚟嘅範圍唔合法」（右邊界 > 1／`size <= 0`／`x[0] < 0`／offset 超出 ±1）。
+  `clampLayout()` 係**唯一**做夾嘅地方（用戶拉爆 slider／拖出界一律夾返合法，唔會出現「拉咗但冇反應」）。
 - ⚠️ `offset`（`dx`／`dy`）只夾到 **±1**（同 `config.js` 契約一致），
   **唔會**夾到「一定喺螢幕內」→ 極端 offset 會令 HUD 走出畫面，所以設定窗有顯示
   「實際左上角」＋ 走出範圍就出警告。
@@ -565,11 +607,12 @@ UMAPYOI_NO_HUD=1 npm.cmd start       # ⭐ 兩個窗都唔開（淨係要 consol
   - → 當佢係**一次性調位工具**：調完 → 存檔 → `Ctrl+C` 收工 → **唔帶環境變數**再開嚟用。
 - ⚠️ **一定要經 `setHudInteractive()` 呢個 funnel**：`electron.d.ts` **冇**
   `isIgnoreMouseEvents()` getter → 讀唔返而家嘅狀態 → 要自己用 flag（`hudInteractive`）記住。
-  再加三重保險：① 所有離開拖曳嘅路徑都行 `finally` 叫 `setHudInteractive()`
+  ⚠️ **同上面「四重保險」係同一個清單**（2026-09-19 統一標籤）：
+  ① funnel 係唯一入口；② 所有離開拖曳嘅路徑都行 `finally` 叫 `setHudInteractive()`
   （⚠️ 佢還原到嘅係**對位模式嘅互動狀態**，唔係穿透 —— 見上面警告）；
-  ② 拖位 watchdog（1200ms 冇新消息 = `pointerup` 唔見咗 → 收手）；
-  ③ 每 500ms interval 喺正常模式**再確認**一次 `setIgnoreMouseEvents(true)`。
-  ⚠️ 呢三重保險嘅用途係「**正常模式**唔會因為漏還原而擋住遊戲」——
+  ③ 拖位 watchdog（1200ms 冇新消息 = `pointerup` 唔見咗 → 收手）；
+  ④ 每 500ms interval 喺正常模式**再確認**一次 `setIgnoreMouseEvents(true)`。
+  ⚠️ 呢四重保險嘅用途係「**正常模式**唔會因為漏還原而擋住遊戲」——
   **唔係**「放手就回復穿透」（對位模式本身設計上就唔穿透）。
 - 拖法：renderer `pointerdown` → `setPointerCapture` → `pointermove`／`up` ＋
   **`screenX/screenY`**（⚠️ **唔准** `clientX/clientY`：相對視窗，`setBounds()` 一移窗就
@@ -592,9 +635,13 @@ UMAPYOI_NO_HUD=1 npm.cmd start       # ⭐ 兩個窗都唔開（淨係要 consol
 - 優先次序 **環境變數 > 設定檔 > 預設**（`resolveHudConfig()`）。
 - 路徑：開發模式 = `<專案根>/hud-position.json`；已打包（或者 `ROOT` 落喺 `.asar`）= `app.getPath('userData')`
   （見 `src/hud/config-path.js`）。⚠️ **實際用邊條路徑一定 log**（`[設定] 檔案：…`），唔准靜默 fallback。
-- ⚠️ **行為改動（刻意）**：合併之後會**再 validate 一次** → `UMAPYOI_HUD_X=0.9,0.5`（前後倒轉）、
-  `UMAPYOI_HUD_W=0`、超出 0–1 一律 **throw**（以前係靜默擺去一個唔可能嘅位置）。
-  main.js 會 catch 佢、大聲講、然後 `app.exit(1)`（唔留低冇窗嘅僵屍程序）。
+- ⚠️ **行為改動（刻意）**：合併之後會**再 validate 一次**，而且**兩類問題分開處理**：
+  - **唔合法 → throw**：`UMAPYOI_HUD_X=0.9,0.5`（前後倒轉）、`x[0] + size.w > 1`（右邊界走出畫面）、
+    `size <= 0`（`UMAPYOI_HUD_W=0`）、超出 0–1、`offset` 超出 ±1 —— main.js 會 catch 佢、
+    大聲講、然後 `app.exit(1)`（唔留低冇窗嘅僵屍程序）。
+  - **冗餘欄位矛盾 → 警告（唔 throw）**：同一個軸上面範圍同大細**兩樣都寫死而唔一致** →
+    **以 `size` 為準 ＋ `[設定] ⚠️ …` 警告**。理由見 §2：`x[1]` 唔影響渲染，
+    而 AGENTS §2 列出嘅六行環境變數一齊用曾經因為呢個 throw 而**完全開唔到程式**（實測）。
 - ⚠️ **設定檔壞咗（JSON 壞／欄位唔合法）＝唔同處理**：log 大聲 ＋ 用預設 ＋
   **唔覆寫你個檔**（設定窗顯示紅色橫額）。理由：檔案壞咗唔應該阻止擷取，但**一定唔可以靜默**。
 - ⚠️ **唔可以寫額外欄位入 JSON**（例如 `savedAt`／`contentRef`）：
@@ -689,7 +736,7 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **155 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **177 個測試必須全過**
 2. `node tools/fit-score.js` — 必須 `完全命中 4/4　總絕對誤差 0`
 3. 如果改咗五維／技能／ランク相關嘅嘢，`node tools/breakdown.js` 逐招核對一次
 4. **如果改咗影像相關嘅嘢**：
@@ -744,17 +791,30 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
    `main.js`，但 `electron/main.js` **入唔到 `node --test`**（main process 要 Electron runtime）
    → 呢個不變式而家只靠註釋同人手記住。建議將來抽成 `src/hud/layout.js` 純函數
    （例如 `hudViewKey(view)`）＋ 加返個測試。
-5. **`electron/main.js`／`hud.html`／`settings.html` 零測試覆蓋**（IPC handler 嘅 try/catch、
-   拖曳狀態機、設定窗表單 ↔ `config.js` 欄位一致性）—— 係**已知缺口**，唔係「已驗證」。
+5. **`electron/main.js`／`hud.html` 零測試覆蓋**（IPC handler 嘅 try/catch、拖曳狀態機）——
+   ⚠️ 呢條係**已知缺口**，唔係「已驗證」。
+   ✅ **2026-09-19 部分收窄（唔係全修）**：① 設定窗表單 ↔ `config.js` 欄位一致性而家有閘
+   （`test/hud-settings-html.test.js`，**真係由 HTML 抽** `DISPLAY_FIELDS`／`NUM_FIELDS`）；
+   ② `envFlag()` 搬去 `src/hud/env-flag.js` ＋ 21 個值嘅測試（`test/hud-env-flag.test.js`）；
+   ③ `applyHudConfig()` 嘅 display 防呆抽成純函數 `assertFullDisplay()`（有測試）。
+   ⚠️ 剩返**真係零覆蓋**嘅：IPC handler 本體、拖曳狀態機、`placeHud()`／`pushHud()`。
 6. **原子寫冇 `fsync`**（`saveHudConfigFile()` = 寫 `.tmp` ＋ `renameSync`）：停電／硬斷電
    可能留低半截 JSON。可接受嘅理由：`loadConfig()` 會**大聲 throw**，而且**唔會覆寫**壞檔
    （改用預設 ＋ 設定窗出紅色橫額）—— 但唔係「零風險」。
 7. **同一類 truthiness 問題仲有 `UMAPYOI_SKILL_DUMP`（未修，唔喺今次範圍）**：
    `SKILL_DUMP = Boolean(process.env.UMAPYOI_SKILL_DUMP)` → `UMAPYOI_SKILL_DUMP=0`
-   一樣會**開咗**連拍模式。要修就照 `envFlag()` 嗰套（`main.js`）。數字型旗標
+   一樣會**開咗**連拍模式。要修就照 `envFlag()` 嗰套（`main.js`；函數而家喺
+   `src/hud/env-flag.js`，改一行就得）。數字型旗標
    （`UMAPYOI_DUMP_FRAMES`／`_SKILL_MAX`）用 `Number(...)`，唔屬呢類。
    （`UMAPYOI_NO_HUD`／`UMAPYOI_NO_SETTINGS`／`UMAPYOI_HUD_EDIT` **已修** → `envFlag()`，
    見 §2。）
+8. ✅ **已修（2026-09-19）—— 唔可以再當「技術債」**：`validateConfig()` 嘅不變式檢查
+   （「`x[1]` 一定要等於 `x[0] + size.w`，唔係就 throw」）令 **AGENTS §2 列出嘅六行環境變數
+   一齊用會 throw → `main.js` catch → `app.exit(1)` → 完全開唔到程式**（獨立審計實跑證實）。
+   已改成「**`size` 為準**、`x[1]` 由推導得出；寫死嘅 `x[1]` 唔一致 → 大聲警告」，
+   而**推導出嚟嘅範圍唔合法**（右邊界 > 1／`size <= 0`／`x[0] < 0`）照樣 throw
+   → 原本要防嘅「HUD 靜默走出畫面」仍然捉得到。回歸測試：`test/hud-config.test.js`
+   「⭐ 回歸：AGENTS §2 嗰六行環境變數一齊用**唔准 throw**」。詳見 §2／§6.4。
 
 
 ---
