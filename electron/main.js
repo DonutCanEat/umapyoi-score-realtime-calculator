@@ -117,6 +117,16 @@ let lastStats = null;
  * **唔係**逐格 5 個 → HUD 只可以標「有金色格」，唔可以標係邊一格。
  */
 let lastGold = false;
+/**
+ * HUD renderer 係唔係啱啱「死咗」（crash）而未載入返。
+ *
+ * ⚠️ 唔可以靠 `webContents.isCrashed()`：呢個 Electron 版本嘅 `electron.d.ts` **冇**呢個
+ * getter（同 `isIgnoreMouseEvents()` 一樣）→ 一定要自己記住。
+ */
+let hudRendererGone = false;
+/** 自動重載 HUD 畫面嘅次數（一定要有上限：renderer 反覆 crash 嗰陣唔可以無限重載）。 */
+let hudReloads = 0;
+const MAX_HUD_RELOADS = 5;
 
 function createHudWindow() {
   const win = new BrowserWindow({
@@ -149,6 +159,45 @@ function createHudWindow() {
   // ⭐ 滑鼠模式一律經 funnel 設定（正常模式 = 上面嗰行嘅穿透；對位模式先開互動）。
   setHudInteractive(HUD_EDIT, win);
   win.loadFile(join(__dirname, 'hud.html'));
+  // ⭐ renderer 一 reload（對位模式之下 HUD 有 focus，Ctrl+R 就踩得到）或者一 crash，
+  //    renderer 嗰邊嘅 DOM 就由零開始，但主程序嘅 dedupe（`lastHudKey`）仲留住舊值
+  //    → 只要狀態唔變就**永遠唔會再推 view → HUD 永遠空白**。所以下面兩條路一定要
+  //    「清 dedupe ＋ 重新對位 ＋ 重推」（見 `resetHudView()`）。
+  // ⚠️ 呢兩條路**唔准**改滑鼠穿透狀態：穿透由 `setHudInteractive()` funnel 管，
+  //    而且 `setIgnoreMouseEvents` 係**視窗**層屬性，renderer 生生死死唔會影響佢。
+  const wc = win.webContents;
+  wc.on('did-finish-load', () => {
+    // 首次載入同 reload / crash 之後重載都行呢條路（`did-finish-load` 每次都 fire）。
+    hudRendererGone = false;
+    resetHudView('HUD renderer 載入完成（首次／reload）');
+  });
+  wc.on('render-process-gone', (_event, details) => {
+    const reason = details?.reason ?? '（未知）';
+    console.warn(`[HUD] ⚠️ HUD renderer 死咗（reason=${reason}　exitCode=${details?.exitCode}）`);
+    hudRendererGone = true;
+    resetHudView('HUD renderer 重啟');
+    // 唔重載就冇 renderer 去畫 → HUD 會永遠空白（Electron 唔會自動 reload）。
+    // ⚠️ 只喺「意外死亡」先重載，而且有次數上限，避免 crash loop 洗版。
+    if (reason === 'clean-exit') return;
+    if (win.isDestroyed()) return;
+    if (hudReloads >= MAX_HUD_RELOADS) {
+      console.error(`[HUD] ⛔ 已經自動重載 ${hudReloads} 次，唔再試（請重開程式；HUD 而家係空白）。`);
+      return;
+    }
+    hudReloads += 1;
+    console.warn(`[HUD] 　→ 自動重載 HUD 畫面（第 ${hudReloads}/${MAX_HUD_RELOADS} 次）`);
+    try {
+      wc.reload();
+    } catch (error) {
+      console.error(`[HUD] ⚠️ 重載 HUD renderer 失敗：${error?.message ?? error}`);
+    }
+  });
+  // renderer 冇反應（卡住／忙）唔等於死 → 只清 dedupe（令佢下次一定收到 view），
+  // **唔會**強制 reload（reload 會殺咗一個可能只係慢嘅 renderer）。
+  wc.on('unresponsive', () => {
+    console.warn('[HUD] ⚠️ HUD renderer 冇反應（可能忙緊）：清 dedupe，唔會強制重載。');
+    resetHudView('HUD renderer 冇反應');
+  });
   win.once('ready-to-show', () => {
     // 開窗之後再經 funnel 確認一次（唔理之前有冇被其他路徑改過）。
     setHudInteractive(HUD_EDIT, win);
@@ -494,6 +543,9 @@ function createSettingsWindow() {
 /** 推 HUD 顯示狀態（主程序計好，renderer 只畫）。 */
 function pushHud(now = Date.now()) {
   if (!hudWindow || hudWindow.isDestroyed()) return;
+  // renderer 死咗（未重載返）→ 冇人收，而且出貨會令 dedupe 記住一個「冇人睇過」嘅狀態
+  // → 之後就永遠唔會再推。所以呢種情況直接唔推（`did-finish-load` 會清 dedupe 再重推）。
+  if (hudRendererGone) return;
   const view = hudState({
     score: lastScore,
     stats: lastStats,
@@ -512,6 +564,32 @@ function pushHud(now = Date.now()) {
   if (key === lastHudKey) return; // 冇變就唔好每幀 send
   lastHudKey = key;
   hudWindow.webContents.send('hud', view);
+}
+
+/**
+ * ⭐ HUD renderer 重新載入（reload／crash 重載）之後**一定**要行呢個。
+ *
+ * 為何要（獨立審計實測嘅真 bug）：`pushHud()` 靠 `lastHudKey` dedupe（key 冇變就唔 send）。
+ * renderer 一 reload，佢嗰邊嘅 DOM／狀態全部由零開始，但主程序嘅 `lastHudKey` 仲留住舊值
+ * → 只要顯示內容唔變（例如一直顯示同一個分），**永遠唔會再 send → HUD 永遠空白**
+ * （對位模式之下 HUD 有 focus，Ctrl+R 就踩得到）。
+ *
+ * 做三件事：① 清 dedupe；② 重新對位（**經 `placeHud()`**，唔准自己 `setBounds()`）；
+ * ③ 即刻重推一次（唔等下一次數值變化）。
+ *
+ * ⚠️ 呢度**唔准**改動滑鼠穿透狀態 —— 穿透係本專案底線，由 `setHudInteractive()` funnel
+ * ＋ 拖位 watchdog ＋ 500ms 再確認守住；而且 `setIgnoreMouseEvents` 係視窗層屬性，
+ * renderer reload／crash 完全唔會影響佢（正常模式照樣穿透）。
+ */
+function resetHudView(why) {
+  lastHudKey = ''; // 清 dedupe → 下一次 pushHud() 一定 send
+  if (!hudWindow || hudWindow.isDestroyed()) {
+    console.log(`[HUD] ${why} → 已重置顯示狀態（未有 HUD 窗）`);
+    return;
+  }
+  placeHud(hudGameSize);
+  pushHud();
+  console.log(`[HUD] ${why} → 已重置顯示狀態（dedupe 清空）＋ 重新對位 ＋ 重推 view`);
 }
 
 /**
