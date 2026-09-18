@@ -63,7 +63,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 | Phase 0 | 技能資料庫（1323 招）＋ 進化技能 override | ✅ |
 | Phase 1 | 畫面擷取（`npm start` 跑得通）| ✅ |
 | Phase 1 | **五維數字辨識（零校準）** | ✅ 兩條路都通：**畫面 A 面板條**（`statbar.js`）**9/9 全中**（1356→2560 五個解析度 ＋ 4 個實機失敗／金色格回歸）；ステータス面板排法 **30/30**。✅ 已實機跑過（`npm start`，1920 窗），修好間歇性「讀唔清」（地雷 #25）同**金色格靜默讀錯**（地雷 #26）|
-| Phase 1 | HUD overlay ＋ 設定面板 | ⏳ 下一步 |
+| Phase 1 | HUD overlay ＋ 設定面板 | 🚧 **HUD 第一版做好**（透明置頂穿透、顯示評價点 + ランク、擺左下角空白位）；設定面板未做 |
 | Phase 2 | 技能 icon 識別（自動知學咗邊啲技能）| 未開始 |
 | Phase 3 | what-if 模擬（加一招加幾多分／Pt）、成長曲線 | 未開始 |
 | Phase 4 | 事件選項助手（已 mark，見 `docs/vision-design.md` §5.5）| 暫緩 |
@@ -124,8 +124,12 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 > `node --test --test-isolation=none test/*.test.js`
 
 ```bash
-npm.cmd start             # 開 Electron（需要遊戲開住）
-npm.cmd test              # 單元測試（90 個，必須全過）
+npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay
+npm.cmd test              # 單元測試（96 個，必須全過）
+
+# HUD 相關開關（環境變數）
+#   UMAPYOI_NO_HUD=1            唔開 HUD（淨係要 console log 嗰陣用）
+#   UMAPYOI_DUMP_FRAMES=5       頭 5 幀每幀都 dump（⭐ 驗「HUD 有冇被自己擷取到」用）
 
 node src/cli.js 600 600 600 600 600        # 手動試算 → 5715 / C+
 
@@ -164,7 +168,7 @@ node tools/diag-shots.js                   # 列出所有截圖尺寸
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **90 個**）
+1. `npm.cmd test` 全過（現時 **96 個**）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 4/4　完全命中 4/4　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（雙閘：**實機面板條 9/9**），兩個都要中
@@ -202,9 +206,15 @@ src/vision/
 
 src/cli.js        # 手動試算
 
+src/hud/
+  layout.js       # ⭐ HUD overlay 嘅**幾何 + 顯示狀態**（純函數，可 node --test）：
+                  #    相對位置（左下角空白位）、內容框推算、三態（ok／stale／none）
+
 electron/
-  main.js         # 主程序：視窗列舉 → statbar.readStatBar()（cropped）／reader.readStats() → evaluate() → IPC
+  main.js         # 主程序：視窗列舉 → statbar.readStatBar()（cropped）／reader.readStats()
+                  #    → evaluate() → console log ＋ **推落 HUD**（見 §6.4）
   capture.html    # 擷取 renderer：getUserMedia → **1:1 剪面板 ROI**（冇 ROI 就退回 640px 縮圖）
+  hud.html        # HUD overlay renderer：透明無邊框，只畫主程序推落嚟嘅 view
 
 tools/
   fetch-skill-db.js      # bwiki 技能庫抓取
@@ -406,6 +416,28 @@ renderer 由 `file://` 載入，**ESM import 會被 Chromium CORS 擋**。
 而 `tools/diag-statbar.js --cropped` 就係模擬 renderer 嗰個剪法，
 所以「執行時路徑」同「診斷路徑」永遠一致。
 
+### 6.4 HUD overlay（透明置頂、穿透點擊）
+
+```
+src/hud/layout.js   anchorHud()  相對位置（內容區 × 0.008–0.145、0.735–0.865 = 左下角空白位）
+                    contentRect() 由視窗範圍推內容區（扣 Windows 標題列，同 contentBox() 一樣）
+                    hudState()   三態：ok（即時）／stale（讀唔到但保留上一個值）／none（未有數）
+electron/hud.html   透明無邊框頁面，只畫主程序推落嚟嘅 view（顯示邏輯唔喺 renderer 重複寫）
+```
+
+用戶指定：只顯示「**評價点 + ランク**」、擺**左邊空白位（拍攝掣下面）**、先做醜版。
+
+⚠️ **一定要 `setContentProtection(true)`**：我哋用 `desktopCapturer` 擷取自己個螢幕，
+冇呢個設定 HUD **會入到自己嘅擷取畫面**（等於自己讀自己嘅字）。
+驗法：`UMAPYOI_DUMP_FRAMES=5 npm start` → `node tools/raw-to-png.js shots/live-debug`
+→ 睇 dump 出嚟嘅幀有冇 HUD 嘅字。
+
+⚠️ 位置用**相對座標**（唔係固定像素）：遊戲冇固定解析度、只有 16:9（地雷 #24）。
+HUD 右邊界**唔可以過圖闊 0.15**，否則會壓住 statbar ROI／第一格數字（有測試守住）。
+
+⚠️ 讀唔到嗰陣**保留上一個穩定值**（`stale` 態，變黃色提示），唔會閃走或者顯示空白 ——
+「唔見面板條」係常態（47 幀 dump 入面 35 幀都係），閃走會令 HUD 冇用。
+
 ---
 
 ## 7. 開發環境（Windows，實測）
@@ -422,7 +454,7 @@ renderer 由 `file://` 載入，**ESM import 會被 Chromium CORS 擋**。
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **90 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **96 個測試必須全過**
 2. `node tools/fit-score.js` — 必須 `完全命中 4/4　總絕對誤差 0`
 3. 如果改咗五維／技能／ランク相關嘅嘢，`node tools/breakdown.js` 逐招核對一次
 4. **如果改咗影像相關嘅嘢**：
@@ -446,7 +478,7 @@ renderer 由 `file://` 載入，**ESM import 會被 Chromium CORS 擋**。
 
 | 優先 | 事項 |
 |---|---|
-| ⭐ 高 | **HUD overlay ＋ 設定面板**（下一步）：`readStatBar()` 已經實機讀到五維並算好評價分（9/9 回歸全中，**金色格都讀得返**），但仲只係 `console.log`。要開透明置頂穿透視窗顯示，技能未讀到就老實顯示 `技能分 ？／總分 ≥ X`；「唔見面板條」／信心不足時**保留上一個穩定值**而唔係閃走（`StatTracker` 已經有 `current`，接去 HUD 就得）。`highlighted: true` 可以順手顯示「呢格屬性已過 1200」|
+| ⭐ 高 | **HUD 實機對位 ＋ 驗「HUD 有冇被自己擷取到」**（下一步）：HUD 第一版已經開得（透明置頂穿透、左下角空白位）。要實機睇：① 位置啱唔啱（唔啱就改 `src/hud/layout.js` 嘅 `DEFAULT_HUD_LAYOUT`）；② `setContentProtection` 有冇效（`UMAPYOI_DUMP_FRAMES=5 npm start` 之後轉 PNG 睇）；③ 再定要唔要**設定面板**（改位置／開關／字大細）。跟住可以擴充：五維逐格、技能分 `？／總分 ≥ X`、「呢格屬性已過 1200」提示 |
 | ⭐ 高 | **確認 uma2 截圖同 JSON 邊個啱**（地雷 #19）：要麼補返對應 1937/993/1077/848/1198 嘅截圖，要麼確認 JSON 值然後重拍截圖 |
 | 中 | **模板覆蓋**：實機樣本仍然偏少（每個數字十幾個）。再收幾張實機圖（唔同培育進度／唔同馬／唔同主題色）可以令相似度同信心再升 |
 | 中 | **其他畫面／其他狀態嘅面板條**：現時只驗證咗育成主畫面（畫面 A）。仲未試：ステータス面板、比賽前後、訓練動畫期間 |
