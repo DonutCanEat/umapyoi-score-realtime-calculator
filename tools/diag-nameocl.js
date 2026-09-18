@@ -33,6 +33,7 @@ import { fileURLToPath } from 'node:url';
 import { decodePng } from '../src/vision/png.js';
 import { encodePng } from '../src/vision/pngwrite.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
+import { nameBoxFeature, nameSimilarity } from '../src/vision/skillname.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const flags = process.argv.slice(2).filter((a) => a.startsWith('--'));
@@ -51,72 +52,6 @@ const SHOTS = [
   'uma4-p1-skills.png', 'uma4-p2-skills.png',
 ];
 
-/** 框內墨跡 → 絕對尺度特徵（1 像素 = 1 格，上下居中；見 diag-namepairs.js 嘅註釋）。 */
-function feature(image, mask, box, y0, y1) {
-  const { x0, x1 } = box;
-  const cols = new Int32Array(x1 - x0 + 1);
-  for (let y = y0; y <= y1; y += 1) {
-    const base = y * image.width;
-    for (let x = x0; x <= x1; x += 1) cols[x - x0] += mask[base + x];
-  }
-  let rightEnd = cols.length - 1;
-  let gap = 0;
-  for (let i = cols.length - 1; i >= 0; i -= 1) {
-    if (cols[i] === 0) { gap += 1; continue; }
-    if (gap >= NAME_LEVEL_GAP && i < cols.length - 1) { rightEnd = i; break; }
-    gap = 0;
-  }
-  let inkL = -1;
-  let inkR = -1;
-  for (let i = 0; i <= rightEnd; i += 1) if (cols[i] > 0) { inkL = i; break; }
-  for (let i = rightEnd; i >= 0; i -= 1) if (cols[i] > 0) { inkR = i; break; }
-  if (inkL < 0) return null;
-  let inkT = -1;
-  let inkB = -1;
-  for (let y = y0; y <= y1; y += 1) {
-    const base = y * image.width;
-    let n = 0;
-    for (let x = x0 + inkL; x <= x0 + inkR; x += 1) n += mask[base + x];
-    if (n > 0) { if (inkT < 0) inkT = y - y0; inkB = y - y0; }
-  }
-  if (inkT < 0) return null;
-  const bw = inkR - inkL + 1;
-  const bh = inkB - inkT + 1;
-  const oh = Math.min(GRID_H, bh);
-  const ow = Math.min(GW, bw);
-  const oy0 = Math.floor((GRID_H - oh) / 2);
-  const raw = new Float32Array(GW * GRID_H);
-  for (let y = 0; y < oh; y += 1) {
-    const sy = y0 + inkT + y;
-    for (let x = 0; x < ow; x += 1) {
-      raw[(oy0 + y) * GW + x] = mask[sy * image.width + (x0 + inkL + x)] ? 1 : 0;
-    }
-  }
-  const out = new Float32Array(GW * GRID_H);
-  let mean = 0;
-  for (let gy = 0; gy < GRID_H; gy += 1) {
-    for (let gx = 0; gx < GW; gx += 1) {
-      let s = 0;
-      for (let dy = -1; dy <= 1; dy += 1) {
-        const yy = gy + dy;
-        if (yy < 0 || yy >= GRID_H) continue;
-        for (let dx = -1; dx <= 1; dx += 1) {
-          const xx = gx + dx;
-          if (xx < 0 || xx >= GW) continue;
-          s += raw[yy * GW + xx] * (dy === 0 && dx === 0 ? 4 : dy === 0 || dx === 0 ? 2 : 1);
-        }
-      }
-      out[gy * GW + gx] = s;
-      mean += s;
-    }
-  }
-  mean /= out.length;
-  let norm = 0;
-  for (let i = 0; i < out.length; i += 1) { out[i] -= mean; norm += out[i] * out[i]; }
-  norm = Math.sqrt(norm) || 1;
-  for (let i = 0; i < out.length; i += 1) out[i] /= norm;
-  return { vec: out, inkL, inkR, inkT, inkB, bw, bh };
-}
 
 // ── 抽出所有格 ──
 const all = [];
@@ -133,7 +68,7 @@ for (const shot of SHOTS) {
     }
     nameBoxesInRow(cols, img.width).forEach((box, ci) => {
       if (!box) return;
-      const f = feature(image, mask, box, row.y0, row.y1);
+      const f = nameBoxFeature(image, mask, box, row.y0, row.y1);
       if (!f) return;
       all.push({ shot, row: ri, col: ci, box, y0: row.y0, y1: row.y1, image, ...f });
     });
@@ -155,7 +90,7 @@ for (let i = 0; i < all.length; i += 1) {
     if (a.shot === b.shot || a.col !== b.col) continue;
     const dx = Math.abs((a.box.x0 + a.inkL) - (b.box.x0 + b.inkL));
     const dw = Math.abs(a.bw - b.bw);
-    const s = dot(a.vec, b.vec);
+    const s = nameSimilarity(a.vec, b.vec);
     if (dx <= TOL) same.push({ s, dx, dw, a, b });
     else if (dx >= 3 * TOL) diff.push({ s, dx, a, b });
   }

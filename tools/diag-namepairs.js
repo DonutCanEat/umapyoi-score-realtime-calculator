@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { decodePng } from '../src/vision/png.js';
 import { encodePng } from '../src/vision/pngwrite.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
+import { nameBoxFeature, nameSimilarity } from '../src/vision/skillname.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const flags = process.argv.slice(2).filter((a) => a.startsWith('--'));
@@ -42,84 +43,6 @@ const SHOTS = [
   'uma4-p1-skills.png', 'uma4-p2-skills.png',
 ];
 
-/**
- * 框內墨跡 → 特徵。
- *
- * 步驟：① 切走右邊 `Lv4`／`★3` 段（右邊最闊嘅空洞）；② 取 tight box；
- * ③ **絕對尺度**（1 像素 = 1 格，唔按自己高度縮放）放入 GW×GH 網格、上下居中。
- *
- * ⚠️ 唔可以「按自己嘅高度縮放」：所有名框高度一樣（同一行同一字體），
- *    相對縮放會令**任何**框嘅墨跡都撐滿 24 格高 → 再把闊度拉滿 → 「4 字名填滿框」
- *    同「2 字名」變成同一幅圖。實測 `絕對是我` 同 `冷谷` 就係咁樣撞到 **1.000**
- *    （兩者墨跡範圍都係 4 字闊 111px）。絕對尺度之下「名有幾長」直接反映喺闊度。
- */
-function feature(image, mask, box, y0, y1) {
-  const { x0, x1 } = box;
-  const cols = new Int32Array(x1 - x0 + 1);
-  for (let y = y0; y <= y1; y += 1) {
-    const base = y * image.width;
-    for (let x = x0; x <= x1; x += 1) cols[x - x0] += mask[base + x];
-  }
-  let rightEnd = cols.length - 1;
-  let gap = 0;
-  for (let i = cols.length - 1; i >= 0; i -= 1) {
-    if (cols[i] === 0) { gap += 1; continue; }
-    if (gap >= NAME_LEVEL_GAP && i < cols.length - 1) { rightEnd = i; break; }
-    gap = 0;
-  }
-  let inkL = -1;
-  let inkR = -1;
-  for (let i = 0; i <= rightEnd; i += 1) if (cols[i] > 0) { inkL = i; break; }
-  for (let i = rightEnd; i >= 0; i -= 1) if (cols[i] > 0) { inkR = i; break; }
-  if (inkL < 0) return null;
-  let inkT = -1;
-  let inkB = -1;
-  for (let y = y0; y <= y1; y += 1) {
-    const base = y * image.width;
-    let n = 0;
-    for (let x = x0 + inkL; x <= x0 + inkR; x += 1) n += mask[base + x];
-    if (n > 0) { if (inkT < 0) inkT = y - y0; inkB = y - y0; }
-  }
-  if (inkT < 0) return null;
-  const bw = inkR - inkL + 1;
-  const bh = inkB - inkT + 1;
-  // 絕對尺度：1 原生像素 = 1 格；闊度超出網格就截（GW 夠放 8 個中文字）
-  const oh = Math.min(GRID_H, bh);
-  const ow = Math.min(GW, bw);
-  const oy0 = Math.floor((GRID_H - oh) / 2); // 垂直居中
-  const raw = new Float32Array(GW * GRID_H);
-  for (let y = 0; y < oh; y += 1) {
-    const sy = y0 + inkT + y;
-    for (let x = 0; x < ow; x += 1) {
-      raw[(oy0 + y) * GW + x] = mask[sy * image.width + (x0 + inkL + x)] ? 1 : 0;
-    }
-  }
-  // 輕微模糊（抗 1 像素位移）＋ 去均值 ＋ 單位化
-  const out = new Float32Array(GW * GRID_H);
-  let mean = 0;
-  for (let gy = 0; gy < GRID_H; gy += 1) {
-    for (let gx = 0; gx < GW; gx += 1) {
-      let s = 0;
-      for (let dy = -1; dy <= 1; dy += 1) {
-        const yy = gy + dy;
-        if (yy < 0 || yy >= GRID_H) continue;
-        for (let dx = -1; dx <= 1; dx += 1) {
-          const xx = gx + dx;
-          if (xx < 0 || xx >= GW) continue;
-          s += raw[yy * GW + xx] * (dy === 0 && dx === 0 ? 4 : dy === 0 || dx === 0 ? 2 : 1);
-        }
-      }
-      out[gy * GW + gx] = s;
-      mean += s;
-    }
-  }
-  mean /= out.length;
-  let norm = 0;
-  for (let i = 0; i < out.length; i += 1) { out[i] -= mean; norm += out[i] * out[i]; }
-  norm = Math.sqrt(norm) || 1;
-  for (let i = 0; i < out.length; i += 1) out[i] /= norm;
-  return { vec: out, inkT, inkB, inkL, inkR, bw, bh };
-}
 
 // ── 抽出所有格 ──
 const all = [];
@@ -136,7 +59,7 @@ for (const shot of SHOTS) {
     }
     nameBoxesInRow(cols, img.width).forEach((box, ci) => {
       if (!box) return;
-      const f = feature(image, mask, box, row.y0, row.y1);
+      const f = nameBoxFeature(image, mask, box, row.y0, row.y1);
       if (!f) return;
       all.push({ shot, row: ri, col: ci, box, y0: row.y0, y1: row.y1, image, ...f });
     });
@@ -157,7 +80,7 @@ for (let i = 0; i < all.length; i += 1) {
     const b = all[j];
     if (a.shot === b.shot) continue;
     // 只同「另一張圖嘅同一列」比（技能清單係順序滾動 → 同一招一定喺同一列）
-    const s = dot(a.vec, b.vec);
+    const s = nameSimilarity(a.vec, b.vec);
     if (!best || s > best.s) { second = best; best = { s, b }; }
     else if (!second || s > second.s) second = { s, b };
   }
