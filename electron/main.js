@@ -21,6 +21,7 @@ import { dirname, join } from 'node:path';
 import { readFileSync, existsSync } from 'node:fs';
 
 import { loadTemplates, readStats, StatTracker, scoreStats } from '../src/vision/reader.js';
+import { readStatBar, DEFAULT_STATBAR_OPTIONS } from '../src/vision/statbar.js';
 import { STAT_LABELS, STAT_KEYS } from '../src/umascore/evaluate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -87,6 +88,15 @@ app.whenReady().then(async () => {
     }
     console.log('');
     console.log(`[來源] 揀咗：${hit.name}`);
+    // 面板條嘅相對範圍由**呢度**（statbar.js）話俾 renderer 知，
+    // renderer 只負責 1:1 剪出嚟傳返嚟（唔可以兩邊各自寫死一組數字）。
+    win.webContents.send('roi', {
+      x0: DEFAULT_STATBAR_OPTIONS.roiX[0],
+      x1: DEFAULT_STATBAR_OPTIONS.roiX[1],
+      y0: DEFAULT_STATBAR_OPTIONS.roiY[0],
+      y1: DEFAULT_STATBAR_OPTIONS.roiY[1],
+      aspect: DEFAULT_STATBAR_OPTIONS.aspect,
+    });
     win.webContents.send('start', hit.id);
   });
 
@@ -97,15 +107,19 @@ app.whenReady().then(async () => {
 });
 
 /**
- * Renderer 每一幀傳過嚟嘅縮圖 → 喺 Node 側讀五維 → 計評價分。
+ * Renderer 每一幀傳過嚟嘅面板條 → 喺 Node 側讀五維 → 計評價分。
  */
 ipcMain.on('frame', (_event, frame) => {
-  const { width, height, fullWidth, fullHeight, buffer } = frame;
+  const { width, height, fullWidth, fullHeight, buffer, cropped } = frame;
   if (!width || !height) return;
   if (Object.keys(templates).length === 0) return;
 
   const image = { data: new Uint8ClampedArray(buffer), width, height };
-  const read = readStats(image, templates);
+  // cropped = renderer 已經 1:1 剪咗面板條（見 capture.html）→ 走 statbar 嗰條路；
+  // 冇 cropped（舊格式／冇 ROI）→ 退回全畫面結構偵測。
+  const read = cropped
+    ? readStatBar(image, templates, { whole: true })
+    : readStats(image, templates);
 
   if (!read.stats) {
     // 讀唔到（轉場／唔喺ステータス畫面）→ 照樣推 null，等投票緩衝自然清走
@@ -122,11 +136,11 @@ ipcMain.on('frame', (_event, frame) => {
   if (!stable || !changed) return;
 
   const score = scoreStats(stats);
-  const k = fullWidth / width;
   const summary =
     `五維 ${stats.join('/')} → 五維分 ${score.statScore}　評價点 ${score.total}（${score.rank}）` +
     `　信心 ${read.confidence.toFixed(2)}` +
-    `　列 y=${Math.round(read.row.y0 * k)}..${Math.round(read.row.y1 * k)}（遊戲原始 ${fullWidth}×${fullHeight}）`;
+    `　來源 ${cropped ? `面板條 ${width}×${height}（原生像素）` : `縮圖 ${width}×${height}`}` +
+    `（遊戲原始 ${fullWidth}×${fullHeight}）`;
 
   console.log(`[評価分] ${summary}`);
   for (const [i, key] of STAT_KEYS.entries()) {

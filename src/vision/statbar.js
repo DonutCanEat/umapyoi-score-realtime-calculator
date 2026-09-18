@@ -130,10 +130,12 @@ function bandStats(mask, width, y0, y1) {
 export function locateStatBar(image, options = {}) {
   const o = { ...DEFAULT_STATBAR_OPTIONS, ...options };
   const box = contentBox(image, o);
-  const x0 = Math.round(image.width * o.roiX[0]);
-  const x1 = Math.round(image.width * o.roiX[1]);
-  const y0 = box.top + Math.round(box.height * o.roiY[0]);
-  const y1 = box.top + Math.round(box.height * o.roiY[1]);
+  // whole: true = 交嚟嘅圖**已經係 ROI**（renderer 直接剪好面板條先傳，見 electron/capture.html）
+  const whole = o.whole === true;
+  const x0 = whole ? 0 : Math.round(image.width * o.roiX[0]);
+  const x1 = whole ? image.width : Math.round(image.width * o.roiX[1]);
+  const y0 = whole ? 0 : box.top + Math.round(box.height * o.roiY[0]);
+  const y1 = whole ? image.height : box.top + Math.round(box.height * o.roiY[1]);
   const roi = cropImage(image, x0, y0, x1, y1);
   const mask = buildInkMask(roi, o);
 

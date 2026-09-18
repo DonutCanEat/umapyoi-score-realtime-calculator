@@ -32,11 +32,20 @@
       const statusEl = document.getElementById('status');
       const hintEl = document.getElementById('hint');
 
-      // 縮圖闊度：錨點偵測只需要粗略影像，縮圖可以大幅減低 IPC 同 CPU 成本。
-      const THUMB_WIDTH = 640;
-      // 目標幀率。錨點唔需要太快，5fps 已經足夠，而且唔會搶遊戲嘅 GPU。
+      // 目標幀率。幀間投票唔需要太快，5fps 已經足夠，而且唔會搶遊戲嘅 GPU。
       const TARGET_FPS = 5;
       const FRAME_MS = 1000 / TARGET_FPS;
+
+      // 遊戲內容區比例（賽馬娘桌面版冇固定解析度，只有固定 16:9）。
+      const CONTENT_ASPECT = 9 / 16;
+
+      // ⚠️ 2026-09-18：唔可以再把**整個視窗**縮到 640px 先傳！
+      //    UI 係等比縮放 → 面板數字得 0.0098×圖闊 咁高，縮到 640px 之後得 ~6px，
+      //    實測偵測 0/8（見 AGENTS 地雷 #22）。
+      //    改為：**只剪面板條嗰個相對範圍，1:1 原生像素**先傳（頻寬反而更細）。
+      //    相對範圍由主程序（statbar.js 嘅 DEFAULT_STATBAR_OPTIONS）經 IPC 傳落嚟，
+      //    兩邊一定同一個來源，唔會各自寫死一組數字。
+      let roi = null;
 
       let started = false;
       let lastSent = 0;
@@ -44,6 +53,10 @@
       ipcRenderer.on('no-source', () => {
         statusEl.textContent = '揾唔到遊戲視窗';
         hintEl.textContent = '請先開賽馬娘，再重新啟動本程式。';
+      });
+
+      ipcRenderer.on('roi', (_event, rect) => {
+        roi = rect;
       });
 
       ipcRenderer.on('start', async (_event, sourceId) => {
@@ -82,28 +95,45 @@
         if (now && now - lastSent < FRAME_MS) return;
         lastSent = now || 0;
 
-        const scale = Math.min(1, THUMB_WIDTH / video.videoWidth);
-        const width = Math.max(1, Math.round(video.videoWidth * scale));
-        const height = Math.max(1, Math.round(video.videoHeight * scale));
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+
+        // 內容框：如果擷取到嘅高度大過 16:9（例如連埋標題列），多出嘅部分喺頂
+        const contentH = Math.min(vh, Math.round(vw * CONTENT_ASPECT));
+        const contentTop = Math.max(0, vh - contentH);
+
+        // 有 ROI → 1:1 剪面板條；冇 → 退回舊行為（縮圖全畫面）
+        const sx0 = roi ? Math.round(vw * roi.x0) : 0;
+        const sx1 = roi ? Math.max(sx0 + 8, Math.round(vw * roi.x1)) : vw;
+        const sy0 = roi ? contentTop + Math.round(contentH * roi.y0) : 0;
+        const sy1 = roi ? Math.max(sy0 + 8, contentTop + Math.round(contentH * roi.y1)) : vh;
+        const sw = Math.min(vw - sx0, sx1 - sx0);
+        const sh = Math.min(vh - sy0, sy1 - sy0);
+
+        const scale = roi ? 1 : Math.min(1, 640 / vw);
+        const width = Math.max(1, Math.round(sw * scale));
+        const height = Math.max(1, Math.round(sh * scale));
 
         if (canvas.width !== width || canvas.height !== height) {
           canvas.width = width;
           canvas.height = height;
         }
-        ctx.drawImage(video, 0, 0, width, height);
+        ctx.drawImage(video, sx0, sy0, sw, sh, 0, 0, width, height);
         const image = ctx.getImageData(0, 0, width, height);
 
         ipcRenderer.send('frame', {
           width,
           height,
-          fullWidth: video.videoWidth,
-          fullHeight: video.videoHeight,
+          fullWidth: vw,
+          fullHeight: vh,
+          cropped: Boolean(roi),
           buffer: image.data.buffer,
         });
 
         hintEl.textContent =
-          ' · 遊戲 ' + video.videoWidth + '×' + video.videoHeight +
-          ' → 縮圖 ' + width + '×' + height + ' @' + TARGET_FPS + 'fps';
+          ' · 遊戲 ' + vw + '×' + vh +
+          (roi ? ' → 面板條 ' + width + '×' + height + '（原生像素）' : ' → 縮圖 ' + width + '×' + height) +
+          ' @' + TARGET_FPS + 'fps';
       }
     </script>
   </body>

@@ -15,6 +15,7 @@
  *   node tools/diag-statbar.js --read --expect=226,54,139,85,102
  *   node tools/diag-statbar.js --read --trace       # 印切字／模板比對中間結果
  *   node tools/diag-statbar.js --read --mask=3,0.4  # 覆寫遮罩窗口半徑,淺色比例
+ *   node tools/diag-statbar.js --read --cropped     # 模擬 renderer 先剪 ROI（執行時路徑）
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
@@ -29,6 +30,7 @@ import {
   cropImage,
   resampleImage,
   pickFiveBySpacing,
+  DEFAULT_STATBAR_OPTIONS,
 } from '../src/vision/statbar.js';
 import { loadTemplates } from '../src/vision/reader.js';
 import { buildInkMask } from '../src/vision/inkmask.js';
@@ -49,6 +51,21 @@ const maskOverride = maskArg
     )
   : {};
 const files = args.filter((a) => !a.startsWith('--'));
+const cropped = args.includes('--cropped');
+
+/**
+ * 模擬 `electron/capture.html` 嘅剪法：由遊戲視窗尺寸推內容框，再剪面板條（1:1）。
+ * 呢個函式同 renderer 嗰段邏輯要一致 —— 用途就係保證「執行時路徑」都 5/5。
+ */
+function cropLikeRenderer(image) {
+  const box = contentBox(image);
+  const o = DEFAULT_STATBAR_OPTIONS;
+  const x0 = Math.round(image.width * o.roiX[0]);
+  const x1 = Math.round(image.width * o.roiX[1]);
+  const y0 = box.top + Math.round(box.height * o.roiY[0]);
+  const y1 = box.top + Math.round(box.height * o.roiY[1]);
+  return cropImage(image, x0, y0, x1, y1);
+}
 const list = files.length
   ? files
   : readdirSync(join(ROOT, 'shots', 'live'))
@@ -127,7 +144,8 @@ for (const rel of list) {
     }
   }
   if (doRead) {
-    const read = readStatBar(image, templates, { minConfidence: 0, ...maskOverride });
+    const target = cropped ? cropLikeRenderer(image) : image;
+    const read = readStatBar(target, templates, { minConfidence: 0, ...maskOverride, whole: cropped });
     total += 1;
     const ok = expect && read.stats && read.stats.every((n, i) => n === expect[i]);
     if (ok) pass += 1;
