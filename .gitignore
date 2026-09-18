@@ -13,3 +13,8 @@ shots/live-debug/
 
 # 技能畫面連拍（UMAPYOI_SKILL_DUMP=1）收到嘅頁面 PNG —— 用完建庫之後就係中間產物，唔入 git
 shots/skill-dump/
+
+# HUD 設定（位置／大細／顯示選項）—— runtime 用戶狀態，人人唔同，唔應該入庫。
+# （`.tmp` 係主程序原子寫入嘅中間檔：寫檔途中死咗會剩低，一樣唔入 git。）
+hud-position.json
+hud-position.json.tmp
