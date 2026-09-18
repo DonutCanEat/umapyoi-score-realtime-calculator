@@ -63,7 +63,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 | Phase 0 | 技能資料庫（1323 招）＋ 進化技能 override | ✅ |
 | Phase 1 | 畫面擷取（`npm start` 跑得通）| ✅ |
 | Phase 1 | **五維數字辨識（零校準）** | ✅ 兩條路都通：**畫面 A 面板條**（`statbar.js`）**9/9 全中**（1356→2560 五個解析度 ＋ 4 個實機失敗／金色格回歸）；ステータス面板排法 **30/30**。✅ 已實機跑過（`npm start`，1920 窗），修好間歇性「讀唔清」（地雷 #25）同**金色格靜默讀錯**（地雷 #26）|
-| Phase 1 | HUD overlay ＋ 設定面板 | 🚧 **HUD 可用**（透明置頂穿透；顯示評價点 + 五維逐格 + 技能分 `？／總分 ≥ X`；對位模式可即時調位）。⏳ 未做：跟住遊戲視窗移動、用家拖位、設定面板 |
+| Phase 1 | HUD overlay ＋ 設定面板 | ✅ **可用**（透明置頂穿透；顯示評價点 + 五維逐格 + 技能分 `？／總分 ≥ X` ＋ 金色格提示）。**已做**：`hud-position.json` 存檔（env > 檔案 > 預設）、獨立**設定窗**（8 個數值 slider ＋ 7 個顯示選項，改動即時生效）、**對位模式（`UMAPYOI_HUD_EDIT=1`）可以直接拖 HUD**（放手即反推 + 存檔）。⏳ 未做：**跟住遊戲視窗移動**（見 §9 ①）、對位模式期間切換（要重開程式）|
 | Phase 2 | 技能 icon 識別（自動知學咗邊啲技能）| ⏸️ **暫停（用戶 2026-09-19 指示：暫時唔處理技能呢一 part）** —— 已經做好嘅部分見下面，隨時可以接返。原狀態：🚧 **兩步做好**：① 技能畫面欄／行偵測器（`skillscreen.js`，8 張實機圖全部搵到 7 行）；② **名稱框抽取**（112 個全部抽到）＋ **影像比對可行性已量化**（互相最佳配對中位數 **0.986**、撞分上限 **0.604** —— 見 `docs/skill-screen.md` §5）。⏳ 未做：接上**候選名單**（見 §9）|
 | Phase 3 | what-if 模擬（加一招加幾多分／Pt）、成長曲線 | 未開始 |
 | Phase 4 | 事件選項助手（已 mark，見 `docs/vision-design.md` §5.5）| 暫緩 |
@@ -124,17 +124,26 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 > `node --test --test-isolation=none test/*.test.js`
 
 ```bash
-npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay
-npm.cmd test              # 單元測試（115 個，必須全過）
+npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
+npm.cmd test              # 單元測試（155 個，必須全過）
 
 # HUD 相關開關（環境變數）
-#   UMAPYOI_NO_HUD=1            唔開 HUD（淨係要 console log 嗰陣用）
-#   UMAPYOI_HUD_EDIT=1          ⭐ 對位模式：HUD 顯示自己嘅範圍／偏移（唔使改 code 就調得）
+#   UMAPYOI_NO_HUD=1            唔開 HUD（⭐ 連設定窗都唔開；淨係要 console log 嗰陣用）
+#   UMAPYOI_NO_SETTINGS=1       唔開設定窗（HUD 照開）—— 做防擷取測試時想畫面乾淨就用
+#   UMAPYOI_HUD_EDIT=1          ⭐ 對位模式：HUD 顯示自己嘅範圍／偏移，而且可以直接拖（放手即存檔）
 #   UMAPYOI_HUD_X=0.01,0.20     HUD 左／右邊界（÷ 內容區闊度）
 #   UMAPYOI_HUD_Y=0.70,0.95     HUD 上／下邊界
 #   UMAPYOI_HUD_DX=-0.005       額外橫向偏移（同 _DY 一樣係相對值，可以負）
 #   UMAPYOI_HUD_W=0.30 / _H=0.24  大細（唔俾就用預設 size）
 #   UMAPYOI_DUMP_FRAMES=5       頭 5 幀每幀都 dump（⭐ 驗「HUD 有冇被自己擷取到」用）
+
+# HUD 設定檔（`hud-position.json`）—— 位置／大細／顯示選項
+#   優先次序：**環境變數 > 設定檔 > 預設**（全部經 `resolveHudConfig()`）
+#   路徑：開發模式 = <專案根>/hud-position.json；打包（或 ROOT 落喺 .asar）= app.getPath('userData')
+#   ⚠️ 實際用邊條路徑一定 log（`[設定] 檔案：…`），唔准靜默 fallback
+#   ⚠️ 合併之後會再 validate → `UMAPYOI_HUD_X=0.9,0.5`（倒轉）／`_W=0` 而家會 **throw + 即刻收工**
+#      （以前係靜默擺去唔可能嘅位置）—— 呢個係刻意嘅（見 §6.4）
+#   ⚠️ `hud-position.json` 唔入 git（runtime 用戶狀態，人人唔同）
 
 node src/cli.js 600 600 600 600 600        # 手動試算 → 5715 / C+
 
@@ -191,7 +200,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **115 個**）
+1. `npm.cmd test` 全過（現時 **155 個**）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 4/4　完全命中 4/4　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（雙閘：**實機面板條 9/9**），兩個都要中
@@ -233,13 +242,28 @@ src/cli.js        # 手動試算
 
 src/hud/
   layout.js       # ⭐ HUD overlay 嘅**幾何 + 顯示狀態**（純函數，可 node --test）：
-                  #    相對位置（左下角空白位）、內容框推算、三態（ok／stale／none）
+                  #    相對位置、內容框推算、四態（ok／stale／none／edit）、顯示選項、
+                  #    clampLayout()（用戶郁過嘅值一律夾成合法）、
+                  #    layoutFromBounds()／relativeFromBounds()（拖完反推）
+  config.js       # ⭐ HUD 設定存檔層（`hud-position.json`）：DEFAULT_HUD_CONFIG／
+                  #    validateConfig()／loadConfig()／saveConfig()／resolveHudConfig()（env > 檔案 > 預設）
+  config-path.js  # ⭐ 設定檔擺邊（純函數）：開發 = 專案根；打包／asar = app.getPath('userData')
 
 electron/
   main.js         # 主程序：視窗列舉 → statbar.readStatBar()（cropped）／reader.readStats()
                   #    → evaluate() → console log ＋ **推落 HUD**（見 §6.4）
+                  #    另有：HUD 設定窗管理、滑鼠穿透 funnel（setHudInteractive）、拖位 IPC
   capture.html    # 擷取 renderer：getUserMedia → **1:1 剪面板 ROI**（冇 ROI 就退回 640px 縮圖）
-  hud.html        # HUD overlay renderer：透明無邊框，只畫主程序推落嚟嘅 view
+  hud.html        # HUD overlay renderer：透明無邊框，只畫主程序推落嚟嘅 view（＋對位模式拖位）
+  settings.html   # ⭐ HUD 設定窗（**普通視窗**，classic script）：8 個數值 slider ＋ 7 個顯示選項
+
+test/
+  hud.test.js         # HUD 幾何／狀態（anchorHud／contentRect／hudState 基本行為）
+  hud-display.test.js # ⭐ 顯示選項（7 個 boolean）＋ 金色格嘅**真實粒度**（整體 boolean）
+  hud-clamp.test.js   # ⭐ clampLayout()（slider 拉爆／拖位反推共用嘅夾法）
+  hud-drag.test.js    # ⭐ 拖完反推：round-trip（±1px）、唔改 size、30 次唔漂
+  hud-config.test.js  # HUD 設定存檔層（env > 檔案 > 預設；唔合法一律 throw）
+  hud-config-path.test.js # ⭐ 設定檔路徑決策（開發 vs 打包 vs asar）
 
 tools/
   fetch-skill-db.js      # bwiki 技能庫抓取
@@ -478,8 +502,71 @@ electron/hud.html   透明無邊框頁面，只畫主程序推落嚟嘅 view（�
 用戶係**特登**要 HUD 擺嗰度（唔係擺錯位要補償）。要改位置只有兩個正路：
 `UMAPYOI_HUD_EDIT=1` 睇即時數值再調、或者直接改 `DEFAULT_HUD_LAYOUT`。
 
-⚠️ **唔啱位唔使改 code**：`UMAPYOI_HUD_EDIT=1 npm start` 開對位模式
-（HUD 會顯示自己嘅 x／y 範圍、偏移、大細），或者直接用 `UMAPYOI_HUD_X`／`_Y`／`_DX`／`_DY`／`_W`／`_H`。
+⚠️ **唔啱位唔使改 code**（三個方法，全部唔使改 code）：
+1. **開設定窗**（`npm start` 會一齊開，見下面「獨立設定窗」）—— 拉 slider 即時生效
+2. **`UMAPYOI_HUD_EDIT=1 npm start`** 開對位模式 → **直接用滑鼠拖 HUD**（放手即寫入 `hud-position.json`）
+3. 環境變數 `UMAPYOI_HUD_X`／`_Y`／`_DX`／`_DY`／`_W`／`_H`（**優先過**設定檔）
+
+#### 獨立設定窗（`electron/settings.html`）
+
+```
+npm.cmd start                      # 一齊開（HUD + 設定窗）
+UMAPYOI_NO_SETTINGS=1 npm.cmd start  # 只唔開設定窗（HUD 照開）
+UMAPYOI_NO_HUD=1 npm.cmd start       # ⭐ 兩個窗都唔開（淨係要 console log 嗰陣用）
+```
+
+- 一個**普通視窗**（`frame:true`／`resizable:true`／`focusable:true`／唔透明）——
+  ⚠️ **唔可以塞入 HUD 裏面**：HUD 一開滑鼠事件就會擋住用戶點遊戲（本專案底線）。
+- 8 個數值（`x0`／`x1`／`y0`／`y1`／`dx`／`dy`／`w`／`h`）：slider ＋ 輸入框雙向；
+  7 個顯示選項 checkbox（`total`／`stats`／`statScore`／`skillScore`／`goldMark`／`note`／`edit`）。
+- 改任何值 → **即時**經 IPC 推落 HUD（未存檔）；「儲存」→ 寫 `hud-position.json`；
+  「還原預設」→ 即時套用純出廠預設（**刻意唔寫檔**，要寫就再按「儲存」）。
+- ⚠️ 不變式：`x1 = x0 + w`、`y1 = y0 + h`（設定窗同拖位共用同一個模型）。
+  `x[1]` 只喺 `size` 缺席嗰陣做 fallback（而 `validateConfig()` 永遠會補 `size`）
+  → 所以邊個做「大細」都唔會唔一致。`clampLayout()` 係**唯一**做夾嘅地方
+  （用戶拉爆 slider／拖出界一律夾返合法，唔會出現「拉咗但冇反應」）。
+- ⚠️ `offset`（`dx`／`dy`）只夾到 **±1**（同 `config.js` 契約一致），
+  **唔會**夾到「一定喺螢幕內」→ 極端 offset 會令 HUD 走出畫面，所以設定窗有顯示
+  「實際左上角」＋ 走出範圍就出警告。
+
+#### 對位模式拖位（`UMAPYOI_HUD_EDIT=1`）
+
+- **正常模式（冇 `UMAPYOI_HUD_EDIT`）一定係 `setIgnoreMouseEvents(true)` 穿透** ——
+  呢個係底線：一旦漏咗還原，用戶就**點唔到遊戲**。
+- ⚠️ **一定要經 `setHudInteractive()` 呢個 funnel**：`electron.d.ts` **冇**
+  `isIgnoreMouseEvents()` getter → 讀唔返而家嘅狀態 → 要自己用 flag（`hudInteractive`）記住。
+  再加三重保險：① 所有離開拖曳嘅路徑都行 `finally` 叫 `setHudInteractive()`；
+  ② 拖位 watchdog（1200ms 冇新消息 = `pointerup` 唔見咗 → 收手）；
+  ③ 每 500ms interval 喺正常模式**再確認**一次 `setIgnoreMouseEvents(true)`。
+- 拖法：renderer `pointerdown` → `setPointerCapture` → `pointermove`／`up` ＋
+  **`screenX/screenY`**（⚠️ **唔准** `clientX/clientY`：相對視窗，`setBounds()` 一移窗就
+  自我回饋 → 抖／暴走），傳「相對按下嗰刻嘅總位移」。
+  ⚠️ **唔用 `-webkit-app-region: drag`**：同 `setIgnoreMouseEvents(true)` 物理上互斥，
+  而且透明窗 + `focusable:false` 之下行為未文檔化。
+- ⚠️ **`placeHud()` 會蓋走拖完嘅位**（首幀、`display-metrics-changed`、設定窗改動都會再叫佢）
+  → 放手之後**一定**要寫入 `hudConfig.layout` 再經 `placeHud()`，唔可以只 `setBounds()`。
+- **反推**用 `layoutFromBounds(hudContent, bounds, layout)`：只改 `offset`，**唔改 `size`**。
+  原因：`anchorHud()` 有大細下限（`max(80,…)`／`max(40,…)`），被夾過嘅
+  `bounds.width ÷ content.width` **唔等於** `size.w` → 攞佢寫 `size` 就係「拖一拖，大細自己變咗」；
+  而且整數 round 會令 `size` 慢慢漂。
+  ⚠️ `hudContent` **一定**要係 `placeHud()` 計出嚟嗰個物件（單一來源）——
+  唔准喺反推路徑再叫 `getPrimaryDisplay()` 或者用擷取幀嘅 `fullWidth/fullHeight` 另計一次。
+- 拖完會**自動存檔**（`hud-position.json`，原子寫：`.tmp` ＋ `rename`）。
+  ⚠️ 有 set 環境變數嗰陣，存咗都會俾 env 蓋過（優先次序係咁設計）→ 一定會 log 警告。
+
+#### 設定檔（`hud-position.json`）
+
+- 優先次序 **環境變數 > 設定檔 > 預設**（`resolveHudConfig()`）。
+- 路徑：開發模式 = `<專案根>/hud-position.json`；已打包（或者 `ROOT` 落喺 `.asar`）= `app.getPath('userData')`
+  （見 `src/hud/config-path.js`）。⚠️ **實際用邊條路徑一定 log**（`[設定] 檔案：…`），唔准靜默 fallback。
+- ⚠️ **行為改動（刻意）**：合併之後會**再 validate 一次** → `UMAPYOI_HUD_X=0.9,0.5`（前後倒轉）、
+  `UMAPYOI_HUD_W=0`、超出 0–1 一律 **throw**（以前係靜默擺去一個唔可能嘅位置）。
+  main.js 會 catch 佢、大聲講、然後 `app.exit(1)`（唔留低冇窗嘅僵屍程序）。
+- ⚠️ **設定檔壞咗（JSON 壞／欄位唔合法）＝唔同處理**：log 大聲 ＋ 用預設 ＋
+  **唔覆寫你個檔**（設定窗顯示紅色橫額）。理由：檔案壞咗唔應該阻止擷取，但**一定唔可以靜默**。
+- ⚠️ **唔可以寫額外欄位入 JSON**（例如 `savedAt`／`contentRef`）：
+  `validateConfig()` 唔准唔認識嘅 key（打錯字要即刻出聲）→ 改為 log 出嚟。
+- ⚠️ `hud-position.json` **唔入 git**（runtime 用戶狀態，人人唔同）。
 
 ⚠️ **一定要 `setContentProtection(true)`**：我哋用 `desktopCapturer` 擷取自己個螢幕，
 冇呢個設定 HUD **會入到自己嘅擷取畫面**（等於自己讀自己嘅字）。
@@ -561,7 +648,7 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **115 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **155 個測試必須全過**
 2. `node tools/fit-score.js` — 必須 `完全命中 4/4　總絕對誤差 0`
 3. 如果改咗五維／技能／ランク相關嘅嘢，`node tools/breakdown.js` 逐招核對一次
 4. **如果改咗影像相關嘅嘢**：
@@ -588,8 +675,8 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 
 | 優先 | 事項 |
 |---|---|
-| ⭐ 高 | **HUD 跟住遊戲視窗 ＋ 用家自己拖位**（用戶 2026-09-18 提出，明講「呢個係後話，你可以 mark 低咗先」）：<br>① **完全固定喺賽馬娘視窗**：而家 HUD 位置係用「前景顯示器工作區」推算（見 §6.4 已知限制），遊戲視窗一移 HUD 就唔跟。<br>　 ⚠️ 難點：`desktopCapturer` **只俾** id／標題／大細，**冇螢幕座標** → 要另找來源。<br>　 ✅ **已實測可行**（2026-09-18）：PowerShell + `Add-Type` 叫 Win32 `EnumWindows` + `GetWindowRect`，列舉全部可見視窗只用 **~365ms**（`powershell.exe -NoProfile -Command`，唔可以寫 `.ps1`，執行原則會擋）。實測讀到遊戲視窗係 **-34,141 1943×1123**。<br>　 ⚠️ 認遊戲視窗**唔可以用「比例 ≈ 16:9」**：實測同一部機有 4 個窗口都接近 16:9（遊戲、cmd、Windows 輸入體驗、Program Manager）→ 要用**標題**（`desktopCapturer` 嘅 source name 同 Win32 標題一樣）或者**大細**配對。<br>　 ⚠️ 沙盒注意：唔可以用 `spawn`／`execFileSync` **擷取子程序輸出**（具名管道 EPERM）→ 叫 PowerShell 自己寫落檔案再讀。<br>② **用家自己拖 HUD 定位置**：HUD 而家 `setIgnoreMouseEvents(true)`（穿透）→ 冇得拖。<br>　 ⚠️ 難點：一開返滑鼠事件就會擋住遊戲點擊。<br>　 ✅ 可行做法：**對位模式（`UMAPYOI_HUD_EDIT=1`）之下才**開滑鼠事件 + 顯示虛線框，拖完寫落 config 檔（`hud-position.json`），正常模式照穿透；或者用鍵盤微調（`Ctrl+Alt+方向鍵`）避免搶滑鼠。<br>（而家做得到嘅替代：`UMAPYOI_HUD_EDIT=1` ＋ `UMAPYOI_HUD_DX/_DY` 環境變數，見 §6.4）|
-| ⭐ 高 | **HUD 收尾**：① 驗「HUD 有冇被自己擷取到」（`UMAPYOI_DUMP_FRAMES=5 npm start` → `node tools/raw-to-png.js shots/live-debug`）；② 再定要唔要**設定面板** |
+| ⭐ 高 | **HUD 跟住遊戲視窗 ＋ 用家自己拖位**（用戶 2026-09-18 提出，明講「呢個係後話，你可以 mark 低咗先」）：<br>① **完全固定喺賽馬娘視窗**：而家 HUD 位置係用「前景顯示器工作區」推算（見 §6.4 已知限制），遊戲視窗一移 HUD 就唔跟。<br>　 ⚠️ 難點：`desktopCapturer` **只俾** id／標題／大細，**冇螢幕座標** → 要另找來源。<br>　 ✅ **已實測可行**（2026-09-18）：PowerShell + `Add-Type` 叫 Win32 `EnumWindows` + `GetWindowRect`，列舉全部可見視窗只用 **~365ms**（`powershell.exe -NoProfile -Command`，唔可以寫 `.ps1`，執行原則會擋）。實測讀到遊戲視窗係 **-34,141 1943×1123**。<br>　 ⚠️ 認遊戲視窗**唔可以用「比例 ≈ 16:9」**：實測同一部機有 4 個窗口都接近 16:9（遊戲、cmd、Windows 輸入體驗、Program Manager）→ 要用**標題**（`desktopCapturer` 嘅 source name 同 Win32 標題一樣）或者**大細**配對。<br>　 ⚠️ 沙盒注意：唔可以用 `spawn`／`execFileSync` **擷取子程序輸出**（具名管道 EPERM）→ 叫 PowerShell 自己寫落檔案再讀。<br>② **用家自己拖 HUD 定位置**：HUD 而家 `setIgnoreMouseEvents(true)`（穿透）→ 冇得拖。<br>　 ⚠️ 難點：一開返滑鼠事件就會擋住遊戲點擊。<br>　 ✅ 可行做法：**對位模式（`UMAPYOI_HUD_EDIT=1`）之下才**開滑鼠事件 + 顯示虛線框，拖完寫落 config 檔（`hud-position.json`），正常模式照穿透；或者用鍵盤微調（`Ctrl+Alt+方向鍵`）避免搶滑鼠。<br>　 ✅ **已做（見 §6.4「對位模式拖位」）**：對位模式之下開滑鼠事件 ＋ 藍虛線框 ＋ 直接拖；放手即反推並寫入 `hud-position.json`。正常模式**一定**穿透（funnel ＋ watchdog ＋ 500ms 再確認）。⚠️ 對位模式**要喺啟動時用環境變數決定**（renderer 喺 `focusable:false` 之下收唔到鍵盤，所以冇得中途切換）。<br>① **未做**：HUD 跟住遊戲視窗移動。|
+| ⭐ 高 | **HUD 收尾**：① 驗「HUD 有冇被自己擷取到」（`UMAPYOI_DUMP_FRAMES=5 npm start` → `node tools/raw-to-png.js shots/live-debug`）—— ⚠️ 加咗設定窗之後要**驗多一樣**：設定窗有 `setContentProtection(true)`，但一樣要實測確認佢唔會入到自己嘅擷取；② 設定面板**已做**（A2），剩返實機驗外觀同拖位手感 |
 | ⭐ 高 | **確認 uma2 截圖同 JSON 邊個啱**（地雷 #19）：要麼補返對應 1937/993/1077/848/1198 嘅截圖，要麼確認 JSON 值然後重拍截圖 |
 | 中 | **模板覆蓋**：實機樣本仍然偏少（每個數字十幾個）。再收幾張實機圖（唔同培育進度／唔同馬／唔同主題色）可以令相似度同信心再升 |
 | 中 | **其他畫面／其他狀態嘅面板條**：現時只驗證咗育成主畫面（畫面 A）。仲未試：ステータス面板、比賽前後、訓練動畫期間 |
@@ -610,10 +697,10 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 
 | # | 項目 | 內容 | 大細 |
 |---|---|---|---|
-| A1 | **HUD 用家拖位** | 對位模式下開滑鼠事件，拖完寫落 `hud-position.json`；正常模式照穿透（見 §9 ⭐高） | 中 |
-| A2 | **HUD 設定面板** | 一個細面板調位置／大細／顯示項目（而家只能靠環境變數） | 中 |
-| A3 | **HUD 顯示選項** | 例：只顯示總分、金色格標示（`readStatBar()` 已經回 `highlighted` 但 HUD 未用）、字體大細 | 細 |
-| A4 | **`hud-position.json` 設定檔** | 位置／大細／偏移寫入檔案，唔使每次打環境變數 | 細 |
+| A1 | ~~**HUD 用家拖位**~~ ✅ **已做** | 對位模式下開滑鼠事件，拖完寫落 `hud-position.json`；正常模式照穿透（見 §6.4「對位模式拖位」）。⚠️ 未實機驗過 | 中 |
+| A2 | ~~**HUD 設定面板**~~ ✅ **已做** | 獨立設定窗（`electron/settings.html`）：8 個數值 slider ＋ 7 個顯示選項，改動即時生效（見 §6.4「獨立設定窗」）。⚠️ 未實機驗過外觀 | 中 |
+| A3 | ~~**HUD 顯示選項**~~ ✅ **已做** | 7 個 `display` 開關（含金色格提示）。⚠️ 金色格嘅**真實粒度係一個整體 boolean**（`highlighted` 唔係逐格）→ HUD 只可以標「有金色格」 | 細 |
+| A4 | ~~**`hud-position.json` 設定檔**~~ ✅ **已做** | 位置／大細／顯示選項寫入檔案（env > 檔案 > 預設；原子寫）。⚠️ 未實機驗過「重開之後讀返」 | 細 |
 | A5 | **`npm start` 前置檢查** | 開唔到遊戲視窗／模板缺失／Smart App Control 擋咗 → 出清楚指引（見 §7 已知坑） | 細 |
 | A6 | **日誌整理** | 分 `--verbose`／靜音；log 寫檔（方便用戶回報問題） | 細 |
 | A7 | **測試覆蓋** | `evaluate.js` 邊界（1200／2000 上限、負分進化技能）、更多合成圖 | 中 |
