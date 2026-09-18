@@ -337,9 +337,29 @@ function replyHudConfigSafely(sender, extra = {}) {
 function applyHudConfig(config, { why = '' } = {}) {
   // 防呆（呢個 bug 我真係踩過）：一定要係**完整設定**，唔可以傳一個 layout 入嚟 ——
   // 傳錯嘅話 `placeHud()` 會攞唔到 `layout` 而彈返去預設位，`saveConfig()` 亦會 throw。
-  if (!config?.layout || !Array.isArray(config.layout.x) || !config.layout.size) {
+  // ⚠️ **`display` 一定要一齊驗**（獨立審計發現）：以前只驗 `layout`，
+  //    傳 `{layout:{…齊…}}`（缺 `display`）會靜默接受 → `hudConfig.display` 變 `undefined`
+  //    → `layout.js` `hudState()` 攞唔到顯示選項就會**當全部開** →
+  //    用戶今次 session 閂咗嘅顯示選項被靜默重設成開（現行呼叫者全部補齊所以未爆，但係瑕疵）。
+  //    唔完整就 throw，而且訊息要講得出**缺咩**（唔准靜默補預設）。
+  const missing = [];
+  if (!config || typeof config !== 'object') {
+    missing.push('layout', 'display');
+  } else {
+    const layout = config.layout;
+    if (!layout || typeof layout !== 'object') missing.push('layout');
+    else {
+      if (!Array.isArray(layout.x)) missing.push('layout.x');
+      if (!layout.size || typeof layout.size !== 'object') missing.push('layout.size');
+    }
+    if (!config.display || typeof config.display !== 'object' || Array.isArray(config.display)) {
+      missing.push('display');
+    }
+  }
+  if (missing.length) {
     throw new Error(
-      `applyHudConfig() 要一份完整設定 {layout:{x,y,offset,size}, display}，實得 ${JSON.stringify(config)}`,
+      `applyHudConfig() 要一份完整設定 {layout:{x,y,offset,size}, display}，` +
+      `缺咗／唔啱型別：${missing.join('、')}（實得 ${JSON.stringify(config)}）`,
     );
   }
   hudConfig = config;
