@@ -27,11 +27,13 @@ import { decodePng } from '../src/vision/png.js';
 import { buildInkMask } from '../src/vision/inkmask.js';
 import { detectDigitRow } from '../src/vision/digitrow.js';
 import { extractGlyphs, standardize, readNumberTrimmed, GLYPH_W, GLYPH_H } from '../src/vision/glyphs.js';
+import { collectStatBarGlyphs, readStatBar } from '../src/vision/statbar.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DB_PATH = join(ROOT, 'data', 'glyph-templates.json');
 const GT_DIR = join(ROOT, 'data', 'ground-truth');
 const SHOTS_DIR = join(ROOT, 'shots', 'gt');
+const LIVE_TRUTH_PATH = join(ROOT, 'data', 'live-truth.json');
 
 const verifyOnly = process.argv.includes('--verify');
 /** --exclude=uma2：排除某啲來源（用嚟診斷「截圖同 ground truth 唔對應」嘅情況） */
@@ -61,11 +63,35 @@ function discoverSources() {
 }
 
 const sources = discoverSources();
-if (sources.length === 0) {
+
+/**
+ * 實機來源（育成主畫面，`shots/live/`）：**排法唔同**（大數值行 + /上限行），
+ * 所以走 `statbar.js` 嗰條路。真值放喺 `data/live-truth.json`。
+ *
+ * 為何要入訓練：實機字高跟解析度變（12–24px），最細尺度（1356 闊 → 12px）字形資訊少，
+ * 淨用 gt（17px）訓練會出現「6 vs 8」混淆。加實機樣本可以覆蓋細尺度。
+ */
+function discoverLiveSources() {
+  if (!existsSync(LIVE_TRUTH_PATH)) return [];
+  const db = JSON.parse(readFileSync(LIVE_TRUTH_PATH, 'utf8'));
+  if (!Array.isArray(db.values) || db.values.length !== 5) return [];
+  return (db.shots ?? [])
+    .map((f) => `shots/live/${f}`)
+    .filter((rel) => existsSync(join(ROOT, rel)))
+    .filter((rel) => !excludes.some((e) => rel.includes(e)))
+    .map((shot) => ({ truth: db.values, shot, live: true }));
+}
+
+const liveSources = discoverLiveSources();
+
+if (sources.length === 0 && liveSources.length === 0) {
   console.error('揾唔到任何「ground truth + 截圖」配對，冇嘢可以做。');
   process.exit(1);
 }
-console.log(`來源：${sources.length} 張（${sources.map((s) => s.shot.replace('shots/gt/', '')).join(', ')}）\n`);
+console.log(
+  `來源：${sources.length} 張面板截圖（${sources.map((s) => s.shot.replace('shots/gt/', '')).join(', ')}）` +
+    ` ＋ ${liveSources.length} 張實機面板條（${liveSources.map((s) => s.shot.replace('shots/live/', '')).join(', ')}）\n`,
+);
 
 /** 累積每個數字嘅樣本。 */
 const samples = new Map();
@@ -106,6 +132,39 @@ for (const source of sources) {
     collected.push(`${value}✓`);
   });
   console.log(`✓ ${source.shot}  y=${row.y0}..${row.y1}  覆蓋率 ${row.coverage}  ${collected.join(' ')}`);
+}
+
+/** 實機面板條：用 `collectStatBarGlyphs()`（同讀數完全同一條路）。 */
+for (const source of liveSources) {
+  const img = decodePng(readFileSync(join(ROOT, source.shot)));
+  const image = { data: img.data, width: img.width, height: img.height };
+  const { entries, reason } = collectStatBarGlyphs(image);
+  if (!entries) {
+    console.log(`✗ ${source.shot}（實機面板條）：${reason}`);
+    continue;
+  }
+  const collected = [];
+  source.truth.forEach((value, index) => {
+    const entry = entries[index];
+    if (!entry) {
+      skipped.push(`${source.shot} 第 ${index + 1} 個數值（真值 ${value}）：偵測唔到`);
+      return;
+    }
+    const digits = String(value).split('');
+    if (entry.glyphs.length < digits.length) {
+      skipped.push(
+        `${source.shot} 第 ${index + 1} 個數值（真值 ${value}）：切到 ${entry.glyphs.length} 個字元，唔夠 ${digits.length} 個`,
+      );
+      return;
+    }
+    const use = entry.glyphs.slice(entry.glyphs.length - digits.length);
+    digits.forEach((digit, i) => {
+      if (!samples.has(digit)) samples.set(digit, []);
+      samples.get(digit).push(standardize(use[i].bitmap));
+    });
+    collected.push(`${value}✓`);
+  });
+  console.log(`✓ ${source.shot}（實機面板條）字高 ${entries.length ? entries[0].num.x1 - entries[0].num.x0 + 1 : '?'}px  ${collected.join(' ')}`);
 }
 
 console.log('');
@@ -168,13 +227,41 @@ for (const source of sources) {
   });
   console.log(`  ${source.shot.replace('shots/gt/', '').padEnd(12)} ${read.join('  ')}`);
 }
-console.log(`\n完全命中 ${hits}/${total}`);
+console.log(`\n完全命中 ${hits}/${total}（面板截圖）`);
 
-if (hits !== total) {
+// ── 實機面板條驗證（唔同排法，必須另外驗）──
+let liveTotal = 0;
+let liveHits = 0;
+const liveFailures = [];
+if (liveSources.length) {
+  console.log('\n=== 驗證（實機面板條）===');
+  for (const source of liveSources) {
+    const img = decodePng(readFileSync(join(ROOT, source.shot)));
+    const image = { data: img.data, width: img.width, height: img.height };
+    const read = readStatBar(image, runtime);
+    liveTotal += 1;
+    const ok = read.stats && read.stats.every((v, i) => v === source.truth[i]);
+    if (ok) liveHits += 1;
+    else {
+      liveFailures.push(
+        `${source.shot}：讀「${read.stats ? read.stats.join('/') : `❌ ${read.reason}`}」` +
+          `，真值 ${source.truth.join('/')}（信心 ${read.confidence.toFixed(2)}）`,
+      );
+    }
+    console.log(
+      `  ${source.shot.replace('shots/live/', '').padEnd(22)} ` +
+        `${read.stats ? read.stats.join('/') : `❌ ${read.reason}`}  ${ok ? '✅' : `❌(${source.truth.join('/')})`}`,
+    );
+  }
+  console.log(`\n完全命中 ${liveHits}/${liveTotal}（實機面板條）`);
+}
+
+if (hits !== total || liveHits !== liveTotal) {
   const badShots = [...new Set(failures.map((f) => /(uma\d+-p\d+\.png)/.exec(f)?.[1]).filter(Boolean))];
   console.log('\n❌ 驗證唔通過，**唔會**寫入模板檔（防止垃圾模板污染正式資料）。');
   console.log('\n失敗明細：');
   for (const f of failures) console.log(`   - ${f}`);
+  for (const f of liveFailures) console.log(`   - ${f}`);
   console.log(
     '\n可能原因：\n' +
       '   1. 嗰張截圖同 ground truth JSON **唔對應**（例如 JSON 換咗做新一輪培育嘅紀錄，\n' +
@@ -193,7 +280,17 @@ if (verifyOnly) {
 
 writeFileSync(
   DB_PATH,
-  `${JSON.stringify({ grid: [GLYPH_W, GLYPH_H], digits: found, sources: sources.length, templates }, null, 0)}\n`,
+  `${JSON.stringify(
+    {
+      grid: [GLYPH_W, GLYPH_H],
+      digits: found,
+      sources: sources.length,
+      liveSources: liveSources.length,
+      templates,
+    },
+    null,
+    0,
+  )}\n`,
   'utf8',
 );
 console.log(`\n✅ 驗證通過，已寫入 ${DB_PATH}`);

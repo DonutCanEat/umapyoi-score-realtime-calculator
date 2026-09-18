@@ -213,6 +213,44 @@ export function pickFiveBySpacing(numbers, options = {}) {
 }
 
 /**
+ * 抽出實機面板條嘅 5 個數值框同各自嘅字元（讀數同**建模板**共用同一條路，
+ * 唔可以兩邊各寫一次，否則會出現「訓練用一套、讀數用另一套」嘅偏差）。
+ *
+ * @returns {{located:object, entries:Array<{num:object,glyphs:Array}>|null, reason?:string}}
+ */
+export function collectStatBarGlyphs(image, options = {}) {
+  const o = { ...DEFAULT_STATBAR_OPTIONS, ...options };
+  const located = locateStatBar(image, o);
+  if (!located.values) {
+    return { located, entries: null, reason: located.reason ?? '搵唔到面板條' };
+  }
+  const { values } = located;
+  const roi = located.image;
+
+  // ⚠️ 遮罩一定要喺**整個 ROI**（有背景）上面做，唔可以剪一條貼邊條帶：
+  //    貼邊條帶冇淺色底 → 「深色字喺淺色底」結構條件失效 → 有環嘅數字（6/8/9）
+  //    筆劃被剔走、碎裂成兩橛（實測：3 位數字切成 4 個字元）。
+  //    只係之後嘅**投影**限制喺大數值行嘅 y 範圍（唔理上限行），就唔會撞到上限。
+  const f = values.height / o.targetGlyphHeight;
+  const minGap = Math.max(1, Math.round(3 * f));
+  const numberGap = Math.max(4, Math.round(10 * f));
+  const windowRadius = Math.min(12, Math.max(2, Math.round(6 * f)));
+  const mask = buildInkMask(roi, { ...o, windowRadius });
+
+  const groups = columnsToGroups(mask, roi.width, values.y0, values.y1, { ...o, minGap });
+  const all = groupsToNumbers(groups, { ...o, numberGap });
+  const picked = pickFiveBySpacing(all, o);
+  if (!picked) {
+    return { located, entries: null, reason: `候選數字唔夠／唔等距（候選 ${all.length} 個）` };
+  }
+  const entries = picked.numbers.map((num) => ({
+    num,
+    glyphs: extractGlyphs(roi, mask, { x0: num.x0, x1: num.x1 }, values.y0, values.y1),
+  }));
+  return { located, entries, reason: undefined };
+}
+
+/**
  * 讀實機五維面板條。
  *
  * ## 為何唔重採樣（2026-09-18 實測踩過）
@@ -232,38 +270,16 @@ export function pickFiveBySpacing(numbers, options = {}) {
  */
 export function readStatBar(image, templates, options = {}) {
   const o = { ...DEFAULT_STATBAR_OPTIONS, ...options };
-  const located = locateStatBar(image, o);
-  if (!located.values) {
-    return { stats: null, texts: null, confidence: 0, row: null, reason: located.reason ?? '搵唔到面板條' };
-  }
-  const { values } = located;
-  const roi = located.image;
-
-  // ⚠️ 遮罩一定要喺**整個 ROI**（有背景）上面做，唔可以剪一條貼邊條帶：
-  //    貼邊條帶冇淺色底 → 「深色字喺淺色底」結構條件失效 → 有環嘅數字（6/8/9）
-  //    筆劃被剔走、碎裂成兩橛（實測：3 位數字切成 4 個字元）。
-  //    只係之後嘅**投影**限制喺大數值行嘅 y 範圍（唔理上限行），就唔會撞到上限。
-  const f = values.height / o.targetGlyphHeight;
-  const minGap = Math.max(1, Math.round(3 * f));
-  const numberGap = Math.max(4, Math.round(10 * f));
-  const windowRadius = Math.min(12, Math.max(2, Math.round(6 * f)));
-  const mask = buildInkMask(roi, { ...o, windowRadius });
-
-  const groups = columnsToGroups(mask, roi.width, values.y0, values.y1, { ...o, minGap });
-  const all = groupsToNumbers(groups, { ...o, numberGap });
-  const picked = pickFiveBySpacing(all, o);
-  if (!picked) {
-    return {
-      stats: null, texts: null, confidence: 0, row: values,
-      reason: `候選數字唔夠／唔等距（候選 ${all.length} 個）`,
-    };
+  const { located, entries, reason } = collectStatBarGlyphs(image, o);
+  const values = located.values;
+  if (!entries) {
+    return { stats: null, texts: null, confidence: 0, row: values ?? null, reason };
   }
 
   const texts = [];
   let confidence = 1;
-  for (const [i, num] of picked.numbers.entries()) {
-    const glyphs = extractGlyphs(roi, mask, { x0: num.x0, x1: num.x1 }, values.y0, values.y1);
-    const read = readNumberTrimmed(glyphs, templates, o);
+  for (const [i, entry] of entries.entries()) {
+    const read = readNumberTrimmed(entry.glyphs, templates, o);
     confidence = Math.min(confidence, read.confidence);
     if (!/^\d+$/.test(read.text)) {
       return {
