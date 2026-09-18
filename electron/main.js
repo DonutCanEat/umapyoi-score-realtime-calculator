@@ -18,14 +18,16 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, screen } from 'electron';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 
 import { loadTemplates, readStats, StatTracker, scoreStats } from '../src/vision/reader.js';
 import { readStatBar, DEFAULT_STATBAR_OPTIONS } from '../src/vision/statbar.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
 import { encodePng } from '../src/vision/pngwrite.js';
 import { STAT_LABELS, STAT_KEYS } from '../src/umascore/evaluate.js';
-import { anchorHud, contentRect, hudState, layoutFromEnv } from '../src/hud/layout.js';
+import { anchorHud, contentRect, hudState, clampLayout, HUD_ENV_KEYS } from '../src/hud/layout.js';
+import { loadConfig, saveConfig, resolveHudConfig, validateConfig } from '../src/hud/config.js';
+import { configPathFor } from '../src/hud/config-path.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -66,8 +68,32 @@ let lastScoreAt = 0;
 let lastHudKey = '';
 /** 遊戲視窗大細（由擷取串流報返嚟），用嚟幫 HUD 對位。 */
 let hudGameSize = { width: 0, height: 0 };
+/**
+ * HUD 設定（`{layout, display}`）—— 由 `src/hud/config.js` 解析（**環境變數 > 檔案 > 預設**）。
+ *
+ * ⚠️ 唔再係「淨係 layout」：顯示選項（7 個 boolean）同位置係同一份設定，
+ * 兩者都要經同一個 `resolveHudConfig()` 出去，唔可以各自讀一次（會走樣）。
+ */
+let hudConfig = null;
+/** 設定檔實際用嘅路徑（`log` 一定要講，唔准靜默 fallback 去錯位置）。 */
+let hudConfigPath = null;
+/** 點解係嗰條路徑（`config-path.js` 嘅 `why`，一律 log 出嚟）。 */
+let hudConfigWhy = '';
+/** 開機時讀設定檔失敗嘅訊息（唔會靜默：log 大聲 ＋ 設定窗顯示紅色橫額）。 */
+let hudConfigLoadError = null;
+/** 有 set 嘅 HUD 環境變數名（佢哋優先過設定檔 → 設定窗要提示用戶）。 */
+let hudEnvOverridden = [];
+/** HUD 設定窗（普通視窗：有邊框、可縮放、可打字；同 HUD overlay 完全兩件事）。 */
+let settingsWindow = null;
+/**
+ * `placeHud()` 計出嚟嘅**遊戲內容區**（螢幕像素）。
+ *
+ * ⚠️ 拖位反推**一定**要用返呢一個物件（同一個 `contentRect()` 結果），
+ * 唔准喺反推路徑再叫 `getPrimaryDisplay()` 或者用 `fullWidth/fullHeight` 另計一次 ——
+ * 差一個 `scaleFactor` 就會令用戶拖完之後重開程式 HUD 跳位。
+ */
+let hudContent = null;
 /** HUD 佈局（可以由環境變數覆寫；`UMAPYOI_HUD_EDIT=1` 開對位模式）。 */
-let hudLayout = null;
 const HUD_EDIT = Boolean(process.env.UMAPYOI_HUD_EDIT);
 /** 最近一次顯示嘅五維數值（HUD 要逐格顯示）。 */
 let lastStats = null;
@@ -117,20 +143,137 @@ function createHudWindow() {
 }
 
 /**
- * 把 HUD 擺去遊戲內容區嘅左下角空白位。
+ * 讀 HUD 設定：**環境變數 > `hud-position.json` > 預設**（全部經 `resolveHudConfig()`）。
+ *
+ * 三件事一定要 log 出嚟（唔准靜默）：
+ *   ① **實際用咗邊條路徑**（開發模式 = 專案根；打包 = userData，見 `config-path.js`）
+ *   ② 設定檔讀唔到／唔合法（→ 用預設，但大聲講，同埋唔會覆寫壞檔）
+ *   ③ 合併之後真正生效嘅數值（連有冇環境變數蓋過）
+ *
+ * ⚠️ 環境變數唔合法（例如 `UMAPYOI_HUD_X=0.9,0.5` 前後倒轉、`_W=0`）**會 throw** ——
+ * 呢個係刻意嘅（跟「唔准靜默當 0」底線）：寧願開唔到，都唔好靜默擺去一個唔可能嘅位置。
+ * 呼叫者要 catch 佢 + 即刻收工（唔可以留低一個冇窗嘅僵屍程序）。
+ */
+function loadHudConfig() {
+  const { path, why } = configPathFor({
+    isPackaged: app.isPackaged,
+    rootDir: ROOT,
+    userDataDir: app.getPath('userData'),
+  });
+  hudConfigPath = path;
+  hudConfigWhy = why;
+  hudEnvOverridden = Object.values(HUD_ENV_KEYS).filter((name) => {
+    const raw = process.env[name];
+    return raw !== undefined && raw !== null && String(raw) !== '';
+  });
+
+  let fileConfig = null;
+  hudConfigLoadError = null;
+  try {
+    fileConfig = loadConfig({ filePath: path });
+    // 檔案唔存在係正常狀態（未存過檔）→ `loadConfig()` 會回預設，唔算錯。
+    console.log(`[設定] 檔案：${path}\n[設定] 　（${why}）`);
+  } catch (error) {
+    hudConfigLoadError = error?.message ?? String(error);
+    console.error(`[設定] ⚠️ 讀唔到／讀壞設定檔：${hudConfigLoadError}`);
+    console.error('[設定] 　→ 呢次用預設值，而且**唔會**覆寫你個檔（修好或者刪咗佢再開就會正常）。');
+  }
+
+  hudConfig = resolveHudConfig(process.env, fileConfig);
+  const l = hudConfig.layout;
+  const on = Object.entries(hudConfig.display).filter(([, v]) => v).map(([k]) => k);
+  console.log(
+    `[設定] 生效：x ${l.x[0]}–${l.x[1]}　y ${l.y[0]}–${l.y[1]}　` +
+    `偏移 ${l.offset.dx}/${l.offset.dy}　大細 ${l.size.w}×${l.size.h}`,
+  );
+  console.log(`[設定] 顯示：${on.length ? on.join('　') : '（全部閂咗）'}`);
+  if (hudEnvOverridden.length) {
+    console.log(`[設定] ⚠️ 環境變數優先（會蓋過設定檔／設定窗）：${hudEnvOverridden.join('　')}`);
+  }
+}
+
+/** 設定檔寫入（**原子寫**：先寫 `.tmp` 再 rename，避免中途出事留低半個壞檔）。 */
+function saveHudConfigFile(config) {
+  const tmp = `${hudConfigPath}.tmp`;
+  saveConfig(config, { filePath: tmp }); // validate + 格式由 config.js 負責（唔喺呢度重寫一套）
+  renameSync(tmp, hudConfigPath); // Windows 之下 rename 會覆蓋舊檔
+  // ⚠️ 唔可以寫 `savedAt`／`contentRef` 入 JSON：`validateConfig()` 唔准唔認識嘅 key
+  //    （打錯字要即刻出聲）→ 改為 log 出嚟，需要時查 console。
+  console.log(
+    `[設定] 已儲存 → ${hudConfigPath}　（savedAt ${new Date().toISOString()}　` +
+    `內容區 ${hudContent ? `${hudContent.width}×${hudContent.height}` : '未對位'}）`,
+  );
+  return hudConfigPath;
+}
+
+/** 設定窗送出嘅值 → 合法設定（先 `clampLayout()` 夾，再 `validateConfig()` 驗）。 */
+function configFromUi(raw) {
+  const layout = clampLayout(raw?.layout ?? {});
+  return validateConfig({ layout, display: raw?.display });
+}
+
+/** 兩個 layout 嘅 8 個數係唔係一樣（用嚟話畀用戶知「你嘅值被我夾過」）。 */
+function sameLayout(a, b) {
+  const nums = (o) => [
+    o?.x?.[0], o?.x?.[1], o?.y?.[0], o?.y?.[1],
+    o?.offset?.dx, o?.offset?.dy, o?.size?.w, o?.size?.h,
+  ].map(Number);
+  const A = nums(a);
+  const B = nums(b);
+  return A.every((v, i) => Number.isFinite(v) && Math.abs(v - B[i]) < 1e-9);
+}
+
+/** 回覆設定窗（設定 + 路徑 + 問題提示）。`sender` 係 `event.sender`（有 send／isDestroyed）。 */
+function replyHudConfig(sender, extra = {}) {
+  if (!sender || sender.isDestroyed?.()) return;
+  sender.send('hud-config', {
+    config: hudConfig,
+    defaults: resolveHudConfig({}, null), // 「還原預設」用嘅純預設（刻意唔理 env／檔案）
+    path: hudConfigPath,
+    why: hudConfigWhy,
+    envOverridden: hudEnvOverridden,
+    loadError: hudConfigLoadError,
+    changed: false,
+    saved: null,
+    ...extra,
+  });
+}
+
+/**
+ * 套用一份（已經 validate 好嘅）設定 → **即刻**反映落 HUD。
+ *
+ * ⚠️ 一定要行 `placeHud()`（唔可以自己 `setBounds()`）：下一幀／
+ * `display-metrics-changed` 都會再 `placeHud()`，只有寫入 `hudConfig.layout`
+ * 之後再經 `placeHud()` 先唔會被蓋走。
+ */
+function applyHudConfig(config, { why = '' } = {}) {
+  hudConfig = config;
+  placeHud(hudGameSize);
+  pushHud();
+  if (why) console.log(`[設定] ${why}`);
+}
+
+/**
+ * 把 HUD 擺去遊戲內容區嘅左上角（位置由 `hudConfig.layout` 決定）。
  *
  * 我哋冇 Win32 API 直接讀「遊戲視窗嘅螢幕座標」（`desktopCapturer` 只俾 id／標題／大細），
  * 而賽馬娘桌面版通常係全螢幕／最大化 → 用**前景顯示器嘅工作區**做基準係穩陣嘅近似。
  *
- * 唔啱位有兩個唔使改 code 嘅方法（見 AGENTS §6.4）：
- *   ① `UMAPYOI_HUD_EDIT=1 npm start` → HUD 會顯示自己嘅範圍／偏移，自己目測調
- *   ② `UMAPYOI_HUD_X=0.01,0.20` 之類嘅環境變數
+ * 唔啱位有三個唔使改 code 嘅方法（見 AGENTS §6.4）：
+ *   ① `UMAPYOI_HUD_EDIT=1` → 直接拖 HUD（拖完自動寫入設定檔）
+ *   ② 開「HUD 設定」窗（`npm start` 會一齊開）用 slider 調
+ *   ③ `UMAPYOI_HUD_X=0.01,0.20` 之類嘅環境變數（**優先過**設定檔）
+ *
+ * ⚠️ 已知單位問題（**未修**，唔喺 A1／A2 範圍）：`area` 係 **DIP**，
+ *    而 `game.width` 係**擷取幀嘅物理像素** → `Math.min` 混用兩種單位。
+ *    遊戲最大化時兩者啱啱好一樣所以無事；視窗化 ＋ 150% 縮放之下會攞物理像素當 DIP
+ *    → HUD 擺錯位。A1／A2 冇加劇：拖位反推用嘅係**同一個** `hudContent`。
  *
  * @param {{width:number,height:number}} game 遊戲視窗大細（由擷取串流量到）
  */
 function placeHud(game) {
   if (!hudWindow) return;
-  if (!hudLayout) hudLayout = layoutFromEnv(process.env);
+  if (!hudConfig) hudConfig = resolveHudConfig(process.env, null); // 保險（正常 whenReady 已設好）
   const display = screen.getPrimaryDisplay();
   const area = display.workArea;
   // 遊戲視窗通常同工作區一樣大；大細唔同時（例如視窗化）以擷取到嘅大細為準。
@@ -140,8 +283,42 @@ function placeHud(game) {
     width: Math.min(area.width, Math.round(game.width || area.width)),
     height: Math.min(area.height, Math.round(game.height || area.height)),
   };
-  const rect = anchorHud(contentRect(windowRect), hudLayout);
-  hudWindow.setBounds(rect);
+  hudContent = contentRect(windowRect); // ⭐ 單一來源：拖位反推一定用返呢個物件
+  hudWindow.setBounds(anchorHud(hudContent, hudConfig.layout));
+}
+
+/**
+ * HUD 設定窗（**普通視窗**，唔係 overlay）。
+ *
+ * 為何要獨立一個窗（唔係塞入 HUD 裏面）：HUD 一定要 `transparent + 穿透點擊`，
+ * 一旦喺裏面加輸入框就要開滑鼠事件 → 擋住用戶點遊戲（底線，見 AGENTS §9 ⭐高）。
+ * 開一個獨立普通窗就完全唔影響 HUD 嘅穿透。
+ */
+function createSettingsWindow() {
+  const win = new BrowserWindow({
+    width: 560,
+    height: 780,
+    minWidth: 460,
+    minHeight: 520,
+    title: '賽馬娘即時評價分 — HUD 設定',
+    frame: true,
+    transparent: false,
+    resizable: true,
+    focusable: true, // 要打字（⚠️ HUD overlay 剛剛相反：focusable:false）
+    show: false,
+    backgroundColor: '#1b1f24',
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
+  win.setContentProtection(true); // 同其他窗一致：唔會入到自己嘅擷取畫面
+  win.loadFile(join(__dirname, 'settings.html'));
+  win.once('ready-to-show', () => win.show());
+  win.on('closed', () => {
+    settingsWindow = null;
+  });
+  return win;
 }
 
 /** 推 HUD 顯示狀態（主程序計好，renderer 只畫）。 */
@@ -153,7 +330,8 @@ function pushHud(now = Date.now()) {
     updatedAt: lastScoreAt,
     now,
     edit: HUD_EDIT,
-    layout: hudLayout,
+    layout: hudConfig?.layout ?? null,
+    display: hudConfig?.display ?? null,
     gold: lastGold,
   });
   // ⚠️ dedupe key 一定要包含**所有**會顯示嘅欄位：漏一個 = 嗰個欄位永遠唔會更新
@@ -320,6 +498,10 @@ function createCaptureWindow() {
   });
   win.setContentProtection(true); // = Win32 WDA_EXCLUDEFROMCAPTURE，令自己唔會入到自己嘅擷取
   win.loadFile(join(__dirname, 'capture.html'));
+  // ⚠️ 加咗 HUD／設定窗之後，「閂擷取窗 = 收工」嘅語意要留住：
+  //    如果只靠 `window-all-closed`，閂咗擷取窗而設定窗仲開住 → 程式會繼續跑但已經冇擷取，
+  //    用戶見到嘅係「閂咗都仲喺度」（以前唔會）。所以喺呢度明確收工。
+  win.on('closed', () => app.quit());
   return win;
 }
 
@@ -335,16 +517,35 @@ async function findGameSource() {
 }
 
 app.whenReady().then(async () => {
+  // ⚠️ 最先讀設定（環境變數 > 檔案 > 預設）—— 位置／顯示選項都要喺開窗之前定好。
+  //    環境變數唔合法會 throw：大聲講 + 即刻收工（唔可以留低冇窗嘅僵屍程序，
+  //    亦**唔可以**靜默用預設位置 —— 嗰樣比起跑唔到更難查）。
+  try {
+    loadHudConfig();
+  } catch (error) {
+    console.error(`[設定] ⛔ 環境變數／設定合併之後唔合法：${error?.message ?? error}`);
+    console.error('[設定] 唔會靜默用預設位置 → 即刻收工，請修好環境變數或者設定檔再開。');
+    app.exit(1);
+    return;
+  }
+
   const win = createCaptureWindow();
-  // HUD：透明置頂、穿透點擊，只顯示評價点 + ランク（見 AGENTS「HUD」）。
-  // 唔想要可以 `UMAPYOI_NO_HUD=1 npm start`。
+  // HUD：透明置頂、穿透點擊（見 AGENTS §6.4）。
+  // 唔想要可以 `UMAPYOI_NO_HUD=1 npm start` —— ⚠️ 咁樣**兩個窗都唔開**（淨係要 console log 嗰陣用）。
   if (!process.env.UMAPYOI_NO_HUD) {
     hudWindow = createHudWindow();
-    hudLayout = layoutFromEnv(process.env);
     console.log(
-      `[HUD] 已開（左下角空白位；要閂就 UMAPYOI_NO_HUD=1）` +
-        (HUD_EDIT ? '　⭐ 對位模式：HUD 會顯示自己嘅範圍／偏移' : ''),
+      '[HUD] 已開（位置／顯示項目由 hud-position.json ＋ 環境變數決定）' +
+        (HUD_EDIT
+          ? '　⭐ 對位模式：HUD 顯示自己嘅範圍／偏移，而且可以直接用滑鼠拖（放手即存檔）'
+          : '　（要拖位就 UMAPYOI_HUD_EDIT=1；注意對位模式要重開程式先切到）'),
     );
+    // 設定窗：`npm start` 一齊開。`UMAPYOI_NO_SETTINGS=1` 可以單獨唔開
+    // （做「HUD 有冇被自己擷取到」嗰類防擷取測試時，唔想有個窗喺度就要佢）。
+    if (!process.env.UMAPYOI_NO_SETTINGS) {
+      settingsWindow = createSettingsWindow();
+      console.log('[設定窗] 已開（唔想要就 UMAPYOI_NO_SETTINGS=1；UMAPYOI_NO_HUD=1 一樣兩個都唔開）');
+    }
   }
 
   win.webContents.once('did-finish-load', async () => {
@@ -527,6 +728,56 @@ ipcMain.on('frame', (_event, frame) => {
 
 ipcMain.on('capture-error', (_event, message) => {
   console.error('[擷取失敗]', message);
+});
+
+// ─────────────────── HUD 設定窗 ↔ 主程序（`electron/settings.html`）───────────────────
+// 全部係 `send`／`on`（冇 `invoke`／`handle`、冇 preload）—— 同本專案其他 IPC 一致：
+// 兩個 renderer 都係我哋自己嘅本機頁面，靠 `nodeIntegration:true + contextIsolation:false`。
+
+/** 設定窗開窗即問：而家生效嘅設定、設定檔路徑、有冇環境變數蓋過。 */
+ipcMain.on('hud-config-get', (event) => {
+  replyHudConfig(event.sender);
+});
+
+/** 設定窗改任何值 → **即時**套用落 HUD（未存檔）。 */
+ipcMain.on('hud-config-preview', (event, raw) => {
+  try {
+    const config = configFromUi(raw);
+    // 用戶送嘅值有冇被夾過（例如 x0 + w > 1）→ 話返畀設定窗知，唔好靜默改佢個數。
+    const changed = !sameLayout(raw?.layout, config.layout);
+    applyHudConfig(config);
+    replyHudConfig(event.sender, { changed });
+  } catch (error) {
+    const message = error?.message ?? String(error);
+    console.error(`[設定] ⚠️ 設定窗送嚟嘅值唔合法（冇套用）：${message}`);
+    replyHudConfig(event.sender, { error: `呢個值冇套用：${message}` });
+  }
+});
+
+/** 「儲存」→ 寫 `hud-position.json`（原子寫）。 */
+ipcMain.on('hud-config-save', (event, raw) => {
+  let saved;
+  try {
+    const config = configFromUi(raw);
+    applyHudConfig(config, { why: '設定窗：儲存（先即時套用，再寫檔）' });
+    saved = { ok: true, path: saveHudConfigFile(config) };
+  } catch (error) {
+    saved = { ok: false, error: error?.message ?? String(error) };
+    console.error(`[設定] ⚠️ 儲存失敗：${saved.error}`);
+  }
+  replyHudConfig(event.sender, { saved });
+});
+
+/**
+ * 「還原預設」→ 純出廠預設（**刻意唔理** env 同設定檔：`resolveHudConfig({}, null)`）。
+ *
+ * ⚠️ 只即時套用，**唔會**寫檔：用戶有可能只係想睇下預設係咩樣。
+ * 要寫入就要再按「儲存」（設定窗有寫明）。
+ */
+ipcMain.on('hud-config-reset', (event) => {
+  const config = resolveHudConfig({}, null);
+  applyHudConfig(config, { why: '設定窗：還原預設（未存檔）' });
+  replyHudConfig(event.sender);
 });
 
 app.on('window-all-closed', () => {

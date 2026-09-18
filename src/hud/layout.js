@@ -81,6 +81,81 @@ export function contentRect(windowRect, aspect = CONTENT_ASPECT) {
 /** 數據幾久冇更新就當「過期」（毫秒）。5fps 之下，2.5 秒 = 12 幀冇新資料。 */
 export const STALE_MS = 2500;
 
+/**
+ * `clampLayout()` 用嘅相對大細下限。
+ *
+ * ⚠️ 呢個**唔係** `anchorHud()` 嘅 80px 下限（嗰個係像素層嘅保護，兩件事）：
+ * 呢個只係防止用戶／拖曳整出「大細 0」呢類**唔合法**嘅設定
+ * （`config.js` 嘅 `validateConfig()` 要求 `size > 0`，所以唔 clamp 就會存唔到檔）。
+ */
+export const MIN_HUD_SIZE = 0.01;
+
+/**
+ * 相對值寫入設定檔時嘅小數位數。
+ *
+ * ⚠️ 唔可以少過 4：3 位小數喺 3000px 闊嘅內容區已經係 **1.5px**，
+ * 每次「拖 → 反推 → 存 → 重開」都會累積偏移，幾次之後 HUD 就自己走位。
+ */
+export const LAYOUT_DECIMALS = 6;
+
+/**
+ * 把一個佈局夾成**一定合法**（符合 `config.js` `validateConfig()` 嘅範圍）。
+ *
+ * 為何要（兩個真實場景都撞到）：
+ *   ① **拖位**：`hudWindow.getBounds()` 反推返相對值之後，可能因為 DPI／
+ *      整數 round 而得出 −0.0002 或者 1.0003（貼住邊緣拖嘅時候）
+ *   ② **設定窗**：用戶用 slider 拉到 `x0 + w > 1` → `x1 > 1` → `validateConfig()` throw
+ *      → 用戶見到「拉咗但冇反應」，唔知自己撞咗範圍
+ *
+ * 呢個函數係**唯一**做呢個夾嘅地方（設定窗、拖位、存檔共用），
+ * 所以唔會出現「一邊夾一邊唔夾」嘅偏差。
+ *
+ * ⚠️ **唔會**喺讀檔路徑上面自動叫：用戶手寫嘅 `hud-position.json` 唔應該被靜默改寫，
+ * 佢嘅合法性由 `validateConfig()` 負責（唔合法就 throw，見 AGENTS「唔准靜默」）。
+ * 呢個函數只喺「用戶啱啱郁過」嘅路徑用。
+ *
+ * 不變式（輸出一定成立）：`x[1] = x[0] + size.w`、`y[1] = y[0] + size.h`、
+ * 而且 `x`／`y` 喺 0–1、`x[0] < x[1]`、`y[0] < y[1]`、`size` 喺 (0, 1]、`offset` 喺 [−1, 1]。
+ *
+ * @param {object} [layout] 任何佈局（缺欄位 → 用 `DEFAULT_HUD_*` 補；唔會 throw）
+ * @returns {{x:number[],y:number[],offset:{dx:number,dy:number},size:{w:number,h:number}}}
+ */
+export function clampLayout(layout = {}) {
+  const src = layout ?? {};
+  const x = Array.isArray(src.x) ? src.x : DEFAULT_HUD_LAYOUT.x;
+  const y = Array.isArray(src.y) ? src.y : DEFAULT_HUD_LAYOUT.y;
+  // size 缺席時同 `anchorHud()` 一樣：用範圍做 fallback（兩邊規則要一致）。
+  const spanW = num(x[1]) - num(x[0]);
+  const spanH = num(y[1]) - num(y[0]);
+  const w = clamp(num(src.size?.w, Number.isFinite(spanW) ? spanW : DEFAULT_HUD_SIZE.w), MIN_HUD_SIZE, 1);
+  const h = clamp(num(src.size?.h, Number.isFinite(spanH) ? spanH : DEFAULT_HUD_SIZE.h), MIN_HUD_SIZE, 1);
+  const x0 = clamp(num(x[0], DEFAULT_HUD_LAYOUT.x[0]), 0, 1 - w);
+  const y0 = clamp(num(y[0], DEFAULT_HUD_LAYOUT.y[0]), 0, 1 - h);
+  return {
+    x: [round6(x0), round6(x0 + w)],
+    y: [round6(y0), round6(y0 + h)],
+    offset: {
+      dx: clamp(num(src.offset?.dx, DEFAULT_HUD_OFFSET.dx), -1, 1),
+      dy: clamp(num(src.offset?.dy, DEFAULT_HUD_OFFSET.dy), -1, 1),
+    },
+    size: { w: round6(w), h: round6(h) },
+  };
+}
+
+function num(v, fallback = NaN) {
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+function clamp(v, lo, hi) {
+  if (!Number.isFinite(v)) return lo;
+  return Math.min(hi, Math.max(lo, v));
+}
+
+/** 6 位小數已經遠細過一個像素（1920 闊之下 1px = 0.0005），純粹係令存檔靚仔。 */
+function round6(v) {
+  return Math.round(v * 10 ** LAYOUT_DECIMALS) / 10 ** LAYOUT_DECIMALS;
+}
+
 /** 五維嘅繁中標籤（跟遊戲ステータス面板由左至右：速度／持久力／力量／毅力／智力）。 */
 export const STAT_LABELS_ZH = Object.freeze(['速度', '持久', '力量', '毅力', '智力']);
 

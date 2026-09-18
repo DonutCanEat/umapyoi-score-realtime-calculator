@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <title>賽馬娘即時評價分 — HUD 設定</title>
+    <!--
+      ⚠️ classic script + require('electron')（唔可以 type="module"）：
+      `file://` 之下 Chromium 會用 CORS 擋 ESM import（見 AGENTS §6.3）。
+      呢個視窗係**普通視窗**（frame / resizable / focusable / 唔透明），
+      同 HUD overlay 完全兩件事 —— HUD 一定要透明 + 穿透，呢個要可以打字。
+    -->
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        font: 13px/1.5 "Segoe UI", "Microsoft JhengHei", sans-serif;
+        background: #1b1f24; color: #e6e9ec;
+        padding: 14px 16px 16px;
+      }
+      h1 { font-size: 16px; margin: 0 0 6px; }
+      h2 { font-size: 13px; margin: 18px 0 6px; color: #9fd0ff; }
+      .path { font-size: 11px; color: #9aa4ad; word-break: break-all; }
+      .path code { color: #ffd479; }
+      .banner {
+        margin: 8px 0 0; padding: 7px 9px; border-radius: 6px; font-size: 12px;
+        background: #3a2320; border: 1px solid #a35a4a; color: #ffc9bd;
+      }
+      .banner.warn { background: #3a3320; border-color: #a3914a; color: #ffe6b0; }
+      .banner.ok { background: #1f3324; border-color: #4a8a5c; color: #bdf0c8; }
+      .hint { font-size: 11px; color: #8b949c; margin: 2px 0 8px; }
+      .field { display: grid; grid-template-columns: 88px 1fr 78px; gap: 8px; align-items: center; margin-bottom: 6px; }
+      .field label { font-size: 12px; color: #cfd8dc; }
+      .field .hint { grid-column: 2 / span 2; margin: -2px 0 4px; }
+      input[type="range"] { width: 100%; }
+      input[type="number"] {
+        width: 100%; box-sizing: border-box; padding: 3px 5px; border-radius: 4px;
+        border: 1px solid #3d454d; background: #12161a; color: #e6e9ec;
+        font-variant-numeric: tabular-nums;
+      }
+      .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+      .checks label { font-size: 12px; display: flex; gap: 6px; align-items: center; }
+      footer {
+        position: sticky; bottom: 0; margin-top: 18px; padding-top: 10px;
+        background: #1b1f24; border-top: 1px solid #2b3239;
+        display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+      }
+      button {
+        padding: 6px 14px; border-radius: 6px; border: 1px solid #3d454d;
+        background: #262d34; color: #e6e9ec; font-size: 13px; cursor: pointer;
+      }
+      button#save { background: #1d4e7a; border-color: #2f6fa5; }
+      button:hover { filter: brightness(1.15); }
+      #status { font-size: 12px; color: #9aa4ad; }
+      #status.ok { color: #bdf0c8; }
+      #status.err { color: #ffc9bd; }
+      #effective { font-size: 11px; color: #9aa4ad; }
+      #effective code { color: #b9f6c0; }
+    </style>
+  </head>
+  <body>
+    <h1>HUD 設定</h1>
+    <div class="path" id="path">設定檔：（讀取中…）</div>
+    <div id="banners"></div>
+
+    <h2>位置／大細（相對遊戲內容區 16:9）</h2>
+    <p class="hint">
+      x0／y0 ＝ HUD 左上角；w／h ＝ HUD 大細。x1／y1 同 w／h 係**同一個數**
+      （x1 = x0 + w），改任何一邊另一邊會跟住變 —— 咁就唔會出現「有兩個大細、唔知邊個算」。
+    </p>
+    <div id="layoutFields"></div>
+    <div id="effective"></div>
+
+    <h2>顯示項目</h2>
+    <p class="hint">閂咗嘅項目係主程序索性唔推落 HUD（唔會留個空框）。</p>
+    <div class="checks" id="displayFields"></div>
+
+    <footer>
+      <button id="save">儲存</button>
+      <button id="reset" title="還原成出廠預設（即時生效，但唔會寫檔；要寫檔就再按『儲存』）">還原預設</button>
+      <span id="status"></span>
+    </footer>
+
+    <script>
+      const { ipcRenderer } = require('electron');
+
+      /** 數值欄位：key 對應 `config.layout` 內嘅位置。 */
+      const NUM_FIELDS = [
+        { key: 'x0', label: '位置 x0', min: 0, max: 1 },
+        { key: 'x1', label: '範圍 x1', min: 0, max: 1 },
+        { key: 'y0', label: '位置 y0', min: 0, max: 1 },
+        { key: 'y1', label: '範圍 y1', min: 0, max: 1 },
+        { key: 'w', label: '大細 w', min: 0.01, max: 1 },
+        { key: 'h', label: '大細 h', min: 0.01, max: 1 },
+        { key: 'dx', label: '偏移 dx', min: -1, max: 1 },
+        { key: 'dy', label: '偏移 dy', min: -1, max: 1 },
+      ];
+
+      /** 顯示選項（key 要同 `src/hud/config.js` 嘅 `HUD_DISPLAY_KEYS` 一致）。 */
+      const DISPLAY_FIELDS = [
+        { key: 'total', label: '評價点（總分）' },
+        { key: 'stats', label: '五維逐格' },
+        { key: 'statScore', label: '五維分' },
+        { key: 'skillScore', label: '技能分' },
+        { key: 'goldMark', label: '金色格提示' },
+        { key: 'note', label: '狀態一行' },
+        { key: 'edit', label: '對位資訊一行' },
+      ];
+
+      const STEP = 0.001;
+      let lastSent = '';     // 上一次送落主程序嘅設定（避免重複送）
+      let pending = null;    // 節流用
+
+      // ── 建 UI ──────────────────────────────────────────────
+      const layoutBox = document.getElementById('layoutFields');
+      const rangeEls = {};
+      const numEls = {};
+      for (const f of NUM_FIELDS) {
+        const row = document.createElement('div');
+        row.className = 'field';
+        const label = document.createElement('label');
+        label.textContent = f.label;
+        label.htmlFor = `n-${f.key}`;
+        const range = document.createElement('input');
+        range.type = 'range';
+        range.min = String(f.min);
+        range.max = String(f.max);
+        range.step = String(STEP);
+        range.id = `r-${f.key}`;
+        const num = document.createElement('input');
+        num.type = 'number';
+        num.min = String(f.min);
+        num.max = String(f.max);
+        num.step = String(STEP);
+        num.id = `n-${f.key}`;
+        row.append(label, range, num);
+        layoutBox.append(row);
+        rangeEls[f.key] = range;
+        numEls[f.key] = num;
+        range.addEventListener('input', () => {
+          num.value = range.value;
+          onEdit(f.key);
+        });
+        num.addEventListener('change', () => {
+          range.value = num.value;
+          onEdit(f.key);
+        });
+      }
+
+      const displayBox = document.getElementById('displayFields');
+      const checkEls = {};
+      for (const f of DISPLAY_FIELDS) {
+        const label = document.createElement('label');
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.id = `c-${f.key}`;
+        const text = document.createElement('span');
+        text.textContent = f.label;
+        label.append(box, text);
+        displayBox.append(label);
+        checkEls[f.key] = box;
+        box.addEventListener('change', onEdit);
+      }
+
+      // ── 讀寫表單（表單就係唯一嘅 user intent 來源）────────────
+      /** 由表單砌出 config。⚠️ 維持不變式 x1 = x0 + w、y1 = y0 + h。 */
+      function readForm() {
+        const v = (k) => Number(numEls[k].value) || 0;
+        const w = Math.max(0.01, v('w'));
+        const h = Math.max(0.01, v('h'));
+        return {
+          layout: {
+            x: [v('x0'), v('x0') + w],
+            y: [v('y0'), v('y0') + h],
+            offset: { dx: v('dx'), dy: v('dy') },
+            size: { w, h },
+          },
+          display: Object.fromEntries(DISPLAY_FIELDS.map((f) => [f.key, checkEls[f.key].checked])),
+        };
+      }
+
+      /** 由 config 寫返落表單（x1／y1 由 w／h 推 —— size 才係真正嘅大細來源）。 */
+      function writeForm(config) {
+        const { layout, display } = config;
+        const set = (k, value) => {
+          numEls[k].value = String(round(value));
+          rangeEls[k].value = String(value);
+        };
+        set('x0', layout.x[0]);
+        set('y0', layout.y[0]);
+        set('x1', layout.x[0] + layout.size.w);
+        set('y1', layout.y[0] + layout.size.h);
+        set('w', layout.size.w);
+        set('h', layout.size.h);
+        set('dx', layout.offset.dx);
+        set('dy', layout.offset.dy);
+        for (const f of DISPLAY_FIELDS) checkEls[f.key].checked = display[f.key] !== false;
+        const dx = layout.offset.dx;
+        const dy = layout.offset.dy;
+        const ex = layout.x[0] + dx;
+        const ey = layout.y[0] + dy;
+        // ⚠️ 偏移係「明確嘅微調旋鈕」，主程序只夾到 ±1（同 config.js 一致）——
+        //    極端偏移會令 HUD 走出畫面，所以呢度一定要老實顯示實際位置 + 警告。
+        const out = ex < 0 || ey < 0
+          || ex + layout.size.w > 1.0005 || ey + layout.size.h > 1.0005;
+        document.getElementById('effective').innerHTML =
+          `實際左上角（含偏移）：<code>x ${round(ex)}　y ${round(ey)}</code>　` +
+          `大細 <code>${round(layout.size.w)} × ${round(layout.size.h)}</code>` +
+          (out ? '<br /><span style="color:#ffc9bd">⚠️ 呢個位置會令 HUD 有一部分走出遊戲內容區' +
+            '（偏移 dx／dy 太大）—— 睇唔到 HUD 就將 dx／dy 調返 0。</span>' : '');
+      }
+
+      function round(v) {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return v;
+        // 6 位小數（同主程序 `LAYOUT_DECIMALS` 一致）：3 位小數喺 3000px 闊之下已經係 1.5px，
+        // 每次「讀表單 → 送 → 存」都會蝕少少，幾次之後 HUD 就自己走位。
+        return Math.round(n * 1000000) / 1000000;
+      }
+
+      // ── 送落主程序（節流，避免拉 slider 時每格都送）──────────
+      function onEdit(changedKey) {
+        // 改 x1／y1 ＝ 改大細（同一個數）；改 w／h 就係改大細本身。
+        if (changedKey === 'x1') {
+          const v = Number(numEls.x1.value) || 0;
+          const w = Math.max(0.01, v - (Number(numEls.x0.value) || 0));
+          numEls.w.value = String(round(w));
+          rangeEls.w.value = String(w);
+        }
+        if (changedKey === 'y1') {
+          const v = Number(numEls.y1.value) || 0;
+          const h = Math.max(0.01, v - (Number(numEls.y0.value) || 0));
+          numEls.h.value = String(round(h));
+          rangeEls.h.value = String(h);
+        }
+        const config = readForm();
+        // 表單自己顯示嘅 x1／y1 跟返不變式（用戶改 w／h 之後即刻睇得到）
+        numEls.x1.value = String(round(config.layout.x[1]));
+        numEls.y1.value = String(round(config.layout.y[1]));
+        setStatus('改動即時生效（未存檔）', '');
+        scheduleSend(config);
+      }
+
+      function scheduleSend(config) {
+        if (pending) clearTimeout(pending);
+        pending = setTimeout(() => {
+          pending = null;
+          const text = JSON.stringify(config);
+          if (text === lastSent) return;
+          lastSent = text;
+          ipcRenderer.send('hud-config-preview', config);
+        }, 40);
+      }
+
+      // ── 收主程序 ───────────────────────────────────────────
+      ipcRenderer.on('hud-config', (_e, payload) => {
+        const { config, path, why, envOverridden, loadError, changed, saved, error } = payload;
+        if (payload.defaults) {
+          const d = payload.defaults.layout;
+          // 用預設值砌個 tooltip：用戶按之前就知會還原成咩（唔使盲按）。
+          document.getElementById('reset').title =
+            `還原成出廠預設：x0 ${d.x[0]}　y0 ${d.y[0]}　w ${d.size.w}　h ${d.size.h}` +
+            '（即時生效，唔會寫檔 —— 要寫檔就再按「儲存」）';
+        }
+
+        renderPath(path, why);
+        const banners = [];
+        if (loadError) {
+          banners.push(`<div class="banner">⚠️ 讀設定檔失敗：${escapeHtml(loadError)}<br />` +
+            '呢次用預設值（**冇**覆寫你個檔）。修好或者刪咗個檔再開就會正常。</div>');
+        }
+        if (envOverridden && envOverridden.length) {
+          banners.push(`<div class="banner warn">⚠️ 環境變數有 set：<code>${envOverridden.join('　')}</code><br />` +
+            '環境變數**優先過**呢個設定檔（env &gt; 檔案 &gt; 預設）→ ' +
+            '呢度改嘅值會即時生效，但**重開程式之後會俾環境變數蓋過**。</div>');
+        }
+        if (changed) {
+          banners.push('<div class="banner warn">⚠️ 有數值超出合法範圍／前後倒轉，主程序已自動夾到合法值（下面顯示嘅就係真正生效嘅值）。</div>');
+        }
+        if (error) banners.push(`<div class="banner">⚠️ ${escapeHtml(error)}</div>`);
+        if (saved) {
+          banners.push(saved.ok
+            ? `<div class="banner ok">✅ 已儲存：<code>${escapeHtml(saved.path)}</code></div>`
+            : `<div class="banner">⚠️ 儲存失敗：${escapeHtml(saved.error)}</div>`);
+        }
+        document.getElementById('banners').innerHTML = banners.join('');
+        writeForm(config);
+        lastSent = JSON.stringify(config);
+      });
+
+      function renderPath(path, why) {
+        const el = document.getElementById('path');
+        if (!path) { el.textContent = '設定檔：（未收到路徑）'; return; }
+        el.innerHTML = `設定檔：<code>${escapeHtml(path)}</code><br />位置規則：${escapeHtml(why || '—')}`;
+      }
+
+      function setStatus(text, cls) {
+        const el = document.getElementById('status');
+        el.textContent = text;
+        el.className = cls || '';
+      }
+
+      // ── 按鈕 ───────────────────────────────────────────────
+      document.getElementById('save').addEventListener('click', () => {
+        setStatus('儲存中…', '');
+        ipcRenderer.send('hud-config-save', readForm());
+      });
+      document.getElementById('reset').addEventListener('click', () => {
+        ipcRenderer.send('hud-config-reset');
+        setStatus('已還原預設（即時生效，未存檔 —— 要寫檔請按「儲存」）', 'ok');
+      });
+
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (c) => (
+          { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+        ));
+      }
+
+      // 開窗即問主程序攞「而家生效嘅設定 + 檔案路徑」。
+      ipcRenderer.send('hud-config-get');
+    </script>
+  </body>
+</html>
