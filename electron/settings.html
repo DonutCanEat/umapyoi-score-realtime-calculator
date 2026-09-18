@@ -467,9 +467,16 @@
         document.getElementById('banners').innerHTML = banners.join('');
         lastConfig = config;
         lastSent = JSON.stringify(config);
-        // ⚠️ 用戶仲喺度拖／打字 → **唔准**改佢個控制（舊 bug：thumb 彈返、數值跳）。
-        //    放手之後由 `releaseInteracting()` → `resyncFromServer()` 對帳。
-        if (interacting) renderEffective(config.layout);
+        // ⚠️ 三種情況分開處理（唔准簡化成「唔 interact 就寫表單」）：
+        //   ① `remote`（主程序自己改咗，例如**拖 HUD**）＝ 呢份係**新真相** →
+        //      **一定**要寫返落表單。唔寫嘅話用戶之後撳「儲存」就會用舊值覆寫拖完嘅位置
+        //      （用戶 2026-09-18 實機報嘅正是呢個：拖完 → 撳儲存 → HUD 彈返滑條嗰個舊位）。
+        //   ② 用戶仲喺度拖／打字（`interacting`）→ 唔准搶佢手上嗰個控制（見上面註解）。
+        //   ③ 其餘（自己送落嚟嘅 preview／save／reset 回覆）→ 正常寫返。
+        if (payload.remote) {
+          setStatus('已跟隨 HUD 拖位更新（拖 HUD 會自動存檔）', '');
+          writeForm(config, { keepFocused: false });
+        } else if (interacting) renderEffective(config.layout);
         else writeForm(config, { keepFocused: false });
       });
 

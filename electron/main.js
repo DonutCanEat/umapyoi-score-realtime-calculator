@@ -403,8 +403,14 @@ function replyHudConfigSafely(sender, extra = {}) {
  * ⚠️ 一定要行 `placeHud()`（唔可以自己 `setBounds()`）：下一幀／
  * `display-metrics-changed` 都會再 `placeHud()`，只有寫入 `hudConfig.layout`
  * 之後再經 `placeHud()` 先唔會被蓋走。
+ *
+ * @param {object} config 完整設定 `{layout, display}`
+ * @param {{why?:string, fromUi?:boolean}} [options]
+ *        `fromUi: true` ＝ 今次改動**由設定窗送落嚟**（佢自己已經有 `replyHudConfig()`
+ *        回覆）→ 唔使再通知佢；`false`（預設）＝ 主程序自己改（而家只有拖 HUD 一條路）
+ *        → **一定要通知設定窗**，否則佢手上係舊值（見 `notifySettingsWindow()`）。
  */
-function applyHudConfig(config, { why = '' } = {}) {
+function applyHudConfig(config, { why = '', fromUi = false } = {}) {
   // 防呆（呢個 bug 我真係踩過）：一定要係**完整設定**，唔可以傳一個 layout 入嚟 ——
   // 傳錯嘅話 `placeHud()` 會攞唔到 `layout` 而彈返去預設位，`saveConfig()` 亦會 throw。
   // ⚠️ **`display` 一定要一齊驗**（獨立審計發現）：以前只驗 `layout`，
@@ -439,7 +445,36 @@ function applyHudConfig(config, { why = '' } = {}) {
   hudConfig = config;
   placeHud(hudGameSize);
   pushHud();
+  // ⚠️ 唔係設定窗送落嚟嘅改動（＝拖 HUD）→ **一定要通知設定窗**（見嗰個函數嘅註解）。
+  if (!fromUi) notifySettingsWindow();
   if (why) console.log(`[設定] ${why}`);
+}
+
+/**
+ * 通知設定窗：**主程序自己**改咗設定（而家只有一條路：拖 HUD）。
+ *
+ * ## 為何一定要（用戶 2026-09-18 實機報，症狀好易誤診成「拖位冇效」）
+ *
+ * 「拖完 HUD → 去設定窗撳『儲存』→ HUD 彈返設定窗滑條嗰個舊位」。
+ * 根因：設定窗嘅表單係**上一次 `hud-config` reply 嗰份**，而拖位改咗 `hudConfig`
+ * 但**冇通知佢**（`applyHudConfig()` 只推 HUD）→ 佢手上係舊值
+ * → 一撳「儲存」就 `readForm()` 送出舊值 → 經 `configFromUi()` → `applyHudConfig()`
+ * → 拖完嘅位被舊值覆寫（而且照樣寫入 `hud-position.json`）。
+ *
+ * ⚠️ 只喺 `fromUi: false` 嗰陣叫（見 `applyHudConfig()`）：設定窗自己送落嚟嘅改動
+ * 已經有 `replyHudConfig()` 回覆，再推一次係多餘（而且會令佢無謂重畫表單）。
+ * ⚠️ 唔會覆寫 `why`（嗰個係「設定檔路徑規則」嘅說明，設定窗會照顯示）→ 用獨立欄位 `remote`。
+ */
+function notifySettingsWindow() {
+  if (!settingsWindow || settingsWindow.isDestroyed()) return;
+  try {
+    replyHudConfig(settingsWindow.webContents, { remote: true });
+  } catch (error) {
+    console.error(
+      `[設定] ⚠️ 通知設定窗失敗（佢會顯示舊值，用戶一撳「儲存」就會覆寫拖完嘅位置）：` +
+      `${error?.message ?? error}`,
+    );
+  }
 }
 
 /**
@@ -1298,7 +1333,7 @@ ipcMain.on('hud-config-preview', (event, raw) => {
     const config = configFromUi(raw);
     // 用戶送嘅值有冇被夾過（例如 x0 + w > 1）→ 話返畀設定窗知，唔好靜默改佢個數。
     const changed = !sameLayout(raw?.layout, config.layout);
-    applyHudConfig(config);
+    applyHudConfig(config, { fromUi: true }); // 設定窗送落嚟 → 唔使再通知佢（下面 replyHudConfig 就係回覆）
     replyHudConfig(event.sender, { changed });
   } catch (error) {
     const message = error?.message ?? String(error);
@@ -1312,7 +1347,7 @@ ipcMain.on('hud-config-save', (event, raw) => {
   let saved;
   try {
     const config = configFromUi(raw);
-    applyHudConfig(config, { why: '設定窗：儲存（先即時套用，再寫檔）' });
+    applyHudConfig(config, { why: '設定窗：儲存（先即時套用，再寫檔）', fromUi: true });
     saved = { ok: true, path: saveHudConfigFile(config) };
   } catch (error) {
     saved = { ok: false, error: error?.message ?? String(error) };
@@ -1332,7 +1367,7 @@ ipcMain.on('hud-config-save', (event, raw) => {
 ipcMain.on('hud-config-reset', (event) => {
   try {
     const config = resolveHudConfig({}, null);
-    applyHudConfig(config, { why: '設定窗：還原預設（未存檔）' });
+    applyHudConfig(config, { why: '設定窗：還原預設（未存檔）', fromUi: true });
     replyHudConfig(event.sender);
   } catch (error) {
     const message = error?.message ?? String(error);
