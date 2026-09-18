@@ -93,8 +93,41 @@ let settingsWindow = null;
  * 差一個 `scaleFactor` 就會令用戶拖完之後重開程式 HUD 跳位。
  */
 let hudContent = null;
+
+/**
+ * ⭐ 環境變數「開關旗標」嘅**唯一**讀法（唔准再用 `Boolean(process.env.X)`）。
+ *
+ * 為何要（獨立審計發現）：以前三個旗標都係 truthiness → `UMAPYOI_NO_HUD=0` 竟然會**閂咗 HUD**
+ * （`'0'` 係非空字串 = truthy），同文件寫嘅「=1」完全對唔上 → 用戶一踩就中。
+ *
+ * 規則（**唔准**放寬）：
+ *   - 只有 `'1'`／`'true'`（**大小寫唔敏感**、前後空白忽略）＝ **開**
+ *   - `'0'`／`'false'`／空字串／**冇 set** ＝ 閂（明確講咗閂）
+ *   - **其他值（例如 `yes`／`on`／`2`）＝ 閂，而且一定要大聲警告**
+ *     —— 唔認識嘅值唔可以靜默當「開」或者「閂」（寧願嘈，都唔好靜默做錯事）。
+ *
+ * @param {string} name 環境變數名
+ * @returns {boolean} 係唔係開
+ */
+function envFlag(name) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null) return false;
+  const value = String(raw).trim().toLowerCase();
+  if (value === '1' || value === 'true') return true;
+  if (value === '0' || value === 'false' || value === '') return false;
+  console.warn(
+    `[旗標] ⚠️ ${name}＝「${raw}」係唔認識嘅值 → 當**冇開**。` +
+    '只認 1／true（大小寫唔敏感）；0／false／空字串 = 冇開。',
+  );
+  return false;
+}
+
 /** HUD 佈局（可以由環境變數覆寫；`UMAPYOI_HUD_EDIT=1` 開對位模式）。 */
-const HUD_EDIT = Boolean(process.env.UMAPYOI_HUD_EDIT);
+const HUD_EDIT = envFlag('UMAPYOI_HUD_EDIT');
+/** `UMAPYOI_NO_HUD=1`：兩個窗（HUD ＋ 設定窗）都唔開。 */
+const NO_HUD = envFlag('UMAPYOI_NO_HUD');
+/** `UMAPYOI_NO_SETTINGS=1`：唔開設定窗（HUD 照開）。 */
+const NO_SETTINGS = envFlag('UMAPYOI_NO_SETTINGS');
 /**
  * HUD 而家係唔係「可互動」（＝唔穿透）。
  *
@@ -828,7 +861,8 @@ app.whenReady().then(async () => {
   const win = createCaptureWindow();
   // HUD：透明置頂、穿透點擊（見 AGENTS §6.4）。
   // 唔想要可以 `UMAPYOI_NO_HUD=1 npm start` —— ⚠️ 咁樣**兩個窗都唔開**（淨係要 console log 嗰陣用）。
-  if (!process.env.UMAPYOI_NO_HUD) {
+  // ⚠️ 一定用 `envFlag()`（只認 1／true）：`UMAPYOI_NO_HUD=0` 以前會**閂咗 HUD**（'0' 係 truthy）。
+  if (!NO_HUD) {
     hudWindow = createHudWindow();
     console.log(
       '[HUD] 已開（位置／顯示項目由 hud-position.json ＋ 環境變數決定）' +
@@ -838,7 +872,7 @@ app.whenReady().then(async () => {
     );
     // 設定窗：`npm start` 一齊開。`UMAPYOI_NO_SETTINGS=1` 可以單獨唔開
     // （做「HUD 有冇被自己擷取到」嗰類防擷取測試時，唔想有個窗喺度就要佢）。
-    if (!process.env.UMAPYOI_NO_SETTINGS) {
+    if (!NO_SETTINGS) {
       settingsWindow = createSettingsWindow();
       console.log('[設定窗] 已開（唔想要就 UMAPYOI_NO_SETTINGS=1；UMAPYOI_NO_HUD=1 一樣兩個都唔開）');
     }
