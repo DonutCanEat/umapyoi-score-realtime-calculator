@@ -42,6 +42,26 @@ let seq = 0;
 const freshPath = (name) => join(root, `${++seq}-${name}`);
 const writeRaw = (path, text) => writeFileSync(path, text, 'utf8');
 
+/** 一個**新開**嘅臨時目錄（一樣住喺 `os.tmpdir()` 之下，唔會整污糟 repo）。 */
+const freshDir = (name) => mkdtempSync(join(root, `${++seq}-${name}-`));
+
+/**
+ * 行一段**同步**嘅 callback，期間 `process.cwd()` 係 `dir`；行完（**連 throw**）一定還原。
+ *
+ * ⚠️ callback **一定要同步**（唔准 async／唔准 `await`）：`--test-isolation=none` 之下
+ * 所有測試檔案共用同一個 process，而 `chdir` 係**全域**狀態 —— callback 一旦讓出
+ * event loop，第二個測試就可能喺錯嘅 cwd 之下行。全程同步就冇任何 interleave 機會。
+ */
+function withCwd(dir, fn) {
+  const before = process.cwd();
+  process.chdir(dir);
+  try {
+    return fn(dir);
+  } finally {
+    process.chdir(before);
+  }
+}
+
 /**
  * 行一次會出警告嘅呼叫，**收集**警告（唔靠 intercept `console`）。
  *
@@ -264,16 +284,21 @@ test('hud-config ⭐ resolveHudConfig：驗 fileConfig 嘅警告一樣要經 cal
 // ───────── 向後兼容：`loadConfig()` 嘅呼叫寫法（唔准因為加 onWarn 而破）─────────
 
 test('hud-config 向後兼容：loadConfig 嘅所有舊呼叫寫法都要照 work（加 onWarn 之後）', () => {
-  // ① 冇參數／`{}` → 用預設路徑（repo 根嘅 `hud-position.json`）。
+  // ① 冇參數／`{}` → 用預設路徑（`defaultConfigPath()` ＝ 而家嘅工作目錄）。
   //    ⚠️ 呢兩個要同 `defaultConfigPath()` 嗰條路**完全一樣**（唔可以各自讀一次）：
-  //    `hud-position.json` 係 runtime 用戶狀態（唔入 git），所以唔可以斷言檔入面嘅值 ——
-  //    只可以斷言「三個寫法讀到嘅嘢一模一樣」同「形狀完整」。
+  //    `hud-position.json` 係 runtime 用戶狀態（**唔入 git**，見 `.gitignore`），
+  //    所以呢度**唔可以**斷言「repo 根有嗰個檔」更加唔可以斷言嗰個檔嘅內容 ——
+  //    舊寫法（`assert.equal(existsSync(defaultConfigPath()), true, '前提：repo 根有…')`）
+  //    令 `git archive HEAD` 抽出嘅**乾淨樹**永遠 1 fail（實測 179 pass／1 fail），
+  //    即係 AGENTS §8 嘅驗收閘**唔可以由乾淨 checkout 重現**。
+  //    → 「冇 filePath ＝ 讀 cwd 嗰個檔」已經由下面專門嗰條測試**兩個分支**真驗
+  //      （自己控制 cwd，唔靠 repo 根有冇檔）；呢度只驗「兩個寫法讀到嘅嘢一模一樣」
+  //      同「形狀完整」。
   const noArg = loadConfig();
   const emptyObj = loadConfig({});
   assert.deepEqual(noArg, emptyObj, '`loadConfig()` 同 `loadConfig({})` 一定要一樣');
   assert.deepEqual(Object.keys(noArg).sort(), ['display', 'layout']);
   assert.deepEqual(Object.keys(noArg.layout).sort(), ['offset', 'size', 'x', 'y']);
-  assert.equal(existsSync(defaultConfigPath()), true, '前提：repo 根有 hud-position.json（runtime 狀態）');
 
   // ② `{ filePath }`（main.js 而家用嘅寫法）→ 照舊，只係多咗個可選嘅 `onWarn`
   const path = freshPath('compat.json');
@@ -308,6 +333,48 @@ test('hud-config 向後兼容：loadConfig 嘅所有舊呼叫寫法都要照 wor
     console.warn = realWarn;
   }
   assert.equal(hits.length, 1, `漏傳 onWarn → 照舊落 console.warn（唔准靜音），實得 ${hits.length} 個`);
+});
+
+// ═══════════ 預設路徑：冇 filePath ＝ 讀「而家嘅工作目錄」嗰個檔 ═══════════
+//
+// ⚠️ 為何要專門一條測試（而唔係斷言「repo 根有 `hud-position.json`」）：
+//    嗰個檔係 **runtime 用戶狀態、唔入 git**（`.gitignore` 有 `hud-position.json`）→
+//    「repo 根有冇嗰個檔」係**環境狀態**，唔係程式行為。舊斷言要求佢存在 →
+//    `git archive HEAD` 抽出嘅**乾淨樹**永遠 1 fail（實測：乾淨樹 179 pass／1 fail、
+//    工作樹 180 pass／0 fail）→ 驗收閘唔可以由乾淨 checkout 重現（AGENTS §8）。
+//    ⚠️ 亦**唔准**用 skip 迴避：所以呢條測試**自己控制 cwd**（`os.tmpdir()` 開臨時目錄），
+//    兩個分支都真驗，而且結果同 repo 根有冇檔**完全無關**：
+//      ① 目錄**冇**檔 → 回預設（而且唔准 throw —— 未存過檔係正常狀態）
+//      ② 目錄**有**檔 → 真係讀到嗰個檔（證明「冇 filePath」係讀 cwd，唔係永遠回預設）
+test('hud-config loadConfig：冇傳 filePath → 真讀 cwd 嘅 hud-position.json（兩個分支都驗，唔靠 repo 根）', () => {
+  // 契約：`defaultConfigPath()` ＝ `process.cwd()` ＋ 檔名（唔可以係其他位）
+  assert.equal(defaultConfigPath(), join(process.cwd(), HUD_CONFIG_FILENAME));
+
+  withCwd(freshDir('cwd'), (cwd) => {
+    const file = join(cwd, HUD_CONFIG_FILENAME);
+
+    // ① 檔案唔存在 → 回預設，唔准 throw
+    assert.equal(existsSync(file), false, '前提：啱啱開嘅臨時目錄一定冇 hud-position.json');
+    assert.deepEqual(loadConfig(), defaultHudConfig(), '冇檔 → 回預設（唔准 throw）');
+    assert.deepEqual(loadConfig({}), defaultHudConfig(), '`{}` 一樣行預設路徑');
+
+    // ② 檔案存在（值刻意同預設**唔同**）→ 真係讀到嗰個檔
+    //    ⚠️ 直接 `writeRaw()` 寫死檔名（唔用 `saveConfig()`）：咁先證明讀嘅就係
+    //    「cwd 嗰個 `hud-position.json`」，而唔係任何其他路徑。
+    //    `x[1] = x[0] + size.w = 0.2 + 0.3 = 0.5`（不變式，唔可以亂寫）。
+    writeRaw(file, JSON.stringify({ layout: { x: [0.2, 0.5], y: [0.1, 0.34], size: { w: 0.3, h: 0.24 } } }));
+    const fromCwd = loadConfig();
+    assert.deepEqual(fromCwd.layout.x, [0.2, 0.5], `要讀 cwd 嗰個檔，實得 ${JSON.stringify(fromCwd.layout.x)}`);
+    assert.equal(fromCwd.layout.size.w, 0.3, '大細一樣要嚟自 cwd 嗰個檔');
+    assert.notDeepEqual(
+      fromCwd.layout.x,
+      defaultHudConfig().layout.x,
+      '前提：測試值唔可以同預設一樣（否則證明唔到真係讀咗檔）',
+    );
+  });
+
+  // finally 真係還原咗 cwd（唔可以漏低全域狀態畀下一個測試）
+  assert.equal(defaultConfigPath(), join(process.cwd(), HUD_CONFIG_FILENAME), 'withCwd 一定要還原 cwd');
 });
 
 // ───────────────────────── validateConfig ─────────────────────────

@@ -294,7 +294,10 @@ test('statbar 金色高亮：正常橙棕數字唔可以被誤判成金色', () 
 
 test('statbar 金色高亮：實機金色幀要判 highlighted 而且讀到真值（永久回歸）', () => {
   const png = `${ROOT}/shots/live/roi-regress-gold.png`;
-  if (!existsSync(png)) return; // 冇檔案就跳過（唔應該發生，但唔想 flaky）
+  // ⚠️ 唔准「冇檔就靜默 pass」（舊寫法 `if (!existsSync(png)) return;`）：呢張係**入咗 git**
+  //    嘅永久回歸幀（`git ls-files` 有、`git archive HEAD` 抽出嚟都有），
+  //    所以「檔唔見」＝回歸閘真係冇咗 → 一定要大聲 fail，唔可以當跳過。
+  assert.ok(existsSync(png), `永久回歸幀唔見咗（AGENTS §3／地雷 #26）：${png}`);
   const img = decodePng(readFileSync(png));
   const read = readStatBar({ data: img.data, width: img.width, height: img.height }, templates, { whole: true });
   assert.equal(read.highlighted, true, `實機金幀應該判金色，實得 reason：${read.reason}`);
