@@ -125,7 +125,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（177 個，必須全過）
+npm.cmd test              # 單元測試（180 個，必須全過）
 
 # HUD 相關開關（環境變數）
 #   ⚠️ 三個旗標（UMAPYOI_NO_HUD／UMAPYOI_NO_SETTINGS／UMAPYOI_HUD_EDIT）嘅**確切**語意
@@ -151,7 +151,7 @@ npm.cmd test              # 單元測試（177 個，必須全過）
 #   逐軸（`x` 對 `size.w`、`y` 對 `size.h`）獨立判斷，規則**只有四條**：
 #     ① **只 set 範圍**（`_X`／`_Y`）→ 大細**由範圍推**（`size.w = x[1] − x[0]`）。
 #        ⚠️ 唔會維持預設 0.212×0.255：實測 `UMAPYOI_HUD_X=0.1,0.3` 舊行為 size.w = 0.212
-#        （＝靜默改咗用戶寫嘅範圍），新行為 size.w = **0.19**（＝0.3 − 0.1，範圍講咩就係咩）
+#        （＝靜默改咗用戶寫嘅範圍），新行為 size.w = **0.2**（＝0.3 − 0.1 = 0.2，範圍講咩就係咩）
 #     ② **只 set 大細**（`_W`／`_H`）→ `x[1]`／`y[1]` 跟住推（起點唔變：env 範圍 → 檔案 → 預設）
 #     ③ **同軸同時寫死範圍同大細而唔一致** → ⭐ **以 `size` 為準 ＋ 大聲警告**（`[設定] ⚠️ …`）
 #        **唔會 throw**。理由：`anchorHud()` 只用 `x[0]` 定位、用 `size` 決定大細，
@@ -233,7 +233,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **177 個**）
+1. `npm.cmd test` 全過（現時 **180 個**）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 4/4　完全命中 4/4　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（雙閘：**實機面板條 9/9**），兩個都要中
@@ -306,6 +306,10 @@ test/
   hud-config.test.js  # HUD 設定存檔層（env > 檔案 > 預設；唔合法一律 throw；
                       #    ⭐ 含「AGENTS §2 六行環境變數一齊用唔准 throw」回歸測試
                       #    ＋ assertFullDisplay()／onWarn 警告收集）
+                      #    ⭐ 另有「onWarn 單一鏈路」測試：**由設定檔引起**嘅警告一定要
+                      #    經 caller 嘅 `onWarn`（caller 收 1 個、裸 `console.warn` 收 0 個、
+                      #    檔案／env 兩條路嘅措辭要一致）＋ `loadConfig()` 舊呼叫寫法唔准破
+                      #    （冇參數／`{}`／`{filePath}`／多傳 onWarn／檔案唔存在／舊式字串）
   hud-config-path.test.js # ⭐ 設定檔路徑決策（開發 vs 打包 vs asar）
   hud-settings-html.test.js # ⭐ 「設定窗 ↔ config.js 欄位對齊」：**真係由 `electron/settings.html` 抽**
                       #    `DISPLAY_FIELDS`／`NUM_FIELDS` 再同 `HUD_DISPLAY_KEYS`／layout 欄位比對
@@ -642,6 +646,19 @@ UMAPYOI_NO_HUD=1 npm.cmd start       # ⭐ 兩個窗都唔開（淨係要 consol
   - **冗餘欄位矛盾 → 警告（唔 throw）**：同一個軸上面範圍同大細**兩樣都寫死而唔一致** →
     **以 `size` 為準 ＋ `[設定] ⚠️ …` 警告**。理由見 §2：`x[1]` 唔影響渲染，
     而 AGENTS §2 列出嘅六行環境變數一齊用曾經因為呢個 throw 而**完全開唔到程式**（實測）。
+  - ⚠️ **警告係單一鏈路**（2026-09-19 修正後**先真正成立**）：去處由呼叫者嘅 `onWarn` 決定，
+    而**三條會出警告嘅路**（`validateConfig()` 直接驗、`loadConfig()` 讀檔案、
+    `resolveHudConfig()` 合併完再驗**同埋**驗 `fileConfig`）**全部**會將 `onWarn` 傳落去 →
+    `main.js` 嘅 `warnHudConfig()` 加 `[設定] ⚠️` 前綴，設定窗／console 都收得到。
+    ⚠️ **修正前嘅實際缺口**（獨立審計實測）：`loadConfig()` 嗌 `validateConfig(raw)`
+    **冇傳 `onWarn`**、`resolveHudConfig()` 嗌 `validateConfig(fileConfig)` **冇轉發**
+    → **由設定檔引起**嘅警告會繞過 caller 直接落**裸 `console.warn`**（冇 `[設定] ⚠️` 前綴）。
+    實測：`resolveHudConfig({}, {layout:{x:[0.1,0.5],size:{w:0.2}}}, {onWarn})`
+    → caller 收 **0** 個、裸 `console.warn` 收 **1** 個。⚠️ 唔算靜默（訊息照出），
+    但同「單一鏈路」唔一致而且零測試覆蓋 → 已修 ＋ 加測試
+    （`test/hud-config.test.js`：caller 要收 1 個、裸 `console.warn` 要收 0 個、
+    兩條路徑嘅措辭要一致）。
+    ⚠️ `onWarn` **冇傳／唔係函數時一定仍然係 `console.warn`**（唔准因為加轉發而變靜音）。
 - ⚠️ **設定檔壞咗（JSON 壞／欄位唔合法）＝唔同處理**：log 大聲 ＋ 用預設 ＋
   **唔覆寫你個檔**（設定窗顯示紅色橫額）。理由：檔案壞咗唔應該阻止擷取，但**一定唔可以靜默**。
 - ⚠️ **唔可以寫額外欄位入 JSON**（例如 `savedAt`／`contentRef`）：
@@ -736,7 +753,7 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **177 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **180 個測試必須全過**
 2. `node tools/fit-score.js` — 必須 `完全命中 4/4　總絕對誤差 0`
 3. 如果改咗五維／技能／ランク相關嘅嘢，`node tools/breakdown.js` 逐招核對一次
 4. **如果改咗影像相關嘅嘢**：
