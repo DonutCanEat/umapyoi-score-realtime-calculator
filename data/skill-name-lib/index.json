@@ -1,0 +1,1401 @@
+{
+  "note": "技能名影像庫：每項 = 一個技能名嘅影像（tight box、原圖色）。⚠️ 未配名（配名要另外決定候選名單邊度嚟，見 AGENTS §9）。相似度門檻 0.95（≥ 就當同一招，實測同名 p25 = 0.936、唔同招上限 0.439）。",
+  "matchThreshold": 0.95,
+  "pages": [
+    {
+      "page": "uma1-p1-skills.png",
+      "size": "1140×950",
+      "rows": 7,
+      "boxes": 14,
+      "fresh": 14,
+      "seen": 0,
+      "dropped": 0
+    },
+    {
+      "page": "uma1-p2-skills.png",
+      "size": "1140×950",
+      "rows": 7,
+      "boxes": 14,
+      "fresh": 12,
+      "seen": 2,
+      "dropped": 0
+    },
+    {
+      "page": "uma2-p1-skills.png",
+      "size": "1140×950",
+      "rows": 7,
+      "boxes": 14,
+      "fresh": 13,
+      "seen": 1,
+      "dropped": 0
+    },
+    {
+      "page": "uma2-p2-skills.png",
+      "size": "1140×950",
+      "rows": 7,
+      "boxes": 14,
+      "fresh": 9,
+      "seen": 5,
+      "dropped": 0
+    },
+    {
+      "page": "uma3-p1-skills.png",
+      "size": "1140×950",
+      "rows": 7,
+      "boxes": 14,
+      "fresh": 7,
+      "seen": 7,
+      "dropped": 0
+    },
+    {
+      "page": "uma3-p2-skills.png",
+      "size": "1140×950",
+      "rows": 7,
+      "boxes": 14,
+      "fresh": 8,
+      "seen": 6,
+      "dropped": 0
+    },
+    {
+      "page": "uma4-p1-skills.png",
+      "size": "1140×950",
+      "rows": 7,
+      "boxes": 14,
+      "fresh": 8,
+      "seen": 6,
+      "dropped": 0
+    },
+    {
+      "page": "uma4-p2-skills.png",
+      "size": "1140×950",
+      "rows": 7,
+      "boxes": 14,
+      "fresh": 8,
+      "seen": 6,
+      "dropped": 0
+    }
+  ],
+  "count": 79,
+  "items": [
+    {
+      "id": "n0000",
+      "image": "img/n0000.png",
+      "inkWidth": 134,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma1-p1-skills.png",
+        "row": 0,
+        "col": 0
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        1
+      ],
+      "nearMiss": null,
+      "nearMissId": null
+    },
+    {
+      "id": "n0001",
+      "image": "img/n0001.png",
+      "inkWidth": 111,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma1-p1-skills.png",
+        "row": 0,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.62,
+      "nearMissId": "n0000"
+    },
+    {
+      "id": "n0002",
+      "image": "img/n0002.png",
+      "inkWidth": 83,
+      "inkHeight": 23,
+      "firstSeen": {
+        "page": "uma1-p1-skills.png",
+        "row": 1,
+        "col": 0
+      },
+      "occurrences": 3,
+      "pages": 3,
+      "mergeScores": [
+        1,
+        1
+      ],
+      "nearMiss": 0.51,
+      "nearMissId": "n0000"
+    },
+    {
+      "id": "n0003",
+      "image": "img/n0003.png",
+      "inkWidth": 111,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma1-p1-skills.png",
+        "row": 1,
+        "col": 1
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        1
+      ],
+      "nearMiss": 0.747,
+      "nearMissId": "n0001"
+    },
+    {
+      "id": "n0004",
+      "image": "img/n0004.png",
+      "inkWidth": 84,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma1-p1-skills.png",
+        "row": 2,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.582,
+      "nearMissId": "n0000"
+    },
+    {
+      "id": "n0005",
+      "image": "img/n0005.png",
+      "inkWidth": 103,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma1-p1-skills.png",
+        "row": 2,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.496,
+      "nearMissId": "n0004"
+    },
+    {
+      "id": "n0006",
+      "image": "img/n0006.png",
+      "inkWidth": 122,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma1-p1-skills.png",
+        "row": 3,
+        "col": 0
+      },
+      "occurrences": 3,
+      "pages": 3,
+      "mergeScores": [
+        0.968,
+        0.978
+      ],
+      "nearMiss": 0.727,
+      "nearMissId": "n0000"
+    },
+    {
+      "id": "n0007",
+      "image": "img/n0007.png",
+      "inkWidth": 140,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma1-p1-skills.png",
+        "row": 3,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.814,
+      "nearMissId": "n0006"
+    },
+    {
+      "id": "n0008",
+      "image": "img/n0008.png",
+      "inkWidth": 140,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma1-p1-skills.png",
+        "row": 4,
+        "col": 0
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        0.98
+      ],
+      "nearMiss": 0.672,
+      "nearMissId": "n0003"
+    },
+    {
+      "id": "n0009",
+      "image": "img/n0009.png",
+      "inkWidth": 111,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma1-p1-skills.png",
+        "row": 4,
+        "col": 1
+      },
+      "occurrences": 3,
+      "pages": 3,
+      "mergeScores": [
+        0.992,
+        0.992
+      ],
+      "nearMiss": 0.762,
+      "nearMissId": "n0003"
+    },
+    {
+      "id": "n0010",
+      "image": "img/n0010.png",
+      "inkWidth": 197,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma1-p1-skills.png",
+        "row": 5,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.582,
+      "nearMissId": "n0008"
+    },
+    {
+      "id": "n0011",
+      "image": "img/n0011.png",
+      "inkWidth": 111,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma1-p1-skills.png",
+        "row": 5,
+        "col": 1
+      },
+      "occurrences": 4,
+      "pages": 4,
+      "mergeScores": [
+        0.986,
+        0.99,
+        0.991
+      ],
+      "nearMiss": 0.761,
+      "nearMissId": "n0009"
+    },
+    {
+      "id": "n0012",
+      "image": "img/n0012.png",
+      "inkWidth": 139,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma1-p1-skills.png",
+        "row": 6,
+        "col": 0
+      },
+      "occurrences": 4,
+      "pages": 4,
+      "mergeScores": [
+        0.995,
+        0.996,
+        0.995
+      ],
+      "nearMiss": 0.656,
+      "nearMissId": "n0008"
+    },
+    {
+      "id": "n0013",
+      "image": "img/n0013.png",
+      "inkWidth": 112,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma1-p1-skills.png",
+        "row": 6,
+        "col": 1
+      },
+      "occurrences": 4,
+      "pages": 4,
+      "mergeScores": [
+        0.987,
+        0.989,
+        0.991
+      ],
+      "nearMiss": 0.755,
+      "nearMissId": "n0003"
+    },
+    {
+      "id": "n0014",
+      "image": "img/n0014.png",
+      "inkWidth": 44,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma1-p2-skills.png",
+        "row": 1,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.443,
+      "nearMissId": "n0004"
+    },
+    {
+      "id": "n0015",
+      "image": "img/n0015.png",
+      "inkWidth": 111,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma1-p2-skills.png",
+        "row": 1,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.746,
+      "nearMissId": "n0003"
+    },
+    {
+      "id": "n0016",
+      "image": "img/n0016.png",
+      "inkWidth": 139,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma1-p2-skills.png",
+        "row": 2,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.729,
+      "nearMissId": "n0008"
+    },
+    {
+      "id": "n0017",
+      "image": "img/n0017.png",
+      "inkWidth": 128,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma1-p2-skills.png",
+        "row": 2,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.687,
+      "nearMissId": "n0009"
+    },
+    {
+      "id": "n0018",
+      "image": "img/n0018.png",
+      "inkWidth": 169,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma1-p2-skills.png",
+        "row": 3,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.701,
+      "nearMissId": "n0008"
+    },
+    {
+      "id": "n0019",
+      "image": "img/n0019.png",
+      "inkWidth": 169,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma1-p2-skills.png",
+        "row": 3,
+        "col": 1
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        0.96
+      ],
+      "nearMiss": 0.933,
+      "nearMissId": "n0018"
+    },
+    {
+      "id": "n0020",
+      "image": "img/n0020.png",
+      "inkWidth": 140,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma1-p2-skills.png",
+        "row": 4,
+        "col": 0
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        0.996
+      ],
+      "nearMiss": 0.716,
+      "nearMissId": "n0008"
+    },
+    {
+      "id": "n0021",
+      "image": "img/n0021.png",
+      "inkWidth": 138,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma1-p2-skills.png",
+        "row": 4,
+        "col": 1
+      },
+      "occurrences": 3,
+      "pages": 3,
+      "mergeScores": [
+        0.995,
+        0.995
+      ],
+      "nearMiss": 0.761,
+      "nearMissId": "n0020"
+    },
+    {
+      "id": "n0022",
+      "image": "img/n0022.png",
+      "inkWidth": 94,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma1-p2-skills.png",
+        "row": 5,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.619,
+      "nearMissId": "n0007"
+    },
+    {
+      "id": "n0023",
+      "image": "img/n0023.png",
+      "inkWidth": 159,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma1-p2-skills.png",
+        "row": 5,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.813,
+      "nearMissId": "n0020"
+    },
+    {
+      "id": "n0024",
+      "image": "img/n0024.png",
+      "inkWidth": 197,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma1-p2-skills.png",
+        "row": 6,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.703,
+      "nearMissId": "n0018"
+    },
+    {
+      "id": "n0025",
+      "image": "img/n0025.png",
+      "inkWidth": 167,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma1-p2-skills.png",
+        "row": 6,
+        "col": 1
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        1
+      ],
+      "nearMiss": 0.681,
+      "nearMissId": "n0008"
+    },
+    {
+      "id": "n0026",
+      "image": "img/n0026.png",
+      "inkWidth": 146,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma2-p1-skills.png",
+        "row": 0,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.491,
+      "nearMissId": "n0007"
+    },
+    {
+      "id": "n0027",
+      "image": "img/n0027.png",
+      "inkWidth": 142,
+      "inkHeight": 13,
+      "firstSeen": {
+        "page": "uma2-p1-skills.png",
+        "row": 0,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.501,
+      "nearMissId": "n0003"
+    },
+    {
+      "id": "n0028",
+      "image": "img/n0028.png",
+      "inkWidth": 131,
+      "inkHeight": 24,
+      "firstSeen": {
+        "page": "uma2-p1-skills.png",
+        "row": 1,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.495,
+      "nearMissId": "n0021"
+    },
+    {
+      "id": "n0029",
+      "image": "img/n0029.png",
+      "inkWidth": 112,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma2-p1-skills.png",
+        "row": 1,
+        "col": 1
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        1
+      ],
+      "nearMiss": 0.754,
+      "nearMissId": "n0011"
+    },
+    {
+      "id": "n0030",
+      "image": "img/n0030.png",
+      "inkWidth": 141,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma2-p1-skills.png",
+        "row": 2,
+        "col": 0
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        0.951
+      ],
+      "nearMiss": 0.737,
+      "nearMissId": "n0003"
+    },
+    {
+      "id": "n0031",
+      "image": "img/n0031.png",
+      "inkWidth": 141,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma2-p1-skills.png",
+        "row": 2,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.745,
+      "nearMissId": "n0030"
+    },
+    {
+      "id": "n0032",
+      "image": "img/n0032.png",
+      "inkWidth": 141,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma2-p1-skills.png",
+        "row": 3,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.808,
+      "nearMissId": "n0030"
+    },
+    {
+      "id": "n0033",
+      "image": "img/n0033.png",
+      "inkWidth": 141,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma2-p1-skills.png",
+        "row": 3,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.861,
+      "nearMissId": "n0032"
+    },
+    {
+      "id": "n0034",
+      "image": "img/n0034.png",
+      "inkWidth": 110,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma2-p1-skills.png",
+        "row": 4,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.829,
+      "nearMissId": "n0032"
+    },
+    {
+      "id": "n0035",
+      "image": "img/n0035.png",
+      "inkWidth": 109,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma2-p1-skills.png",
+        "row": 4,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.865,
+      "nearMissId": "n0034"
+    },
+    {
+      "id": "n0036",
+      "image": "img/n0036.png",
+      "inkWidth": 79,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma2-p1-skills.png",
+        "row": 5,
+        "col": 0
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        0.976
+      ],
+      "nearMiss": 0.533,
+      "nearMissId": "n0034"
+    },
+    {
+      "id": "n0037",
+      "image": "img/n0037.png",
+      "inkWidth": 111,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma2-p1-skills.png",
+        "row": 6,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.931,
+      "nearMissId": "n0011"
+    },
+    {
+      "id": "n0038",
+      "image": "img/n0038.png",
+      "inkWidth": 111,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma2-p1-skills.png",
+        "row": 6,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.771,
+      "nearMissId": "n0035"
+    },
+    {
+      "id": "n0039",
+      "image": "img/n0039.png",
+      "inkWidth": 111,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma2-p2-skills.png",
+        "row": 1,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.943,
+      "nearMissId": "n0038"
+    },
+    {
+      "id": "n0040",
+      "image": "img/n0040.png",
+      "inkWidth": 139,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma2-p2-skills.png",
+        "row": 2,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.807,
+      "nearMissId": "n0020"
+    },
+    {
+      "id": "n0041",
+      "image": "img/n0041.png",
+      "inkWidth": 110,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma2-p2-skills.png",
+        "row": 2,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.777,
+      "nearMissId": "n0003"
+    },
+    {
+      "id": "n0042",
+      "image": "img/n0042.png",
+      "inkWidth": 71,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma2-p2-skills.png",
+        "row": 3,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.634,
+      "nearMissId": "n0034"
+    },
+    {
+      "id": "n0043",
+      "image": "img/n0043.png",
+      "inkWidth": 56,
+      "inkHeight": 23,
+      "firstSeen": {
+        "page": "uma2-p2-skills.png",
+        "row": 3,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.46,
+      "nearMissId": "n0042"
+    },
+    {
+      "id": "n0044",
+      "image": "img/n0044.png",
+      "inkWidth": 110,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma2-p2-skills.png",
+        "row": 4,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.806,
+      "nearMissId": "n0041"
+    },
+    {
+      "id": "n0045",
+      "image": "img/n0045.png",
+      "inkWidth": 196,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma2-p2-skills.png",
+        "row": 4,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.707,
+      "nearMissId": "n0024"
+    },
+    {
+      "id": "n0046",
+      "image": "img/n0046.png",
+      "inkWidth": 112,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma2-p2-skills.png",
+        "row": 5,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.689,
+      "nearMissId": "n0013"
+    },
+    {
+      "id": "n0047",
+      "image": "img/n0047.png",
+      "inkWidth": 112,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma2-p2-skills.png",
+        "row": 6,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.78,
+      "nearMissId": "n0035"
+    },
+    {
+      "id": "n0048",
+      "image": "img/n0048.png",
+      "inkWidth": 108,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma3-p1-skills.png",
+        "row": 0,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.889,
+      "nearMissId": "n0001"
+    },
+    {
+      "id": "n0049",
+      "image": "img/n0049.png",
+      "inkWidth": 141,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma3-p1-skills.png",
+        "row": 0,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.823,
+      "nearMissId": "n0000"
+    },
+    {
+      "id": "n0050",
+      "image": "img/n0050.png",
+      "inkWidth": 110,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma3-p1-skills.png",
+        "row": 3,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.906,
+      "nearMissId": "n0035"
+    },
+    {
+      "id": "n0051",
+      "image": "img/n0051.png",
+      "inkWidth": 48,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma3-p1-skills.png",
+        "row": 3,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.73,
+      "nearMissId": "n0014"
+    },
+    {
+      "id": "n0052",
+      "image": "img/n0052.png",
+      "inkWidth": 82,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma3-p1-skills.png",
+        "row": 4,
+        "col": 0
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        0.997
+      ],
+      "nearMiss": 0.618,
+      "nearMissId": "n0004"
+    },
+    {
+      "id": "n0053",
+      "image": "img/n0053.png",
+      "inkWidth": 93,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma3-p1-skills.png",
+        "row": 6,
+        "col": 0
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        0.982
+      ],
+      "nearMiss": 0.77,
+      "nearMissId": "n0048"
+    },
+    {
+      "id": "n0054",
+      "image": "img/n0054.png",
+      "inkWidth": 111,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma3-p1-skills.png",
+        "row": 6,
+        "col": 1
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        0.994
+      ],
+      "nearMiss": 0.781,
+      "nearMissId": "n0046"
+    },
+    {
+      "id": "n0055",
+      "image": "img/n0055.png",
+      "inkWidth": 139,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma3-p2-skills.png",
+        "row": 3,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.768,
+      "nearMissId": "n0023"
+    },
+    {
+      "id": "n0056",
+      "image": "img/n0056.png",
+      "inkWidth": 170,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma3-p2-skills.png",
+        "row": 3,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.878,
+      "nearMissId": "n0018"
+    },
+    {
+      "id": "n0057",
+      "image": "img/n0057.png",
+      "inkWidth": 170,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma3-p2-skills.png",
+        "row": 4,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.923,
+      "nearMissId": "n0056"
+    },
+    {
+      "id": "n0058",
+      "image": "img/n0058.png",
+      "inkWidth": 139,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma3-p2-skills.png",
+        "row": 4,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.791,
+      "nearMissId": "n0008"
+    },
+    {
+      "id": "n0059",
+      "image": "img/n0059.png",
+      "inkWidth": 82,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma3-p2-skills.png",
+        "row": 5,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.621,
+      "nearMissId": "n0004"
+    },
+    {
+      "id": "n0060",
+      "image": "img/n0060.png",
+      "inkWidth": 46,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma3-p2-skills.png",
+        "row": 5,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.727,
+      "nearMissId": "n0051"
+    },
+    {
+      "id": "n0061",
+      "image": "img/n0061.png",
+      "inkWidth": 111,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma3-p2-skills.png",
+        "row": 6,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.783,
+      "nearMissId": "n0048"
+    },
+    {
+      "id": "n0062",
+      "image": "img/n0062.png",
+      "inkWidth": 137,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma3-p2-skills.png",
+        "row": 6,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.932,
+      "nearMissId": "n0021"
+    },
+    {
+      "id": "n0063",
+      "image": "img/n0063.png",
+      "inkWidth": 133,
+      "inkHeight": 24,
+      "firstSeen": {
+        "page": "uma4-p1-skills.png",
+        "row": 0,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.91,
+      "nearMissId": "n0028"
+    },
+    {
+      "id": "n0064",
+      "image": "img/n0064.png",
+      "inkWidth": 141,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma4-p1-skills.png",
+        "row": 2,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.816,
+      "nearMissId": "n0030"
+    },
+    {
+      "id": "n0065",
+      "image": "img/n0065.png",
+      "inkWidth": 139,
+      "inkHeight": 27,
+      "firstSeen": {
+        "page": "uma4-p1-skills.png",
+        "row": 3,
+        "col": 0
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        0.994
+      ],
+      "nearMiss": 0.739,
+      "nearMissId": "n0058"
+    },
+    {
+      "id": "n0066",
+      "image": "img/n0066.png",
+      "inkWidth": 140,
+      "inkHeight": 27,
+      "firstSeen": {
+        "page": "uma4-p1-skills.png",
+        "row": 3,
+        "col": 1
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        0.986
+      ],
+      "nearMiss": 0.796,
+      "nearMissId": "n0058"
+    },
+    {
+      "id": "n0067",
+      "image": "img/n0067.png",
+      "inkWidth": 140,
+      "inkHeight": 27,
+      "firstSeen": {
+        "page": "uma4-p1-skills.png",
+        "row": 4,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.924,
+      "nearMissId": "n0066"
+    },
+    {
+      "id": "n0068",
+      "image": "img/n0068.png",
+      "inkWidth": 83,
+      "inkHeight": 27,
+      "firstSeen": {
+        "page": "uma4-p1-skills.png",
+        "row": 4,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.892,
+      "nearMissId": "n0004"
+    },
+    {
+      "id": "n0069",
+      "image": "img/n0069.png",
+      "inkWidth": 83,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma4-p1-skills.png",
+        "row": 5,
+        "col": 0
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        0.986
+      ],
+      "nearMiss": 0.778,
+      "nearMissId": "n0068"
+    },
+    {
+      "id": "n0070",
+      "image": "img/n0070.png",
+      "inkWidth": 140,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma4-p1-skills.png",
+        "row": 6,
+        "col": 0
+      },
+      "occurrences": 2,
+      "pages": 2,
+      "mergeScores": [
+        0.982
+      ],
+      "nearMiss": 0.94,
+      "nearMissId": "n0008"
+    },
+    {
+      "id": "n0071",
+      "image": "img/n0071.png",
+      "inkWidth": 140,
+      "inkHeight": 27,
+      "firstSeen": {
+        "page": "uma4-p2-skills.png",
+        "row": 0,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.937,
+      "nearMissId": "n0064"
+    },
+    {
+      "id": "n0072",
+      "image": "img/n0072.png",
+      "inkWidth": 141,
+      "inkHeight": 27,
+      "firstSeen": {
+        "page": "uma4-p2-skills.png",
+        "row": 0,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.932,
+      "nearMissId": "n0030"
+    },
+    {
+      "id": "n0073",
+      "image": "img/n0073.png",
+      "inkWidth": 140,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma4-p2-skills.png",
+        "row": 2,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.938,
+      "nearMissId": "n0067"
+    },
+    {
+      "id": "n0074",
+      "image": "img/n0074.png",
+      "inkWidth": 83,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma4-p2-skills.png",
+        "row": 2,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.941,
+      "nearMissId": "n0068"
+    },
+    {
+      "id": "n0075",
+      "image": "img/n0075.png",
+      "inkWidth": 123,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma4-p2-skills.png",
+        "row": 3,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.935,
+      "nearMissId": "n0006"
+    },
+    {
+      "id": "n0076",
+      "image": "img/n0076.png",
+      "inkWidth": 169,
+      "inkHeight": 26,
+      "firstSeen": {
+        "page": "uma4-p2-skills.png",
+        "row": 4,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.936,
+      "nearMissId": "n0019"
+    },
+    {
+      "id": "n0077",
+      "image": "img/n0077.png",
+      "inkWidth": 94,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma4-p2-skills.png",
+        "row": 6,
+        "col": 0
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.917,
+      "nearMissId": "n0022"
+    },
+    {
+      "id": "n0078",
+      "image": "img/n0078.png",
+      "inkWidth": 106,
+      "inkHeight": 25,
+      "firstSeen": {
+        "page": "uma4-p2-skills.png",
+        "row": 6,
+        "col": 1
+      },
+      "occurrences": 1,
+      "pages": 1,
+      "mergeScores": null,
+      "nearMiss": 0.713,
+      "nearMissId": "n0022"
+    }
+  ]
+}
