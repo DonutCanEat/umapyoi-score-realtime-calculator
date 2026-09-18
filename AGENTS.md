@@ -646,18 +646,38 @@ UMAPYOI_NO_HUD=1 npm.cmd start       # ⭐ 兩個窗都唔開（淨係要 consol
   - **冗餘欄位矛盾 → 警告（唔 throw）**：同一個軸上面範圍同大細**兩樣都寫死而唔一致** →
     **以 `size` 為準 ＋ `[設定] ⚠️ …` 警告**。理由見 §2：`x[1]` 唔影響渲染，
     而 AGENTS §2 列出嘅六行環境變數一齊用曾經因為呢個 throw 而**完全開唔到程式**（實測）。
-  - ⚠️ **警告係單一鏈路**（2026-09-19 修正後**先真正成立**）：去處由呼叫者嘅 `onWarn` 決定，
-    而**三條會出警告嘅路**（`validateConfig()` 直接驗、`loadConfig()` 讀檔案、
-    `resolveHudConfig()` 合併完再驗**同埋**驗 `fileConfig`）**全部**會將 `onWarn` 傳落去 →
-    `main.js` 嘅 `warnHudConfig()` 加 `[設定] ⚠️` 前綴，設定窗／console 都收得到。
+  - ⚠️ **警告係單一鏈路**（2026-09-19：`config.js` 兩處 ＋ `main.js` 一處都修正之後**先真正成立**）：
+    去處由呼叫者嘅 `onWarn` 決定，而**三條會出警告嘅路**（`validateConfig()` 直接驗、
+    `loadConfig()` 讀檔案、`resolveHudConfig()` 合併完再驗**同埋**驗 `fileConfig`）
+    **全部**會將 `onWarn` 傳落去 → `main.js` 嘅 `warnHudConfig()` 加 `[設定] ⚠️` 前綴，
+    設定窗／console 都收得到。三個入口（2026-09-19 逐一核對過）：
+    ① `main.js` `configFromUi()` → `validateConfig(…, { onWarn: warnHudConfig })`；
+    ② `main.js` `loadHudConfig()` → `loadConfig({ filePath, onWarn: warnHudConfig })`（L286）；
+    ③ 同一個函數 → `resolveHudConfig(env, fileConfig, { onWarn: warnHudConfig })`。
+    ⚠️ **雙重驗證係刻意嘅，但同一條矛盾唔會因此警告兩次**（2026-09-19 實測）：
+    設定檔內容確實會被驗**兩次**（`loadConfig()` 內部一次 ＋ `resolveHudConfig()` 驗
+    `fileConfig` 再一次），但 `loadConfig()` 交返嚟嘅係**已正規化**嘅結果
+    （`x[1]` 已經被 `x[0] + size.w` 覆蓋、`size` 亦已收斂到 6 位小數）→
+    第二次驗唔會再撞到同一個矛盾。**實測**：一個「`x[1]` 寫死 `0.5` 但 `size.w = 0.2`」嘅
+    `hud-position.json` → 整條 `main.js` 鏈路 `onWarn` 收 **1** 條（帶 `[設定] ⚠️` 前綴）、
+    裸 `console.warn` 收 **0** 條。
+    ⚠️ **同一輪出多過一條警告係另一個情況（唔係重複驗造成，亦唔係 bug）**：
+    同一個檔 x ＋ y **兩軸**都矛盾 → **2** 條；壞檔案 ＋ env 又寫死範圍同大細（§2 六行）
+    → **2** 條（一條講檔案嘅、一條講 env 嘅）。兩條係**唔同**嘅矛盾，各自都帶
+    `[設定] ⚠️` 前綴 —— 用戶見到重複措辭唔好以為出錯，照訊息講嘅值改就得。
     ⚠️ **修正前嘅實際缺口**（獨立審計實測）：`loadConfig()` 嗌 `validateConfig(raw)`
     **冇傳 `onWarn`**、`resolveHudConfig()` 嗌 `validateConfig(fileConfig)` **冇轉發**
     → **由設定檔引起**嘅警告會繞過 caller 直接落**裸 `console.warn`**（冇 `[設定] ⚠️` 前綴）。
     實測：`resolveHudConfig({}, {layout:{x:[0.1,0.5],size:{w:0.2}}}, {onWarn})`
     → caller 收 **0** 個、裸 `console.warn` 收 **1** 個。⚠️ 唔算靜默（訊息照出），
-    但同「單一鏈路」唔一致而且零測試覆蓋 → 已修 ＋ 加測試
+    但同「單一鏈路」唔一致而且零測試覆蓋 → 已修 `config.js` 嗰兩處 ＋ 加測試
     （`test/hud-config.test.js`：caller 要收 1 個、裸 `console.warn` 要收 0 個、
     兩條路徑嘅措辭要一致）。
+    ⚠️ **第三個入口唔喺測試覆蓋範圍**：`main.js` 自己嗌 `loadConfig()` 嗰句
+    （`electron/main.js` 零測試覆蓋，見 §9 第 5 條）—— 2026-09-19 補傳
+    `onWarn: warnHudConfig` 之前，**由設定檔引起**嘅警告一樣落裸 `console.warn`
+    （實測：`onWarn` 收 0 條／裸 `console.warn` 收 1 條；補傳之後 1／0）。
+    ⚠️ 對照（唔准變靜音）：兩邊都唔傳 `onWarn` 嘅舊寫法一樣出 **1** 條裸 `console.warn`。
     ⚠️ `onWarn` **冇傳／唔係函數時一定仍然係 `console.warn`**（唔准因為加轉發而變靜音）。
 - ⚠️ **設定檔壞咗（JSON 壞／欄位唔合法）＝唔同處理**：log 大聲 ＋ 用預設 ＋
   **唔覆寫你個檔**（設定窗顯示紅色橫額）。理由：檔案壞咗唔應該阻止擷取，但**一定唔可以靜默**。
