@@ -43,7 +43,37 @@ export const DEFAULT_INK_OPTIONS = Object.freeze({
   hueMin: 15,     // 橙棕窗口下界
   hueMax: 50,     // 橙棕窗口上界
   lumMax: 0.62,   // 亮度上界（太光 = 淺色底，唔係字）
+  /**
+   * **金色高光窗口**（第二個窗口，預設**關**）。
+   *
+   * 為何需要（2026-09-18 實機 dump 實測）：屬性升咗之後，遊戲會把該格數字畫成**金色**，
+   * 而金色係「深金邊 ＋ 極淺金高光」（實測 `rgb(255,255,214)`、色相 60°、亮度 **0.98**）。
+   * 淨用橙棕窗口（lum < 0.62）會**削走淺金部分** → 連「9」嘅上圈左邊筆劃都冇咗 →
+   * 形狀變成似「3」（實測 3:0.60 vs 9:0.60 打和）→ **靜默讀錯**（1489 讀成 1483）。
+   *
+   * 為何唔可以單純調高 lumMax：面板底色本身都係暖色（實測色相 27–44°、亮度 0.63–0.92），
+   * 一放寬就會連底都當成墨 → 全盤污染。但**淺金**嘅色相（實測 50–70°）同底（≤44°）分得開，
+   * 所以用「色相 50–70°、飽和 ≥ 40、亮度 < 0.99」呢個獨立窗口去捉高光。
+   */
+  goldHueMin: undefined,
+  goldHueMax: undefined,
+  goldDeltaMin: undefined,
+  goldLumMax: undefined,
 });
+
+/** 一格像素嘅色相（0–360）；灰／黑（冇色相）回 null。 */
+export function pixelHue(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  if (delta < 1) return null;
+  let hue;
+  if (max === r) hue = 60 * (((g - b) / delta) % 6);
+  else if (max === g) hue = 60 * ((b - r) / delta + 2);
+  else hue = 60 * ((r - g) / delta + 4);
+  if (hue < 0) hue += 360;
+  return hue;
+}
 
 /** 用預設補齊局部門檻（唔完整嘅 options 唔可以直接用，否則 undefined 會令比較全部 false）。 */
 export function resolveInkOptions(options) {
@@ -60,7 +90,12 @@ export function resolveInkOptions(options) {
 }
 
 /**
- * 一格像素嘅顏色係唔係「數字墨色」（橙棕、偏暗）。
+ * 一格像素嘅顏色係唔係「數字墨色」。
+ *
+ * 兩個窗口（OR）：
+ *   1. 橙棕（一般狀態）：色相 hueMin–hueMax、亮度 < lumMax
+ *   2. 淺金高光（屬性升咗之後）：色相 goldHueMin–goldHueMax、亮度 < goldLumMax
+ *      —— 預設關（`goldHueMin` 係 undefined）；實測要開先讀得啱金色數字（見上面註釋）。
  *
  * @param {number} r
  * @param {number} g
@@ -74,18 +109,26 @@ export function isDigitInk(r, g, b, options) {
   const delta = max - min;
   if (delta < o.deltaMin) return false; // 灰／黑（冇色相）唔係數字墨
 
-  let hue;
-  if (max === r) hue = 60 * (((g - b) / delta) % 6);
-  else if (max === g) hue = 60 * ((b - r) / delta + 2);
-  else hue = 60 * ((r - g) / delta + 4);
-  if (hue < 0) hue += 360;
-
-  // 只留橙棕。ランク徽章本身有金／粉／綠／藍／紫，但**實測金徽章 hue 17–44°**
-  // 落喺窗口內 → 色相剔唔走佢，要靠亮度同結構條件（見 §2.2）。
-  if (hue < o.hueMin || hue > o.hueMax) return false;
+  const hue = pixelHue(r, g, b);
 
   const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return lum < o.lumMax;
+
+  // 窗口 1：橙棕
+  // ランク徽章本身有金／粉／綠／藍／紫，但**實測金徽章 hue 17–44°**
+  // 落喺窗口內 → 色相剔唔走佢，要靠亮度同結構條件（見 §2.2）。
+  if (hue >= o.hueMin && hue <= o.hueMax && lum < o.lumMax) return true;
+
+  // 窗口 2：淺金高光（屬性升咗之後嘅金色數字）—— 預設關
+  if (
+    o.goldHueMin !== undefined &&
+    hue >= o.goldHueMin &&
+    hue <= o.goldHueMax &&
+    delta >= o.goldDeltaMin &&
+    lum < o.goldLumMax
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /** 預設參數。 */
@@ -112,6 +155,10 @@ export function buildInkMask(image, options = {}) {
     hueMin: merged.hueMin,
     hueMax: merged.hueMax,
     lumMax: merged.lumMax,
+    goldHueMin: merged.goldHueMin,
+    goldHueMax: merged.goldHueMax,
+    goldDeltaMin: merged.goldDeltaMin,
+    goldLumMax: merged.goldLumMax,
   };
   const { data, width, height } = image;
   const n = width * height;

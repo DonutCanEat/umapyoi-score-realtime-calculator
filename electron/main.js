@@ -154,12 +154,16 @@ ipcMain.on('frame', (_event, frame) => {
     // 讀唔到（轉場／唔喺ステータス畫面）→ 照樣推 null，等投票緩衝自然清走
     tracker.push(null);
     const now = Date.now();
-    // 「唔見／唔似面板條」= 換咗畫面，屬正常（唔 dump、log 稀疏啲）；
-    // 其他（面板喺度但讀唔清）= 真問題，要 dump 幀查 + log 密啲。
-    const quietMs = read.notBar ? 30000 : 5000;
+    // 三種「唔出數」：
+    //   ① 金色高亮（屬性啱啱升咗）—— 字形被侵蝕，讀就會讀錯 → 跳過，沿用上一個穩定值
+    //   ② 唔見／唔似面板條（換咗畫面）—— 屬正常
+    //   ③ 其他（面板喺度但讀唔清）—— 真問題，要 dump 幀查
+    const quietMs = read.notBar ? 30000 : read.highlighted ? 10000 : 5000;
     if (read.reason && now - lastLog > quietMs) {
       lastLog = now;
-      if (read.notBar) {
+      if (read.highlighted) {
+        console.log(`[跳過] ${read.reason}（會沿用上一個穩定值，等佢回復正常色）`);
+      } else if (read.notBar) {
         console.log(`[讀唔到] （唔見面板條 —— 可能喺其他畫面／轉場，屬正常：${read.reason}）`);
       } else {
         console.log(`[讀唔到] ${read.reason}`);

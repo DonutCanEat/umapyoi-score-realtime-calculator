@@ -57,6 +57,8 @@ const cropped = args.includes('--cropped');
 const LIVE_TRUTH_PATH = join(ROOT, 'data', 'live-truth.json');
 const liveTruth = existsSync(LIVE_TRUTH_PATH) ? JSON.parse(readFileSync(LIVE_TRUTH_PATH, 'utf8')) : null;
 const truthOf = (rel) => expect ?? liveTruth?.perShot?.[basename(rel)] ?? liveTruth?.values ?? null;
+/** 金色高亮幀：**應該唔出數**（讀到反而係錯，見 live-truth 嘅 notes）。 */
+const expectHighlighted = new Set(liveTruth?.expectHighlighted ?? []);
 
 /**
  * `shots/live/` 有兩種圖：
@@ -167,13 +169,23 @@ for (const entry of list) {
     }
     const read = readStatBar(target, templates, { minConfidence: 0, ...maskOverride, whole });
     const truth = truthOf(rel);
+    const wantHighlighted = expectHighlighted.has(basename(rel));
     total += 1;
-    const ok = truth && read.stats && read.stats.every((n, i) => n === truth[i]);
+    let ok;
+    let want = '';
+    if (wantHighlighted) {
+      ok = read.highlighted === true && read.stats === null;
+      want = `　真值 ${(truth ?? []).join('/')}（金色 → 應該唔出數）`;
+    } else {
+      ok = truth && read.stats && read.stats.every((n, i) => n === truth[i]);
+      want = truth ? `　真值 ${truth.join('/')}` : '';
+    }
     if (ok) pass += 1;
     console.log(
       `     讀：${read.stats ? read.stats.join('/') : `❌ ${read.reason}`}` +
         `　信心 ${read.confidence.toFixed(2)}` +
-        (truth ? `　真值 ${truth.join('/')}　${ok ? '✅' : '❌'}` : ''),
+        want +
+        (truth || wantHighlighted ? `　${ok ? '✅' : '❌'}` : ''),
     );
     if (trace) traceRead(image, templates, maskOverride, entry.cropped);
   }

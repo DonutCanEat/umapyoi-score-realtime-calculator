@@ -11,8 +11,10 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+
+import { decodePng } from '../src/vision/png.js';
 
 import {
   contentBox,
@@ -60,7 +62,7 @@ function paint(image, x0, y0, w, h, color = INK) {
 }
 
 /** 用模板 bitmap 畫一個字（模板係 16×24 歸一化網格，數值已 standardize → 用 > 0 做門檻）。 */
-function drawGlyph(image, label, x0, y0, w, h) {
+function drawGlyph(image, label, x0, y0, w, h, color = INK) {
   const bitmap = templates[label];
   for (let gy = 0; gy < GLYPH_H; gy += 1) {
     for (let gx = 0; gx < GLYPH_W; gx += 1) {
@@ -70,18 +72,18 @@ function drawGlyph(image, label, x0, y0, w, h) {
       const cx1 = Math.max(cx0 + 1, x0 + Math.floor(((gx + 1) * w) / GLYPH_W));
       const cy0 = y0 + Math.floor((gy * h) / GLYPH_H);
       const cy1 = Math.max(cy0 + 1, y0 + Math.floor(((gy + 1) * h) / GLYPH_H));
-      paint(image, cx0, cy0, cx1 - cx0, cy1 - cy0);
+      paint(image, cx0, cy0, cx1 - cx0, cy1 - cy0, color);
     }
   }
 }
 
 /** 畫一串數字（右對齊，同實機一樣）。 */
-function drawNumberRight(image, text, right, top, height) {
+function drawNumberRight(image, text, right, top, height, color = INK) {
   const digitW = Math.max(3, Math.round(height * 0.7));
   const pitch = digitW + 1; // 數字內部只隔 1px（實測 2–7px）
   let x = right - text.length * pitch;
   for (const label of text) {
-    drawGlyph(image, label, x, top, digitW, height);
+    drawGlyph(image, label, x, top, digitW, height, color);
     x += pitch;
   }
 }
@@ -93,7 +95,7 @@ function drawNumberRight(image, text, right, top, height) {
  *   上限行高 0.0064×闊、大數值行頂 0.669×內容高、上限行頂 0.692×內容高。
  * 即係 5 個數值佔 0.164–0.385（左邊界 0.385 − 4×0.0495 − 3 位數闊 ≈ 0.164）。
  */
-function makeStatBarImage({ width = 1600, chrome = 0, values = [226, 54, 139, 85, 102], limits = [1946, 1600, 1600, 1500, 1450], valueHeight = null, limitHeight = null } = {}) {
+function makeStatBarImage({ width = 1600, chrome = 0, values = [226, 54, 139, 85, 102], limits = [1946, 1600, 1600, 1500, 1450], valueHeight = null, limitHeight = null, inkColor = INK } = {}) {
   const contentH = Math.round((width * 9) / 16);
   const image = makeImage(width, contentH + chrome);
   const top = chrome; // 內容區由 chrome 之後開始
@@ -105,8 +107,8 @@ function makeStatBarImage({ width = 1600, chrome = 0, values = [226, 54, 139, 85
   const limitTop = top + Math.round(contentH * 0.692);
   values.forEach((v, i) => {
     const right = Math.round(rightMost - (values.length - 1 - i) * pitch);
-    drawNumberRight(image, String(v), right, valueTop, valueH);
-    drawNumberRight(image, String(limits[i]), right, limitTop, limitH);
+    drawNumberRight(image, String(v), right, valueTop, valueH, inkColor);
+    drawNumberRight(image, String(limits[i]), right, limitTop, limitH, inkColor);
   });
   return image;
 }
@@ -252,6 +254,35 @@ test('statbar expectedGlyphHeight：跟圖闊等比（實測 1356→12px、2560�
   const at = (frameWidth) => expectedGlyphHeight(frameWidth * 0.29);
   assert.ok(Math.abs(at(1356) - 12) < 1.5, `1356 闊應該 ~12px，實得 ${at(1356).toFixed(1)}`);
   assert.ok(Math.abs(at(2560) - 24) < 2, `2560 闊應該 ~24px，實得 ${at(2560).toFixed(1)}`);
+});
+
+/* ──────────────────── 金色高亮（屬性升咗 → 唔准出數） ──────────────────── */
+
+test('statbar 金色高亮：數字變金（色相 ~38°）→ 應該唔出數，唔可以讀錯', () => {
+  // 2026-09-18 實機：遊戲顯示 1489，但金色狀態下字形被侵蝕 → 讀成 1483（靜默讀錯）。
+  // 正解係偵測到金色就跳過（寧願顯示上一個穩定值）。
+  const gold = [190, 150, 80]; // 色相 ≈ 38°、亮度 ≈ 0.60（仍然過橙棕窗口）
+  const image = makeStatBarImage({ width: 1600, values: [1489, 543, 655, 624, 628], inkColor: gold });
+  const read = readStatBar(image, templates);
+  assert.equal(read.highlighted, true, `應該偵測到金色高亮，實得 reason：${read.reason}`);
+  assert.equal(read.stats, null, '金色狀態唔可以出數（出錯數比唔出數差）');
+  assert.match(read.reason ?? '', /金色/);
+});
+
+test('statbar 金色高亮：正常橙棕數字唔可以被誤判成金色', () => {
+  const image = makeStatBarImage({ width: 1600 });
+  const read = readStatBar(image, templates);
+  assert.equal(read.highlighted, false, `唔應該判成金色，實得 reason：${read.reason}`);
+  assert.deepEqual(read.stats, [226, 54, 139, 85, 102]);
+});
+
+test('statbar 金色高亮：實機金色幀要判 highlighted（永久回歸）', () => {
+  const png = `${ROOT}/shots/live/roi-regress-gold.png`;
+  if (!existsSync(png)) return; // 冇檔案就跳過（唔應該發生，但唔想 flaky）
+  const img = decodePng(readFileSync(png));
+  const read = readStatBar({ data: img.data, width: img.width, height: img.height }, templates, { whole: true });
+  assert.equal(read.highlighted, true, `實機金幀應該判金色，實得 reason：${read.reason}`);
+  assert.equal(read.stats, null);
 });
 
 test('statbar：DEFAULT_STATBAR_OPTIONS 嘅 ROI 同實測數值一致', () => {

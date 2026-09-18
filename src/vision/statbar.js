@@ -24,9 +24,39 @@
  * ③ 字高可以自己控制（重採樣到模板尺度）。
  */
 
-import { buildInkMask, findTextLines } from './inkmask.js';
+import { buildInkMask, findTextLines, pixelHue } from './inkmask.js';
 import { denseBands, tightenBand, columnsToGroups, groupsToNumbers } from './digitrow.js';
 import { extractGlyphs, readNumberTrimmed } from './glyphs.js';
+
+/** 帶入面嘅墨點數。 */
+function countInk(mask, width, y0, y1) {
+  let n = 0;
+  for (let y = y0; y <= y1; y += 1) {
+    const base = y * width;
+    for (let x = 0; x < width; x += 1) n += mask[base + x];
+  }
+  return n;
+}
+
+/**
+ * 墨點像素嘅**色相分位數**（用嚟分「正常橙棕」同「金色高亮」）。
+ * 實測：正常幀 p90 ≈ 27.2–27.8°、金幀 p90 ≈ 37.5–38.7°。
+ */
+function inkHuePercentile(roi, mask, y0, y1, p) {
+  const hues = [];
+  for (let y = y0; y <= y1; y += 1) {
+    const base = y * roi.width;
+    for (let x = 0; x < roi.width; x += 1) {
+      if (!mask[base + x]) continue;
+      const q = (base + x) * 4;
+      const hue = pixelHue(roi.data[q], roi.data[q + 1], roi.data[q + 2]);
+      if (hue !== null) hues.push(hue);
+    }
+  }
+  if (!hues.length) return null;
+  hues.sort((a, b) => a - b);
+  return hues[Math.min(hues.length - 1, Math.floor(hues.length * p))];
+}
 
 /** 預設參數（相對座標係 ÷ 內容區 16:9）。 */
 export const DEFAULT_STATBAR_OPTIONS = Object.freeze({
@@ -55,8 +85,22 @@ export const DEFAULT_STATBAR_OPTIONS = Object.freeze({
    * 咁樣就唔應該報「讀唔清」嚇人，而係老實講「唔似面板條」。
    */
   minGlyphHeightRatio: 0.6,
-  expectedGlyphHeightK: 0.0098,
   minGlyphHeight: 6,
+  expectedGlyphHeightK: 0.0098,
+  /**
+   * 「金色高亮」偵測（屬性升咗之後，遊戲會把該格數字畫成金色）。
+   *
+   * 為何要偵測而唔係照讀（2026-09-18 實機實測）：金色係「深金邊 ＋ 極淺金高光」
+   * （`rgb(255,255,214)`、色相 60°、亮度 0.98），淨用橙棕窗口（lum < 0.62）
+   * 會**削走淺金部分** → 字形被侵蝕到所有字元相似度只剩 0.46–0.60
+   * → **靜默讀錯**（實測 1489 讀成 1483、1613 讀成 1513）。
+   * 試過加「淺金窗口」反而更差（8 讀成 5），所以正解係**唔出數**：
+   * 寧願顯示上一個穩定值，都唔可以出錯數（本專案底線）。
+   *
+   * 判準：數值行墨點嘅**色相 p90**。實測正常幀 27.2–27.8°、金幀 37.5–38.7° → 用 33 分開。
+   */
+  goldHueThreshold: 33,
+  goldMinInk: 80,
 });
 
 /**
@@ -304,8 +348,21 @@ export function collectStatBarGlyphs(image, options = {}) {
 
   const groups = columnsToGroups(mask, roi.width, values.y0, values.y1, { ...o, minGap });
   const all = groupsToNumbers(groups, { ...o, numberGap });
-  const picked = pickFiveBySpacing(all, o);
   const candidates = all.map((n) => `${n.x0}-${n.x1}(${n.parts.length}字)`);
+
+  // 金色高亮 → 唔出數（見 DEFAULT_STATBAR_OPTIONS 嘅 goldHueThreshold 註釋）
+  const hueP90 = inkHuePercentile(roi, mask, values.y0, values.y1, 0.9);
+  if (hueP90 !== null && hueP90 >= o.goldHueThreshold && countInk(mask, roi.width, values.y0, values.y1) >= o.goldMinInk) {
+    return {
+      located,
+      entries: null,
+      highlighted: true,
+      candidates,
+      reason: `數值升咗（金色顯示，墨色色相 p90 ${hueP90.toFixed(0)}° ≥ ${o.goldHueThreshold}°）→ 暫時唔出數`,
+    };
+  }
+
+  const picked = pickFiveBySpacing(all, o);
   if (!picked) {
     return {
       located,
@@ -360,10 +417,13 @@ export function collectStatBarGlyphs(image, options = {}) {
  */
 export function readStatBar(image, templates, options = {}) {
   const o = { ...DEFAULT_STATBAR_OPTIONS, ...options };
-  const { located, entries, reason, candidates, notBar } = collectStatBarGlyphs(image, o);
+  const { located, entries, reason, candidates, notBar, highlighted } = collectStatBarGlyphs(image, o);
   const values = located.values;
   if (!entries) {
-    return { stats: null, texts: null, confidence: 0, row: values ?? null, reason, candidates, notBar: Boolean(notBar) };
+    return {
+      stats: null, texts: null, confidence: 0, row: values ?? null, reason, candidates,
+      notBar: Boolean(notBar), highlighted: Boolean(highlighted),
+    };
   }
 
   const texts = [];
@@ -393,5 +453,5 @@ export function readStatBar(image, templates, options = {}) {
       reason: `信心 ${confidence.toFixed(2)} < ${o.minConfidence}（寧願唔出數，唔可以出錯數）`,
     };
   }
-  return { stats, texts, confidence, row: values };
+  return { stats, texts, confidence, row: values, notBar: false, highlighted: false };
 }

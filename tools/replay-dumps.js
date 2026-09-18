@@ -39,6 +39,7 @@ function tagOf(reason) {
   if (reason.includes('冇一條帶')) return 'NO_BAND_SPAN';
   if (reason.includes('只搵到')) return 'NO_BAND_ZERO';
   if (reason.includes('唔似面板條')) return 'NOT_BAR';
+  if (reason.includes('金色')) return 'GOLD';
   if (reason.includes('讀唔清')) return 'GLYPH_FAIL';
   if (reason.includes('唔等距') || reason.includes('候選')) return 'PICK_FAIL';
   if (reason.includes('信心')) return 'LOW_CONF';
@@ -57,6 +58,7 @@ console.log('幀（時間戳）              當時       現在          讀數
 const summary = new Map();
 let fixed = 0;
 let regressed = 0;
+let skippedGold = 0;
 for (const name of raws) {
   const metaPath = join(DIR, name.replace(/\.raw$/, '.json'));
   const meta = existsSync(metaPath) ? JSON.parse(readFileSync(metaPath, 'utf8')) : {};
@@ -72,7 +74,8 @@ for (const name of raws) {
   const after = read.stats ? 'OK' : tagOf(read.reason ?? '');
   summary.set(`${before} → ${after}`, (summary.get(`${before} → ${after}`) ?? 0) + 1);
   if (before !== 'OK' && after === 'OK') fixed += 1;
-  if (before === 'OK' && after !== 'OK') regressed += 1;
+  else if (before === 'OK' && after === 'GOLD') skippedGold += 1;
+  else if (before === 'OK' && after !== 'OK') regressed += 1;
 
   const stamp = basename(name, '.raw').replace(/Z-.*/, 'Z');
   const detail = read.stats
@@ -83,7 +86,11 @@ for (const name of raws) {
 
 console.log('\n=== 轉變統計 ===');
 for (const [k, n] of [...summary.entries()].sort((a, b) => b[1] - a[1])) console.log(`  ${k.padEnd(28)} ${n}`);
-console.log(`\n修好（失敗 → 成功）：${fixed}　退步（成功 → 失敗）：${regressed}`);
+console.log(
+  `\n修好（失敗 → 成功）：${fixed}　` +
+    `正確跳過（原本讀到但係金色高亮幀 —— 之前讀嘅值係錯嘅）：${skippedGold}　` +
+    `退步：${regressed}`,
+);
 if (regressed > 0) {
   console.log('⚠️ 有退步 —— 唔好接受，要睇 --verbose 逐幀查。');
   process.exit(1);

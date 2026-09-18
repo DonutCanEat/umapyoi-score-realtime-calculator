@@ -79,12 +79,15 @@ function discoverLiveSources() {
   if (!existsSync(LIVE_TRUTH_PATH)) return [];
   const db = JSON.parse(readFileSync(LIVE_TRUTH_PATH, 'utf8'));
   if (!Array.isArray(db.values) || db.values.length !== 5) return [];
+  const expectHighlighted = new Set(db.expectHighlighted ?? []);
   return (db.shots ?? [])
     .map((file) => ({
       shot: `shots/live/${file}`,
       file,
       live: true,
       cropped: file.startsWith('roi-'),
+      /** 金色高亮幀：字元被侵蝕 → **唔可以入訓練**（會教壞模板），驗證時要判「應該跳過」。 */
+      highlighted: expectHighlighted.has(file),
       truth: db.perShot?.[file] ?? db.values,
     }))
     .filter((s) => existsSync(join(ROOT, s.shot)))
@@ -145,6 +148,10 @@ for (const source of sources) {
 
 /** 實機面板條：用 `collectStatBarGlyphs()`（同讀數完全同一條路）。 */
 for (const source of liveSources) {
+  if (source.highlighted) {
+    console.log(`⏭ ${source.shot}（金色高亮幀：字元被侵蝕，唔入訓練；驗證時判「應該跳過」）`);
+    continue;
+  }
   const img = decodePng(readFileSync(join(ROOT, source.shot)));
   const image = { data: img.data, width: img.width, height: img.height };
   const { entries, reason } = collectStatBarGlyphs(image, { whole: source.cropped });
@@ -249,17 +256,22 @@ if (liveSources.length) {
     const image = { data: img.data, width: img.width, height: img.height };
     const read = readStatBar(image, runtime, { whole: source.cropped });
     liveTotal += 1;
-    const ok = read.stats && read.stats.every((v, i) => v === source.truth[i]);
+    // 金色高亮幀：**應該跳過**（唔出數）→ 讀到反而係錯
+    const ok = source.highlighted
+      ? read.highlighted === true && read.stats === null
+      : read.stats && read.stats.every((v, i) => v === source.truth[i]);
     if (ok) liveHits += 1;
     else {
       liveFailures.push(
         `${source.shot}：讀「${read.stats ? read.stats.join('/') : `❌ ${read.reason}`}」` +
-          `，真值 ${source.truth.join('/')}（信心 ${read.confidence.toFixed(2)}）`,
+          `，${source.highlighted ? '應該判「金色高亮、唔出數」' : `真值 ${source.truth.join('/')}`}` +
+          `（信心 ${read.confidence.toFixed(2)}）`,
       );
     }
     console.log(
       `  ${source.shot.replace('shots/live/', '').padEnd(22)} ` +
-        `${read.stats ? read.stats.join('/') : `❌ ${read.reason}`}  ${ok ? '✅' : `❌(${source.truth.join('/')})`}`,
+        `${read.stats ? read.stats.join('/') : `❌ ${read.reason}`}  ` +
+        `${ok ? '✅' : source.highlighted ? '❌（應該跳過）' : `❌(${source.truth.join('/')})`}`,
     );
   }
   console.log(`\n完全命中 ${liveHits}/${liveTotal}（實機面板條）`);
