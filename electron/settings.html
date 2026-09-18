@@ -2,7 +2,12 @@
 <html lang="zh-Hant">
   <head>
     <meta charset="utf-8" />
-    <title>賽馬娘即時評價分 — HUD 設定</title>
+    <!-- ⚠️ 標題**唔准**含遊戲關鍵字（`src/capture/source.js` 嘅 `GAME_TITLE_HINTS`）：
+         呢個 <title> 會蓋過 BrowserWindow 嘅 `title` 選項（Electron 跟文件標題），
+         而舊標題「賽馬娘即時評價分 — HUD 設定」含「賽馬娘」→ 舊嘅來源挑選邏輯
+         （靠標題 includes）會**擷取咗自己個設定窗**（全黑畫面 ＋ HUD 幾何全錯）。
+         兩邊（main.js 嘅 title 同呢度）一定要一致，唔准是但改一邊。 -->
+    <title>Umapyoi HUD 設定</title>
     <!--
       ⚠️ classic script + require('electron')（唔可以 type="module"）：
       `file://` 之下 Chromium 會用 CORS 擋 ESM import（見 AGENTS §6.3）。

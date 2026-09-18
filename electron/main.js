@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { readFileSync, existsSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 
+import { pickGameSource } from '../src/capture/source.js';
 import { loadTemplates, readStats, StatTracker, scoreStats } from '../src/vision/reader.js';
 import { readStatBar, DEFAULT_STATBAR_OPTIONS } from '../src/vision/statbar.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
@@ -33,8 +34,17 @@ import { envFlag } from '../src/hud/env-flag.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 
-/** 遊戲視窗標題關鍵字（繁中服／日服）。 */
-const GAME_TITLE_HINTS = ['賽馬娘', 'Pretty Derby', 'プリティーダービー', 'umamusume'];
+/**
+ * ⚠️ 遊戲視窗標題關鍵字同「點揀來源」而家喺 `src/capture/source.js`（純函數、有測試）。
+ *
+ * 為何要搬（用戶 2026-09-19 實機報嘅 bug）：以前呢度只有一句
+ * `sources.find((s) => GAME_TITLE_HINTS.some((hint) => s.name.includes(hint)))`，
+ * 而**本程式自己嘅設定窗標題含「賽馬娘」** → 一撳設定窗（它一定喺前景）
+ * 就會**擷取自己個設定窗**：全黑畫面（三個窗都有 `setContentProtection`）、
+ * 而且 `fullWidth/fullHeight` 變咗設定窗大細 → `placeHud()` 攞住一個錯嘅「遊戲內容區」
+ * → HUD 縮細、拖位範圍縮到半個螢幕（實測用戶存檔 `offset.dx` 飽和成 1）。
+ * 排除自己嘅窗係**必要條件**，規則＋回歸測試見 AGENTS 地雷 #27。
+ */
 
 /** 字形模板（由 tools/build-glyph-templates.js 產生）。 */
 const TEMPLATE_PATH = join(ROOT, 'data', 'glyph-templates.json');
@@ -609,7 +619,11 @@ function createSettingsWindow() {
     height: 780,
     minWidth: 460,
     minHeight: 520,
-    title: '賽馬娘即時評價分 — HUD 設定',
+    // ⚠️ 標題**唔准**含遊戲關鍵字（`src/capture/source.js` 嘅 `GAME_TITLE_HINTS`）：
+    //    原本係「賽馬娘即時評價分 — HUD 設定」，含「賽馬娘」→ 舊嘅來源挑選邏輯
+    //    （靠標題 `includes`）會**擷取自己個設定窗**（全黑畫面 ＋ HUD 幾何全錯）。
+    //    而家已經有 HWND 硬排除，但呢個標題係第二重保險（萬一 handle 攞唔到）。
+    title: 'Umapyoi HUD 設定',
     frame: true,
     transparent: false,
     resizable: true,
@@ -843,15 +857,104 @@ function createCaptureWindow() {
   return win;
 }
 
+/**
+ * 本程式自己嘅三個窗（HUD／設定／擷取）—— **擷取來源一定要排除佢哋**。
+ *
+ * 為何要（用戶實機報嘅 bug）：自己嘅窗標題一樣可能含遊戲關鍵字
+ * （設定窗標題「賽馬娘即時評價分 — HUD 設定」），而 `getSources()` 係
+ * **z-order／前景優先** → 用戶一撳設定窗，舊寫法就會揀咗自己個設定窗。
+ * 詳見 `src/capture/source.js` 同 AGENTS 地雷 #27。
+ *
+ * 兩個獨立來源（唔可以只做一個）：
+ *   ① `getNativeWindowHandle()` → `window:<hwnd>:0` 嗰個 `<hwnd>`（硬證據）
+ *   ② `webContents.getMediaSourceId()` → 同 `source.id` **同一個格式**，直接字串比對
+ * 另外 `titles` 係第二重保險（標題比對），防止平台 API 改咗樣。
+ *
+ * ⚠️ 一定唔可以 throw：攞唔到就 log 大聲 ＋ 靠另一重（排除唔到自己 = 用戶見到黑畫面，
+ *    比起開唔到程式更難查）。
+ */
+function ownWindowIds() {
+  const ids = [];
+  const titles = [];
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win || win.isDestroyed()) continue;
+    try {
+      titles.push(win.getTitle());
+    } catch {
+      /* 標題攞唔到唔緊要：handle 先係硬證據 */
+    }
+    try {
+      const media = win.webContents?.getMediaSourceId?.();
+      if (media) ids.push(String(media));
+    } catch {
+      /* 呢個 Electron 版本冇／唔支援 → 靠下面 HWND */
+    }
+    try {
+      const handle = win.getNativeWindowHandle();
+      const value = handle.length >= 8 ? Number(handle.readBigUInt64LE(0)) : handle.readUInt32LE(0);
+      if (Number.isSafeInteger(value) && value > 0) ids.push(value);
+    } catch (error) {
+      console.warn(
+        `[來源] ⚠️ 攞唔到視窗 handle（${error?.message ?? error}）→ 呢個窗只靠標題排除` +
+        '（如果連標題都比對唔到，就有可能擷取到自己嘅窗）。',
+      );
+    }
+  }
+  return { ids, titles };
+}
+
+/**
+ * 揀遊戲視窗（規則同測試喺 `src/capture/source.js`）。
+ *
+ * @returns {Promise<{hit:object|null, sources:Array<{name:string,score:number,why:string|null}>}>}
+ *          `sources` 係**每一個**見到嘅窗（連分數同排除原因）—— `main.js` 要全部 log 出嚟，
+ *          揀錯嘅時候用戶先有嘢可以照住查（唔准靜默掉走候選）。
+ */
 async function findGameSource() {
   const sources = await desktopCapturer.getSources({
     types: ['window'],
     thumbnailSize: { width: 0, height: 0 },
     fetchWindowIcons: false,
   });
-  const named = sources.map((s) => s.name);
-  const hit = sources.find((s) => GAME_TITLE_HINTS.some((hint) => s.name.includes(hint)));
-  return { hit, named };
+  const own = ownWindowIds();
+  const { hit, candidates, rejected } = pickGameSource(sources, {
+    ownIds: own.ids,
+    ownTitles: own.titles,
+  });
+  const scoreOf = new Map(candidates.map((c) => [c.id, c.score]));
+  const whyOf = new Map(rejected.map((r) => [r.id, r.why]));
+  return {
+    hit,
+    sources: sources.map((s) => ({
+      name: s.name,
+      score: scoreOf.get(s.id) ?? 0,
+      why: whyOf.get(s.id) ?? null,
+    })),
+  };
+}
+
+/**
+ * 擷取到嘅畫面大細**離奇地細** → 大聲警告。
+ *
+ * 為何要（呢個就係用戶實機報嗰個 bug 嘅症狀）：揀錯來源唔會令程式報錯，
+ * 但 `fullWidth/fullHeight` 會變成**嗰個窗**嘅大細 → `placeHud()` 攞住錯嘅「遊戲內容區」
+ * → HUD 大細、可拖範圍、存檔嘅相對值全部計錯（實測：設定窗 560×780 →
+ * `hudContent` 560×315 → HUD 淨係拖得郁左半邊）。呢句警告令呢類 bug 即刻睇得見。
+ */
+function warnIfSourceTooSmall(width, height) {
+  try {
+    const area = screen.getPrimaryDisplay().workArea;
+    if (width >= area.width * 0.6 && height >= area.height * 0.6) return;
+    console.warn(
+      `[來源] ⚠️ 擷取到嘅畫面得 ${width}×${height}，比工作區 ${area.width}×${area.height} 細好多。`,
+    );
+    console.warn(
+      '[來源] 　→ 可能揀錯視窗（亦可能係遊戲冇最大化）。揀錯嘅後果：HUD 大細同可拖範圍全部計錯。',
+    );
+    console.warn('[來源] 　→ 請睇上面「見到嘅視窗」清單，確認命中嗰個係唔係遊戲本體。');
+  } catch {
+    /* 量唔到就唔嘈（唔想為一句警告搞出 uncaught） */
+  }
 }
 
 app.whenReady().then(async () => {
@@ -888,9 +991,17 @@ app.whenReady().then(async () => {
   }
 
   win.webContents.once('did-finish-load', async () => {
-    const { hit, named } = await findGameSource();
+    const { hit, sources } = await findGameSource();
     console.log('[來源] 見到嘅視窗：');
-    for (const name of named) console.log(`   - ${name}`);
+    for (const s of sources) {
+      // ⚠️ 每一個候選都要交代（分數／點解排除）—— 揀錯嘅時候呢份清單就係唯一線索。
+      const tag = s.why === 'own-window-handle' || s.why === 'own-window-title'
+        ? '　← 本程式自己嘅窗（**排除**）'
+        : s.why === 'no-hint'
+          ? ''
+          : `　← 命中（分數 ${s.score}）`;
+      console.log(`   - ${s.name}${tag}`);
+    }
 
     if (!hit) {
       console.log('');
@@ -899,7 +1010,7 @@ app.whenReady().then(async () => {
       return;
     }
     console.log('');
-    console.log(`[來源] 揀咗：${hit.name}`);
+    console.log(`[來源] 揀咗：${hit.name}（分數 ${hit.score}）`);
     // ⚠️ 唔可以信 thumbnailSize 做「遊戲視窗大細」：`main.js` 開頭用 {0,0} 攞來源，
     //    縮圖大細唔可靠。真正大細由擷取串流（capture.html 嘅 fullWidth/fullHeight）報返嚟，
     //    收到第一幀之後 `pushHud()` 會自動對位。
@@ -999,6 +1110,8 @@ ipcMain.on('frame', (_event, frame) => {
     hudGameSize = { width: fullWidth, height: fullHeight };
     placeHud(hudGameSize);
     console.log(`[HUD] 對位：遊戲 ${fullWidth}×${fullHeight} → HUD ${JSON.stringify(hudWindow.getBounds())}`);
+    // ⚠️ 呢句係「揀錯來源」嘅第一道可見防線（見 warnIfSourceTooSmall 註解）。
+    warnIfSourceTooSmall(fullWidth, fullHeight);
   }
   // 每幀都更新 HUD 嘅「新鮮度」（唔可以只喺出數嗰陣推，否則 stale 轉唔到）。
   pushHud();
