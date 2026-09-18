@@ -33,8 +33,9 @@
       const hintEl = document.getElementById('hint');
 
       // 目標幀率。幀間投票唔需要太快，5fps 已經足夠，而且唔會搶遊戲嘅 GPU。
-      const TARGET_FPS = 5;
-      const FRAME_MS = 1000 / TARGET_FPS;
+      // 主程序可以經 IPC 改（技能畫面連拍模式用 1fps：一幀 4–6MB，冇必要密）。
+      let targetFps = Number(new URLSearchParams(location.search).get('fps') || 0) || 5;
+      let frameMs = 1000 / targetFps;
 
       // 遊戲內容區比例（賽馬娘桌面版冇固定解析度，只有固定 16:9）。
       const CONTENT_ASPECT = 9 / 16;
@@ -57,6 +58,15 @@
 
       ipcRenderer.on('roi', (_event, rect) => {
         roi = rect;
+      });
+
+      // 主程序可以調幀率（技能連拍模式用 1fps）。
+      ipcRenderer.on('fps', (_event, value) => {
+        const n = Number(value);
+        if (Number.isFinite(n) && n > 0) {
+          targetFps = n;
+          frameMs = 1000 / n;
+        }
       });
 
       ipcRenderer.on('start', async (_event, sourceId) => {
@@ -92,7 +102,7 @@
       function loop(now) {
         requestAnimationFrame(loop);
         if (!video.videoWidth || !video.videoHeight) return;
-        if (now && now - lastSent < FRAME_MS) return;
+        if (now && now - lastSent < frameMs) return;
         lastSent = now || 0;
 
         const vw = video.videoWidth;
@@ -102,11 +112,13 @@
         const contentH = Math.min(vh, Math.round(vw * CONTENT_ASPECT));
         const contentTop = Math.max(0, vh - contentH);
 
-        // 有 ROI → 1:1 剪面板條；冇 → 退回舊行為（縮圖全畫面）
+        // 有 ROI → 1:1 剪出嚟；冇 → 退回舊行為（縮圖全畫面）
+        // ⚠️ 技能連拍模式會傳 x0=0／x1=1／y0=0／y1=1（＝整個內容區），
+        //    呢個時候要用 `vw`／`contentH` 而唔係 `Math.round(vw*1)`（差一像素都好）。
         const sx0 = roi ? Math.round(vw * roi.x0) : 0;
-        const sx1 = roi ? Math.max(sx0 + 8, Math.round(vw * roi.x1)) : vw;
-        const sy0 = roi ? contentTop + Math.round(contentH * roi.y0) : 0;
-        const sy1 = roi ? Math.max(sy0 + 8, contentTop + Math.round(contentH * roi.y1)) : vh;
+        const sx1 = roi ? (roi.x1 >= 1 ? vw : Math.max(sx0 + 8, Math.round(vw * roi.x1))) : vw;
+        const sy0 = roi ? (roi.y0 <= 0 ? contentTop : contentTop + Math.round(contentH * roi.y0)) : 0;
+        const sy1 = roi ? (roi.y1 >= 1 ? contentTop + contentH : Math.max(sy0 + 8, contentTop + Math.round(contentH * roi.y1))) : vh;
         const sw = Math.min(vw - sx0, sx1 - sx0);
         const sh = Math.min(vh - sy0, sy1 - sy0);
 
@@ -132,8 +144,8 @@
 
         hintEl.textContent =
           ' · 遊戲 ' + vw + '×' + vh +
-          (roi ? ' → 面板條 ' + width + '×' + height + '（原生像素）' : ' → 縮圖 ' + width + '×' + height) +
-          ' @' + TARGET_FPS + 'fps';
+          (roi ? ' → ' + width + '×' + height + '（原生像素）' : ' → 縮圖 ' + width + '×' + height) +
+          ' @' + targetFps + 'fps';
       }
     </script>
   </body>

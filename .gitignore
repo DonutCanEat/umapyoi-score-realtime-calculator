@@ -10,3 +10,6 @@ out/
 # 搵到有代表性嘅失敗幀之後，手動複製去 shots/live/ 再入 `data/live-truth.json`，
 # 令佢變成正式回歸案例（唔好原封不動 commit 成堆 dump）。
 shots/live-debug/
+
+# 技能畫面連拍（UMAPYOI_SKILL_DUMP=1）收到嘅頁面 PNG —— 用完建庫之後就係中間產物，唔入 git
+shots/skill-dump/

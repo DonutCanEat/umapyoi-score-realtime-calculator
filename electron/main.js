@@ -22,6 +22,8 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 
 import { loadTemplates, readStats, StatTracker, scoreStats } from '../src/vision/reader.js';
 import { readStatBar, DEFAULT_STATBAR_OPTIONS } from '../src/vision/statbar.js';
+import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
+import { encodePng } from '../src/vision/pngwrite.js';
 import { STAT_LABELS, STAT_KEYS } from '../src/umascore/evaluate.js';
 import { anchorHud, contentRect, hudState, layoutFromEnv } from '../src/hud/layout.js';
 
@@ -36,7 +38,9 @@ const TEMPLATE_PATH = join(ROOT, 'data', 'glyph-templates.json');
 let templates = {};
 if (existsSync(TEMPLATE_PATH)) {
   templates = loadTemplates(JSON.parse(readFileSync(TEMPLATE_PATH, 'utf8')));
-  console.log(`[模板] 載入 ${Object.keys(templates).length} 個數字字形（${Object.keys(templates).sort().join('')}）`);
+  console.log(
+    `[模板] 載入 ${Object.keys(templates).length} 個數字字形（${Object.keys(templates).sort().join('')}）`,
+  );
 } else {
   console.error(`[模板] ⚠️ 搵唔到 ${TEMPLATE_PATH}，請先跑 node tools/build-glyph-templates.js`);
 }
@@ -172,6 +176,77 @@ let okDumps = 0;
 const DUMP_EVERY = Number(process.env.UMAPYOI_DUMP_FRAMES || 0) || 0;
 let everyCount = 0;
 
+/**
+ * 技能畫面「連拍」模式：`UMAPYOI_SKILL_DUMP=1`
+ *
+ * 為何要：技能名冇遊戲字型檔、冇 1300 招標註樣本 → 做唔到通用 OCR。
+ * 唯一可行路線係「用**影像**比對**已知**名單」（見 `docs/skill-screen.md` §4/§5），
+ * 而個「已知名單」嘅影像庫**只可以由實機畫面收集**（用戶 2026-09-18 決定：
+ * 「你直接用返個程式截圖遊戲畫面，我盡量開得幾多得幾多」）。
+ *
+ * 做法：呢個模式之下 renderer 會 1:1 傳**整個內容區**（唔剪面板條），
+ * 主程序每幀都：
+ *   ① 用 `rowInkProfile` 逐列墨量砌「頁面指紋」；② 同一頁就唔存（用戶翻頁時會拍到重複）；
+ *   ③ 新一頁就寫 **PNG**（唔寫 .raw —— 一頁 4–6MB，95 頁會爆硬碟）。
+ * 同時印「偵測到 N 列技能／名框墨跡闊度」做進度顯示，用戶睇得到自己有冇翻漏頁。
+ */
+const SKILL_DUMP = Boolean(process.env.UMAPYOI_SKILL_DUMP);
+const SKILL_DIR = join(ROOT, 'shots', 'skill-dump');
+const SKILL_MAX = Number(process.env.UMAPYOI_SKILL_MAX || 400) || 400;
+let skillPages = 0;
+let skillSkipped = 0;
+const skillSignatures = []; // 已存頁面嘅指紋（正規化逐列墨量）
+
+/** 兩頁指紋係唔係同一頁（逐列墨量差異 ≤ 0.01 就當一樣）。 */
+function samePage(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (Math.abs(a[i] - b[i]) > 0.01) return false;
+  }
+  return true;
+}
+
+function dumpSkillPage(image, meta) {
+  if (skillPages >= SKILL_MAX) return null;
+  try {
+    const { counts, mask } = rowInkProfile(image);
+    const sig = new Float32Array(counts.length);
+    for (let i = 0; i < counts.length; i += 1) sig[i] = counts[i] / image.width;
+    if (skillSignatures.some((s) => samePage(s, sig))) {
+      skillSkipped += 1;
+      return null;
+    }
+    if (!existsSync(SKILL_DIR)) mkdirSync(SKILL_DIR, { recursive: true });
+    const name = `page-${String(skillPages).padStart(4, '0')}.png`;
+    writeFileSync(join(SKILL_DIR, name), encodePng(image));
+    skillSignatures.push(sig);
+    skillPages += 1;
+    // 進度顯示：列數 + 首列名框墨跡闊度 —— 用戶可以憑呢行知自己有冇翻漏
+    const rows = findSkillRows(counts, image.width, image.height);
+    const first = rows[0];
+    let widths = '—';
+    if (first) {
+      const cols = new Int32Array(image.width);
+      for (let y = first.y0; y <= first.y1; y += 1) {
+        const base = y * image.width;
+        for (let x = 0; x < image.width; x += 1) cols[x] += mask[base + x];
+      }
+      widths = nameBoxesInRow(cols, image.width)
+        .filter(Boolean)
+        .map((b) => b.x1 - b.x0 + 1)
+        .join('/');
+    }
+    console.log(
+      `[技能拍] 第 ${skillPages} 頁 ${name}　${image.width}×${image.height}　` +
+      `偵測 ${rows.length} 列　首列名框闊度 ${widths}${meta ? `　(${meta})` : ''}`,
+    );
+    return name;
+  } catch (error) {
+    console.error('[技能拍] 寫檔失敗：', error?.message ?? error);
+    return null;
+  }
+}
+
 function dumpFrame(image, meta) {
   if (dumpCount >= MAX_DUMPS) return null;
   try {
@@ -249,14 +324,28 @@ app.whenReady().then(async () => {
     //    收到第一幀之後 `pushHud()` 會自動對位。
     // 面板條嘅相對範圍由**呢度**（statbar.js）話俾 renderer 知，
     // renderer 只負責 1:1 剪出嚟傳返嚟（唔可以兩邊各自寫死一組數字）。
-    win.webContents.send('roi', {
-      x0: DEFAULT_STATBAR_OPTIONS.roiX[0],
-      x1: DEFAULT_STATBAR_OPTIONS.roiX[1],
-      y0: DEFAULT_STATBAR_OPTIONS.roiY[0],
-      y1: DEFAULT_STATBAR_OPTIONS.roiY[1],
-      aspect: DEFAULT_STATBAR_OPTIONS.aspect,
-    });
+    // ⭐ 技能連拍模式：唔剪面板條，1:1 傳**整個內容區**（見 `SKILL_DUMP` 註解）。
+    win.webContents.send('roi', SKILL_DUMP
+      ? { x0: 0, x1: 1, y0: 0, y1: 1, aspect: DEFAULT_STATBAR_OPTIONS.aspect }
+      : {
+        x0: DEFAULT_STATBAR_OPTIONS.roiX[0],
+        x1: DEFAULT_STATBAR_OPTIONS.roiX[1],
+        y0: DEFAULT_STATBAR_OPTIONS.roiY[0],
+        y1: DEFAULT_STATBAR_OPTIONS.roiY[1],
+        aspect: DEFAULT_STATBAR_OPTIONS.aspect,
+      });
     win.webContents.send('start', hit.id);
+    if (SKILL_DUMP) {
+      win.webContents.send('fps', Number(process.env.UMAPYOI_CAPTURE_FPS || 1) || 1);
+      console.log('');
+      console.log('📸 技能連拍模式（UMAPYOI_SKILL_DUMP=1）');
+      console.log('   ① 喺遊戲開「賽馬娘詳情 → 技能」清單畫面');
+      console.log('   ② 慢慢向下翻頁（每頁停約 1 秒）—— 同一頁重複拍會自動略過');
+      console.log(`   ③ 存去 shots/skill-dump/（每頁一個 PNG，新頁面先會存）`);
+      console.log('   ④ 翻完就 Ctrl+C；之後跑 node tools/skillpages-to-library.js');
+      console.log('   ⑤ 冇開 HUD、亦唔會讀五維（呢個模式只係收圖）');
+      console.log('');
+    }
   });
 
   // HUD 嘅「新鮮度」要自己行：讀唔到嘅時候唔會再有 frame 事件推佢，
@@ -268,6 +357,14 @@ app.whenReady().then(async () => {
     tracker.reset();
     if (hudWindow) placeHud({ width: 0, height: 0 });
   });
+
+  if (SKILL_DUMP) {
+    // 收圖模式嘅總結（Ctrl+C 之前睇得到收咗幾頁）。
+    app.on('before-quit', () => {
+      console.log(`\n[技能拍] 總結：存咗 ${skillPages} 頁、略過 ${skillSkipped} 幀重複。`);
+      console.log('        下一步：node tools/skillpages-to-library.js');
+    });
+  }
 });
 
 /**
@@ -276,6 +373,14 @@ app.whenReady().then(async () => {
 ipcMain.on('frame', (_event, frame) => {
   const { width, height, fullWidth, fullHeight, buffer, cropped } = frame;
   if (!width || !height) return;
+
+  // ⭐ 技能連拍模式：唔做五維辨識，只逐幀存「新頁面」（見 SKILL_DUMP 註解）。
+  if (SKILL_DUMP) {
+    const image = { data: new Uint8ClampedArray(buffer), width, height };
+    dumpSkillPage(image, `遊戲 ${fullWidth}×${fullHeight}`);
+    return;
+  }
+
   if (Object.keys(templates).length === 0) return;
 
   const image = { data: new Uint8ClampedArray(buffer), width, height };
