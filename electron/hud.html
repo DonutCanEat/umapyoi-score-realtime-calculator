@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <title>Umapyoi HUD</title>
+    <style>
+      /* 醜版：先求睇得到、唔搶眼、唔遮遊戲內容。 */
+      html, body {
+        margin: 0; padding: 0; height: 100%;
+        background: transparent;   /* 一定要透明，否則會遮住遊戲 */
+        overflow: hidden;
+        font: 600 15px/1.35 "Segoe UI", "Microsoft JhengHei", sans-serif;
+        color: #fff;
+        user-select: none;
+        cursor: default;
+      }
+      #box {
+        height: 100%;
+        display: flex; flex-direction: column; justify-content: center;
+        padding: 6px 10px;
+        background: rgba(0, 0, 0, 0.58);
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 8px;
+      }
+      #total { font-size: 21px; letter-spacing: 0.5px; white-space: nowrap; }
+      #note { font-size: 12px; font-weight: 400; color: #b9f6c0; margin-top: 2px; white-space: nowrap; }
+      /* 狀態色：綠 = 即時、黃 = 用緊上一個穩定值、灰 = 未有數 */
+      body[data-state="ok"] #note { color: #9ef0a8; }
+      body[data-state="stale"] #note { color: #ffd479; }
+      body[data-state="none"] #note { color: #bbb; }
+      body[data-state="none"] #total { color: #ddd; }
+    </style>
+  </head>
+  <body data-state="none">
+    <div id="box">
+      <div id="total">評價点 —</div>
+      <div id="note">等待面板條（開育成主畫面）</div>
+    </div>
+    <script>
+      const { ipcRenderer } = require('electron');
+      const totalEl = document.getElementById('total');
+      const noteEl = document.getElementById('note');
+
+      // 顯示邏輯（狀態機）喺 src/hud/layout.js 嘅 hudState()，主程序計好先推落嚟，
+      // 呢邊只負責畫 —— 免得兩邊各寫一套判斷。
+      ipcRenderer.on('hud', (_event, view) => {
+        document.body.dataset.state = view.state;
+        totalEl.textContent = view.text;
+        noteEl.textContent = view.note;
+      });
+    </script>
+  </body>
+</html>

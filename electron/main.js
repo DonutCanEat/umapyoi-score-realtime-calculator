@@ -23,6 +23,7 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { loadTemplates, readStats, StatTracker, scoreStats } from '../src/vision/reader.js';
 import { readStatBar, DEFAULT_STATBAR_OPTIONS } from '../src/vision/statbar.js';
 import { STAT_LABELS, STAT_KEYS } from '../src/umascore/evaluate.js';
+import { anchorHud, contentRect, hudState, DEFAULT_HUD_LAYOUT } from '../src/hud/layout.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -44,6 +45,95 @@ const tracker = new StatTracker();
 let lastLog = 0;
 
 /**
+ * HUD overlay（透明置頂視窗）。
+ *
+ * 用戶指定：只顯示「評價点 + ランク」，擺喺**左邊空白位（拍攝掣下面）**，
+ * 先做醜版睇效果。位置一律用**相對座標**（見 `src/hud/layout.js`），
+ * 因為遊戲冇固定解析度、只有固定 16:9。
+ *
+ * ⚠️ 一定要 `setContentProtection(true)`：我哋用 `desktopCapturer` 擷取自己個螢幕／
+ * 視窗，冇呢個設定的話 HUD **會入到自己嘅擷取畫面**（等於自己讀自己嘅字）。
+ */
+let hudWindow = null;
+/** 最近一次計出嚟嘅評價分（連時間戳），HUD 靠佢決定顯示咩。 */
+let lastScore = null;
+let lastScoreAt = 0;
+/** HUD 而家顯示緊嘅狀態（避免每幀都重複 send）。 */
+let lastHudKey = '';
+/** 遊戲視窗大細（由擷取串流報返嚟），用嚟幫 HUD 對位。 */
+let hudGameSize = { width: 0, height: 0 };
+
+function createHudWindow() {
+  const win = new BrowserWindow({
+    x: 0,
+    y: 0,
+    width: 300,
+    height: 96,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    resizable: false,
+    skipTaskbar: true,
+    focusable: false,
+    show: false,
+    title: 'Umapyoi HUD',
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
+  win.setAlwaysOnTop(true, 'screen-saver');
+  win.setIgnoreMouseEvents(true); // 穿透點擊：唔會搶遊戲嘅滑鼠
+  win.setContentProtection(true); // 唔會入到自己嘅擷取（見上面註解）
+  try {
+    win.setVisibleOnAllWorkspaces(true);
+  } catch {
+    /* 非必要，失敗唔理 */
+  }
+  win.loadFile(join(__dirname, 'hud.html'));
+  win.once('ready-to-show', () => win.showInactive());
+  win.on('closed', () => {
+    hudWindow = null; // 唔好留住已銷毀嘅視窗（`window-all-closed` 會跟住收工）
+  });
+  return win;
+}
+
+/**
+ * 把 HUD 擺去遊戲內容區嘅左下角空白位。
+ *
+ * 我哋冇 Win32 API 直接讀「遊戲視窗嘅螢幕座標」（`desktopCapturer` 只俾 id／標題／大細），
+ * 而賽馬娘桌面版通常係全螢幕／最大化 → 用**前景顯示器嘅工作區**做基準係穩陣嘅近似。
+ * 實測唔啱位嘅話，改 `src/hud/layout.js` 嘅 `DEFAULT_HUD_LAYOUT` 就得（有測試守住邊界）。
+ *
+ * @param {{width:number,height:number}} game 遊戲視窗大細（由擷取串流量到）
+ */
+function placeHud(game) {
+  if (!hudWindow) return;
+  const display = screen.getPrimaryDisplay();
+  const area = display.workArea;
+  // 遊戲視窗通常同工作區一樣大；大細唔同時（例如視窗化）以擷取到嘅大細為準。
+  const windowRect = {
+    x: area.x,
+    y: area.y,
+    width: Math.min(area.width, Math.round(game.width || area.width)),
+    height: Math.min(area.height, Math.round(game.height || area.height)),
+  };
+  const rect = anchorHud(contentRect(windowRect), DEFAULT_HUD_LAYOUT);
+  hudWindow.setBounds(rect);
+}
+
+/** 推 HUD 顯示狀態（主程序計好，renderer 只畫）。 */
+function pushHud(now = Date.now()) {
+  if (!hudWindow || hudWindow.isDestroyed()) return;
+  const view = hudState({ score: lastScore, updatedAt: lastScoreAt, now });
+  const key = `${view.state}|${view.text}|${view.note}`;
+  if (key === lastHudKey) return; // 冇變就唔好每幀 send
+  lastHudKey = key;
+  hudWindow.webContents.send('hud', view);
+}
+
+/**
  * 失敗／成功幀 dump（除錯用）。
  *
  * 為何要：實機係**間歇性**（有時讀到、之後又讀唔清），冇當時嗰幀就係盲猜。
@@ -54,6 +144,17 @@ const DEBUG_DIR = join(ROOT, 'shots', 'live-debug');
 const MAX_DUMPS = 40;
 let dumpCount = 0;
 let okDumps = 0;
+
+/**
+ * `UMAPYOI_DUMP_FRAMES=N`：頭 N 幀**每一幀都存**（唔理成功定失敗）。
+ *
+ * 為何要（HUD 上線之後一定要驗）：HUD 用咗 `setContentProtection(true)`
+ * 聲稱「唔會入到自己嘅擷取」，但呢樣一定要**實測**（否則 HUD 會被自己讀到 → 災難）。
+ * 開呢個模式 dump 幾幀，用 `node tools/raw-to-png.js shots/live-debug` 轉 PNG，
+ * 睇下有冇 HUD 嘅字入咗畫面就知。
+ */
+const DUMP_EVERY = Number(process.env.UMAPYOI_DUMP_FRAMES || 0) || 0;
+let everyCount = 0;
 
 function dumpFrame(image, meta) {
   if (dumpCount >= MAX_DUMPS) return null;
@@ -103,6 +204,12 @@ async function findGameSource() {
 
 app.whenReady().then(async () => {
   const win = createCaptureWindow();
+  // HUD：透明置頂、穿透點擊，只顯示評價点 + ランク（見 AGENTS「HUD」）。
+  // 唔想要可以 `UMAPYOI_NO_HUD=1 npm start`。
+  if (!process.env.UMAPYOI_NO_HUD) {
+    hudWindow = createHudWindow();
+    console.log('[HUD] 已開（左下角空白位；要閂就 UMAPYOI_NO_HUD=1）');
+  }
 
   win.webContents.once('did-finish-load', async () => {
     const { hit, named } = await findGameSource();
@@ -117,6 +224,9 @@ app.whenReady().then(async () => {
     }
     console.log('');
     console.log(`[來源] 揀咗：${hit.name}`);
+    // ⚠️ 唔可以信 thumbnailSize 做「遊戲視窗大細」：`main.js` 開頭用 {0,0} 攞來源，
+    //    縮圖大細唔可靠。真正大細由擷取串流（capture.html 嘅 fullWidth/fullHeight）報返嚟，
+    //    收到第一幀之後 `pushHud()` 會自動對位。
     // 面板條嘅相對範圍由**呢度**（statbar.js）話俾 renderer 知，
     // renderer 只負責 1:1 剪出嚟傳返嚟（唔可以兩邊各自寫死一組數字）。
     win.webContents.send('roi', {
@@ -129,9 +239,14 @@ app.whenReady().then(async () => {
     win.webContents.send('start', hit.id);
   });
 
+  // HUD 嘅「新鮮度」要自己行：讀唔到嘅時候唔會再有 frame 事件推佢，
+  // 所以每 500ms 檢查一次，令 HUD 可以自己由 `ok` 轉 `stale`（而唔係永遠顯示即時值）。
+  setInterval(() => pushHud(), 500).unref?.();
+
   screen.on('display-metrics-changed', () => {
     console.log('[DPI] 螢幕設定改咗，下一幀會自動重新偵測（亦會清空投票緩衝）。');
     tracker.reset();
+    if (hudWindow) placeHud({ width: 0, height: 0 });
   });
 });
 
@@ -144,6 +259,20 @@ ipcMain.on('frame', (_event, frame) => {
   if (Object.keys(templates).length === 0) return;
 
   const image = { data: new Uint8ClampedArray(buffer), width, height };
+  // HUD 對位：第一次收到幀就知遊戲視窗實際大細（thumbnailSize 唔可靠）。
+  if (hudWindow && fullWidth && fullHeight && hudGameSize.width !== fullWidth) {
+    hudGameSize = { width: fullWidth, height: fullHeight };
+    placeHud(hudGameSize);
+    console.log(`[HUD] 對位：遊戲 ${fullWidth}×${fullHeight} → HUD ${JSON.stringify(hudWindow.getBounds())}`);
+  }
+  // 每幀都更新 HUD 嘅「新鮮度」（唔可以只喺出數嗰陣推，否則 stale 轉唔到）。
+  pushHud();
+  // UMAPYOI_DUMP_FRAMES=N：頭 N 幀每幀存落嚟（驗 HUD 有冇被自己影到，見上面註解）。
+  if (everyCount < DUMP_EVERY) {
+    everyCount += 1;
+    const dumped = dumpFrame(image, { kind: 'every', cropped, fullWidth, fullHeight });
+    if (dumped) console.log(`[dump] 第 ${everyCount} 幀已存（驗 HUD 用）：${dumped.replace(`${ROOT}\\`, '')}`);
+  }
   // cropped = renderer 已經 1:1 剪咗面板條（見 capture.html）→ 走 statbar 嗰條路；
   // 冇 cropped（舊格式／冇 ROI）→ 退回全畫面結構偵測。
   const read = cropped
@@ -192,9 +321,16 @@ ipcMain.on('frame', (_event, frame) => {
   }
 
   const { stable, stats, changed } = tracker.push(read.stats);
-  if (!stable || !changed) return;
+  if (!stable) return;
 
   const score = scoreStats(stats);
+  // ⭐ 每次都更新（唔理 `changed`）：HUD 嘅「新鮮度」靠呢個時間戳，
+  //    數值一樣都要更新，否則 HUD 會以為數據過期而轉 `stale`。
+  lastScore = score;
+  lastScoreAt = Date.now();
+
+  if (!changed) return;
+
   const summary =
     `五維 ${stats.join('/')} → 五維分 ${score.statScore}　評價点 ${score.total}（${score.rank}）` +
     `　信心 ${read.confidence.toFixed(2)}` +
@@ -207,6 +343,7 @@ ipcMain.on('frame', (_event, frame) => {
   for (const [i, key] of STAT_KEYS.entries()) {
     console.log(`   ${STAT_LABELS[key]}　${stats[i]}`);
   }
+  pushHud(); // 有新數即刻推（唔等 500ms 嗰個 interval）
 });
 
 ipcMain.on('capture-error', (_event, message) => {
