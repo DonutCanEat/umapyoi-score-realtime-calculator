@@ -254,6 +254,15 @@
       // ── 收主程序 ───────────────────────────────────────────
       ipcRenderer.on('hud-config', (_e, payload) => {
         const { config, path, why, envOverridden, loadError, changed, saved, error } = payload;
+        // 防呆：正常情況主程序一定已經載入好設定（設定窗係載入之後先開），
+        // 但係如果將來有第條路徑喺 `loadHudConfig()` 之前就問設定，呢度唔應該爆。
+        if (!config || !config.layout || !config.display) {
+          renderPath(path, why);
+          document.getElementById('banners').innerHTML =
+            '<div class="banner">⚠️ 未收到生效中嘅設定（主程序可能未載入好）—— 呢個窗暫時只讀。</div>';
+          setStatus('未收到設定', 'err');
+          return;
+        }
         if (payload.defaults) {
           const d = payload.defaults.layout;
           // 用預設值砌個 tooltip：用戶按之前就知會還原成咩（唔使盲按）。

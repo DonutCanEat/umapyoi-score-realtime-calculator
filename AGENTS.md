@@ -521,6 +521,8 @@ UMAPYOI_NO_HUD=1 npm.cmd start       # ⭐ 兩個窗都唔開（淨係要 consol
   7 個顯示選項 checkbox（`total`／`stats`／`statScore`／`skillScore`／`goldMark`／`note`／`edit`）。
 - 改任何值 → **即時**經 IPC 推落 HUD（未存檔）；「儲存」→ 寫 `hud-position.json`；
   「還原預設」→ 即時套用純出廠預設（**刻意唔寫檔**，要寫就再按「儲存」）。
+- ⚠️ **閂咗設定窗就要重開程式先開得返**（冇選單／快捷鍵，因為 `focusable:false` 嗰種限制
+  喺設定窗唔存在但唔想加額外 UI）—— 同對位模式一樣係「開程式時決定」嘅設定。
 - ⚠️ 不變式：`x1 = x0 + w`、`y1 = y0 + h`（設定窗同拖位共用同一個模型）。
   `x[1]` 只喺 `size` 缺席嗰陣做 fallback（而 `validateConfig()` 永遠會補 `size`）
   → 所以邊個做「大細」都唔會唔一致。`clampLayout()` 係**唯一**做夾嘅地方
