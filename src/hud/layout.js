@@ -156,6 +156,96 @@ function round6(v) {
   return Math.round(v * 10 ** LAYOUT_DECIMALS) / 10 ** LAYOUT_DECIMALS;
 }
 
+// ─────────────────────── 拖位：螢幕範圍 → 相對值 ───────────────────────
+
+/**
+ * 由 HUD 視窗嘅**螢幕像素範圍**算出佢喺內容區嘅相對位置／大細。
+ *
+ * ⚠️ `content` **一定**要係 `placeHud()` 計出嚟嗰個物件（同一次 `contentRect()` 嘅結果）。
+ * 唔准喺呢度自己再叫 `screen.getPrimaryDisplay()` 或者用擷取幀嘅 `fullWidth/fullHeight`
+ * 另計一次 —— 兩者差一個 `scaleFactor`（DIP vs 物理像素）就會令用戶拖完之後
+ * 重開程式 HUD 跳位（見 AGENTS §6.4 已知限制）。
+ *
+ * 用途：
+ *   ① **診斷／log**（講得出「用戶拖到相對 x 0.61、大細 0.212」）
+ *   ② `layoutFromBounds()` 內部攞位置
+ *
+ * @param {{x:number,y:number,width:number,height:number}} content 遊戲內容區（螢幕像素）
+ * @param {{x:number,y:number,width:number,height:number}} bounds HUD 視窗嘅螢幕範圍（像素）
+ * @returns {{x0:number,y0:number,w:number,h:number}}
+ */
+export function relativeFromBounds(content, bounds) {
+  assertContent(content);
+  assertBounds(bounds);
+  return {
+    x0: (bounds.x - content.x) / content.width,
+    y0: (bounds.y - content.y) / content.height,
+    w: bounds.width / content.width,
+    h: bounds.height / content.height,
+  };
+}
+
+/**
+ * 拖完之後嘅**新佈局**：只改 `offset`，`x`／`y` 範圍同 `size` 一律唔郁。
+ *
+ * ## 為何係改 offset 而唔係改 x0／size（唔好「順手改返」）
+ *
+ * `anchorHud()` 嘅位置 ＝ `content.x + content.width × (x[0] + offset.dx)`，
+ * 所以「拖到邊」有兩個等價講法：改 `x[0]`、或者改 `offset.dx`。揀 offset 嘅原因：
+ *
+ *   ① **`anchorHud()` 有大細下限**（`max(80, …)`／`max(40, …)`）。若果個窗細到被夾過，
+ *      `bounds.width / content.width` 就**唔等於** `size.w` —— 攞佢寫返 `size` 會令
+ *      「拖一拖，大細自己變咗」（用戶冇要求改大細）。
+ *   ② **整數 round**：`bounds` 係整數像素，反推返 `size.w` 會有 0.5px 級嘅誤差，
+ *      來回幾次就係一條漂移路徑。offset 只影響位置，而位置誤差 ≤1px 唔會累積
+ *      （因為每次都係由**實際 bounds** 重算，唔係疊加）。
+ *
+ * ⚠️ 唔准用 `clientX/clientY` 嗰類「相對視窗」嘅座標嚟計 —— `setBounds()` 一移窗
+ * 就會自我回饋（抖／暴走）。renderer 傳嘅係 `screenX/screenY`。
+ *
+ * @param {object} content `placeHud()` 計出嚟嘅內容區（螢幕像素）
+ * @param {object} bounds 拖完之後 `hudWindow.getBounds()`
+ * @param {object} [layout] 而家生效嘅佈局（x／y／size 由佢借過嚟）
+ * @returns {{x:number[],y:number[],offset:{dx:number,dy:number},size:{w:number,h:number}}}
+ *          已經過 `clampLayout()` → 一定合法、可以即刻存檔
+ *
+ * ⚠️ `clampLayout()` 會維持不變式 `x[1] = x[0] + size.w`，所以若果交入嚟嘅 `x[1]`
+ * 唔等於 `x[0] + size.w`，佢會被**正規化**。呢個係刻意嘅（`x[1]` 只喺 `size` 缺席嗰陣
+ * 做 fallback，而 `validateConfig()` 永遠會補 `size` → 改 `x[1]` 完全唔影響任何幾何）。
+ */
+export function layoutFromBounds(content, bounds, layout = DEFAULT_HUD_LAYOUT) {
+  const rel = relativeFromBounds(content, bounds);
+  const base = layout ?? DEFAULT_HUD_LAYOUT;
+  const bx = Array.isArray(base.x) ? base.x : DEFAULT_HUD_LAYOUT.x;
+  const by = Array.isArray(base.y) ? base.y : DEFAULT_HUD_LAYOUT.y;
+  return clampLayout({
+    x: [...bx],
+    y: [...by],
+    offset: { dx: rel.x0 - num(bx[0], DEFAULT_HUD_LAYOUT.x[0]), dy: rel.y0 - num(by[0], DEFAULT_HUD_LAYOUT.y[0]) },
+    size: { ...(base.size ?? DEFAULT_HUD_SIZE) },
+  });
+}
+
+function assertContent(content) {
+  if (!content || !(num(content.width) > 0) || !(num(content.height) > 0)) {
+    throw new Error(`拖位反推要一個有效嘅內容區（width/height > 0），實得 ${describe(content)}`);
+  }
+}
+
+function assertBounds(bounds) {
+  const ok = bounds && ['x', 'y', 'width', 'height'].every((k) => Number.isFinite(num(bounds[k])));
+  if (!ok) throw new Error(`拖位反推要一個有效嘅視窗範圍（x/y/width/height 都係數字），實得 ${describe(bounds)}`);
+}
+
+function describe(v) {
+  if (v === undefined) return 'undefined';
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
+
 /** 五維嘅繁中標籤（跟遊戲ステータス面板由左至右：速度／持久力／力量／毅力／智力）。 */
 export const STAT_LABELS_ZH = Object.freeze(['速度', '持久', '力量', '毅力', '智力']);
 

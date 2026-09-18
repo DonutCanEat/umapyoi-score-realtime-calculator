@@ -25,7 +25,7 @@ import { readStatBar, DEFAULT_STATBAR_OPTIONS } from '../src/vision/statbar.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
 import { encodePng } from '../src/vision/pngwrite.js';
 import { STAT_LABELS, STAT_KEYS } from '../src/umascore/evaluate.js';
-import { anchorHud, contentRect, hudState, clampLayout, HUD_ENV_KEYS } from '../src/hud/layout.js';
+import { anchorHud, contentRect, hudState, clampLayout, layoutFromBounds, HUD_ENV_KEYS } from '../src/hud/layout.js';
 import { loadConfig, saveConfig, resolveHudConfig, validateConfig } from '../src/hud/config.js';
 import { configPathFor } from '../src/hud/config-path.js';
 
@@ -95,6 +95,18 @@ let settingsWindow = null;
 let hudContent = null;
 /** HUD 佈局（可以由環境變數覆寫；`UMAPYOI_HUD_EDIT=1` 開對位模式）。 */
 const HUD_EDIT = Boolean(process.env.UMAPYOI_HUD_EDIT);
+/**
+ * HUD 而家係唔係「可互動」（＝唔穿透）。
+ *
+ * ⚠️ **一定要自己記住**：`electron.d.ts` **冇** `isIgnoreMouseEvents()` getter
+ * → 讀唔返而家嘅狀態，所以呢個 flag 就係唯一真相。所有改動一定要經
+ * `setHudInteractive()` 呢個 funnel（見嗰個函數嘅註解）。
+ */
+let hudInteractive = false;
+/** 拖位中嘅狀態（`null` = 冇拖緊）。`at` 係最後一次收到消息嘅時間（watchdog 用）。 */
+let hudDrag = null;
+/** 拖位 watchdog：幾久冇新消息就當「pointerup 唔見咗」，主動收手（毫秒）。 */
+const DRAG_IDLE_MS = 1200;
 /** 最近一次顯示嘅五維數值（HUD 要逐格顯示）。 */
 let lastStats = null;
 /**
@@ -127,15 +139,21 @@ function createHudWindow() {
     },
   });
   win.setAlwaysOnTop(true, 'screen-saver');
-  win.setIgnoreMouseEvents(true); // 穿透點擊：唔會搶遊戲嘅滑鼠
+  win.setIgnoreMouseEvents(true); // 穿透點擊：唔會搶遊戲嘅滑鼠（⭐ 底線，無條件）
   win.setContentProtection(true); // 唔會入到自己嘅擷取（見上面註解）
   try {
     win.setVisibleOnAllWorkspaces(true);
   } catch {
     /* 非必要，失敗唔理 */
   }
+  // ⭐ 滑鼠模式一律經 funnel 設定（正常模式 = 上面嗰行嘅穿透；對位模式先開互動）。
+  setHudInteractive(HUD_EDIT, win);
   win.loadFile(join(__dirname, 'hud.html'));
-  win.once('ready-to-show', () => win.showInactive());
+  win.once('ready-to-show', () => {
+    // 開窗之後再經 funnel 確認一次（唔理之前有冇被其他路徑改過）。
+    setHudInteractive(HUD_EDIT, win);
+    win.showInactive();
+  });
   win.on('closed', () => {
     hudWindow = null; // 唔好留住已銷毀嘅視窗（`window-all-closed` 會跟住收工）
   });
@@ -203,6 +221,11 @@ function saveHudConfigFile(config) {
     `[設定] 已儲存 → ${hudConfigPath}　（savedAt ${new Date().toISOString()}　` +
     `內容區 ${hudContent ? `${hudContent.width}×${hudContent.height}` : '未對位'}）`,
   );
+  // ⚠️ 老實講：env 優先過檔案 → 用戶今次拖／調嘅位，重開之後會俾 env 蓋過。
+  //    唔講嘅話用戶會以為「存咗但冇效」（實際係優先次序，唔係 bug）。
+  if (hudEnvOverridden.length) {
+    console.warn(`[設定] ⚠️ 注意：${hudEnvOverridden.join('　')} 有 set → 重開程式之後會蓋過今次存嘅值。`);
+  }
   return hudConfigPath;
 }
 
@@ -247,6 +270,13 @@ function replyHudConfig(sender, extra = {}) {
  * 之後再經 `placeHud()` 先唔會被蓋走。
  */
 function applyHudConfig(config, { why = '' } = {}) {
+  // 防呆（呢個 bug 我真係踩過）：一定要係**完整設定**，唔可以傳一個 layout 入嚟 ——
+  // 傳錯嘅話 `placeHud()` 會攞唔到 `layout` 而彈返去預設位，`saveConfig()` 亦會 throw。
+  if (!config?.layout || !Array.isArray(config.layout.x) || !config.layout.size) {
+    throw new Error(
+      `applyHudConfig() 要一份完整設定 {layout:{x,y,offset,size}, display}，實得 ${JSON.stringify(config)}`,
+    );
+  }
   hudConfig = config;
   placeHud(hudGameSize);
   pushHud();
@@ -254,7 +284,132 @@ function applyHudConfig(config, { why = '' } = {}) {
 }
 
 /**
- * 把 HUD 擺去遊戲內容區嘅左上角（位置由 `hudConfig.layout` 決定）。
+ * ⭐ HUD 滑鼠模式嘅**唯一入口**（funnel）。
+ *
+ * 為何一定要集中（唔可以四圍各自叫 `setIgnoreMouseEvents()`）：
+ *   `electron.d.ts` **冇** `isIgnoreMouseEvents()` getter → 讀唔返而家嘅狀態，
+ *   所以一定要靠 `hudInteractive` flag 記住。分散喺幾條路徑各自叫 = 早晚有一條漏咗還原
+ *   → 用戶**點唔到遊戲**（本專案最嚴重嘅後果，見 AGENTS §9 ⭐高）。
+ *
+ * 底線：**正常模式（冇 `UMAPYOI_HUD_EDIT`）一定係穿透**，冇任何例外 ——
+ * `want` 永遠會 `&& HUD_EDIT`。對位模式先開互動（同時要 `setFocusable(true)`，
+ * 因為 `focusable:false` 之下 renderer 收唔到鍵盤、拖曳亦未必穩）。
+ *
+ * @param {boolean} on 想唔想互動
+ * @param {Electron.BrowserWindow} [win] 預設係 `hudWindow`
+ * @returns {boolean} 最後真正生效嘅模式（`true` = 可互動）
+ */
+function setHudInteractive(on, win = hudWindow) {
+  if (!win || win.isDestroyed()) {
+    hudInteractive = false;
+    return false;
+  }
+  const want = Boolean(on) && HUD_EDIT;
+  // ⚠️ 次序重要：先還原穿透（就算下面 `setFocusable` 出事，都唔會擋住遊戲點擊）。
+  try {
+    win.setIgnoreMouseEvents(!want);
+  } catch (error) {
+    console.error(`[HUD] ⚠️ setIgnoreMouseEvents(${!want}) 失敗：${error?.message ?? error}`);
+  }
+  try {
+    win.setFocusable(want);
+  } catch (error) {
+    console.error(`[HUD] ⚠️ setFocusable(${want}) 失敗：${error?.message ?? error}`);
+  }
+  if (hudInteractive !== want) {
+    console.log(`[HUD] 滑鼠模式 → ${want ? '可互動（對位模式：可以拖 HUD）' : '穿透（唔會搶遊戲嘅滑鼠）'}`);
+  }
+  hudInteractive = want;
+  return want;
+}
+
+/**
+ * 兜底：正常模式之下定期**再確認**穿透。
+ *
+ * 為何要：狀態機漂移（或者某一條路徑漏咗還原）係最嚴重嘅後果，
+ * 每 500ms 重申一次就等佢**自己修正返**，就算我漏咗一條路徑都唔會永久擋住遊戲。
+ */
+function assertHudPassthrough() {
+  if (hudInteractive || !hudWindow || hudWindow.isDestroyed()) return;
+  try {
+    hudWindow.setIgnoreMouseEvents(true);
+  } catch {
+    /* 下次再試（唔想因為一次失敗就洗版） */
+  }
+}
+
+/**
+ * 實機量測 log：`getBounds()`（肉眼框）vs `getContentBounds()`（內容區）＋
+ * `scaleFactor`／`workArea`／擷取幀大細／`contentRect`。
+ *
+ * 為何一定要有：HUD 開咗 `setContentProtection(true)`（防自己擷取到自己）
+ * → HUD **唔會出現喺任何截圖**，所以「HUD 到底擺咗喺邊」唔可以用截圖核對，
+ * 呢行 log 就係實機驗證時唯一嘅證據。亦用嚟查 frameless 窗嘅已知 bug
+ * （electron#51679／#51876：`getBounds()` 唔等於肉眼框，未確認 44.4.1 修咗未）。
+ */
+function logHudBounds(tag, bounds) {
+  try {
+    const d = screen.getPrimaryDisplay();
+    const content = hudWindow?.isDestroyed?.() ? null : hudWindow?.getContentBounds?.();
+    console.log(
+      `[HUD/位] ${tag}：getBounds=${JSON.stringify(bounds)}　getContentBounds=${JSON.stringify(content)}` +
+      `　scaleFactor=${d.scaleFactor}　workArea=${d.workArea.x},${d.workArea.y} ${d.workArea.width}×${d.workArea.height}` +
+      `　擷取幀=${hudGameSize.width}×${hudGameSize.height}　contentRect=${JSON.stringify(hudContent)}`,
+    );
+  } catch (error) {
+    console.error(`[HUD/位] ${tag}：量測失敗 ${error?.message ?? error}`);
+  }
+}
+
+/**
+ * 收手（拖位結束 / 出錯 / watchdog / 螢幕設定改變都要行呢個）。
+ *
+ * ⚠️ 所有離開拖曳狀態嘅路徑**一定**要行到 `finally` 嗰句 `setHudInteractive()` ——
+ * 呢個就係「正常模式一定回到穿透」嘅保證。
+ *
+ * @param {boolean} commit `true` = 放手 → 反推位置、寫入設定檔；`false` = 放棄（唔存檔）
+ */
+function finishDrag(commit) {
+  const drag = hudDrag;
+  hudDrag = null;
+  try {
+    if (!commit || !drag || !hudWindow || hudWindow.isDestroyed()) return;
+    const bounds = hudWindow.getBounds();
+    logHudBounds('拖完', bounds);
+    if (!hudContent) {
+      console.error('[HUD] ⚠️ 未對位（未有 contentRect）→ 拖位結果反推唔到，唔存檔。');
+      return;
+    }
+    // 由實際 bounds 反推相對值（只改 offset；見 layout.js `layoutFromBounds()` 註解）。
+    // ⚠️ 一定要寫入 `hudConfig.layout` 再 `placeHud()`：直接 `setBounds()` 會俾
+    //    下一幀／`display-metrics-changed` 嗰個 `placeHud()` 蓋走（AGENTS §6.4）。
+    // ⚠️ `layoutFromBounds()` 回嘅係**一個 layout**，而 `applyHudConfig()`／`saveConfig()`
+    //    要嘅係**完整設定** `{layout, display}` → 一定要砌返（唔好淨係傳 layout，
+    //    否則 HUD 會彈返去預設位、存檔亦會 throw）。
+    const config = {
+      layout: layoutFromBounds(hudContent, bounds, hudConfig.layout),
+      display: { ...hudConfig.display },
+    };
+    applyHudConfig(config, {
+      why: `拖位：x0=${config.layout.x[0]} y0=${config.layout.y[0]}　` +
+        `偏移 ${config.layout.offset.dx}/${config.layout.offset.dy}　` +
+        `大細 ${config.layout.size.w}×${config.layout.size.h}`,
+    });
+    try {
+      saveHudConfigFile(config);
+    } catch (error) {
+      console.error(`[設定] ⚠️ 拖位之後存檔失敗（HUD 今次仍然留喺新位）：${error?.message ?? error}`);
+    }
+    pushHud();
+  } catch (error) {
+    console.error(`[HUD] ⚠️ 拖位收手時出錯（唔會影響穿透）：${error?.message ?? error}`);
+  } finally {
+    setHudInteractive(HUD_EDIT); // ⭐ 底線：唔理上面成功定 throw，都要還原滑鼠模式
+  }
+}
+
+/**
+ * 把 HUD 擺去遊戲內容區（位置由 `hudConfig.layout` 決定）。
  *
  * 我哋冇 Win32 API 直接讀「遊戲視窗嘅螢幕座標」（`desktopCapturer` 只俾 id／標題／大細），
  * 而賽馬娘桌面版通常係全螢幕／最大化 → 用**前景顯示器嘅工作區**做基準係穩陣嘅近似。
@@ -284,7 +439,22 @@ function placeHud(game) {
     height: Math.min(area.height, Math.round(game.height || area.height)),
   };
   hudContent = contentRect(windowRect); // ⭐ 單一來源：拖位反推一定用返呢個物件
-  hudWindow.setBounds(anchorHud(hudContent, hudConfig.layout));
+  const target = anchorHud(hudContent, hudConfig.layout);
+  hudWindow.setBounds(target);
+  // ⚠️ 實機量測鉤（只有對位模式先 log，免得正常模式洗版）：確認
+  //    `getBounds().x === 目標 x`。Electron 41.3+ 有「frameless 窗 getBounds() 唔等於
+  //    肉眼框」嘅已知 bug（electron#51679／#51876，未確認 44.4.1 修咗未），
+  //    而 HUD 因為 `setContentProtection` 唔會出現喺截圖 → log 係唯一證據。
+  if (HUD_EDIT) {
+    const actual = hudWindow.getBounds();
+    if (actual.x !== target.x || actual.y !== target.y
+      || actual.width !== target.width || actual.height !== target.height) {
+      console.warn(
+        `[HUD/位] ⚠️ setBounds 之後唔一致（疑似 electron#51679）：` +
+        `要求 ${JSON.stringify(target)}　實際 ${JSON.stringify(actual)}`,
+      );
+    }
+  }
 }
 
 /**
@@ -602,12 +772,31 @@ app.whenReady().then(async () => {
 
   // HUD 嘅「新鮮度」要自己行：讀唔到嘅時候唔會再有 frame 事件推佢，
   // 所以每 500ms 檢查一次，令 HUD 可以自己由 `ok` 轉 `stale`（而唔係永遠顯示即時值）。
-  setInterval(() => pushHud(), 500).unref?.();
+  // ⭐ 順手做「穿透兜底」：正常模式之下每 500ms 再確認一次，狀態機漂移會自我修正
+  //    （一旦漏咗還原穿透，用戶就會點唔到遊戲 —— 本專案最嚴重嘅後果）。
+  setInterval(() => {
+    pushHud();
+    assertHudPassthrough();
+  }, 500).unref?.();
+
+  // 拖位 watchdog：`pointerup` 有時會唔見（例如拖出窗外面先放手／renderer 出錯）
+  // → 唔可以永遠卡住「拖緊」。逾時就當用戶收手（唔存檔，只還原狀態）。
+  setInterval(() => {
+    if (hudDrag && Date.now() - hudDrag.at > DRAG_IDLE_MS) {
+      console.warn(`[HUD] ⚠️ 拖位 ${DRAG_IDLE_MS}ms 冇新消息（可能 lost pointerup）→ 當佢收手（唔存檔）`);
+      finishDrag(false);
+    }
+  }, 300).unref?.();
 
   screen.on('display-metrics-changed', () => {
     console.log('[DPI] 螢幕設定改咗，下一幀會自動重新偵測（亦會清空投票緩衝）。');
     tracker.reset();
-    if (hudWindow) placeHud({ width: 0, height: 0 });
+    // 螢幕一改，拖緊嘅座標系就唔再成立 → 收手（唔存檔），再按新嘅工作區重新對位。
+    finishDrag(false);
+    if (hudWindow) {
+      placeHud({ width: 0, height: 0 });
+      logHudBounds('螢幕設定改變後', hudWindow.getBounds());
+    }
   });
 
   if (SKILL_DUMP) {
@@ -779,6 +968,47 @@ ipcMain.on('hud-config-reset', (event) => {
   applyHudConfig(config, { why: '設定窗：還原預設（未存檔）' });
   replyHudConfig(event.sender);
 });
+
+// ─────────────────── 對位模式：拖 HUD（`electron/hud.html` → 主程序）───────────────────
+// ⚠️ 只有 `UMAPYOI_HUD_EDIT=1` 之下 HUD 先收得到滑鼠事件（`setHudInteractive()`），
+//    所以正常模式根本冇機會入到呢啲 handler —— 下面再 check 一次 `HUD_EDIT` 係第二重保險。
+// ⚠️ renderer 傳嘅係 `screenX/screenY`（螢幕座標）算出嚟嘅**總位移**，
+//    唔准用 `clientX/clientY`（相對視窗 → `setBounds()` 一移窗就自我回饋 → 抖／暴走）。
+
+ipcMain.on('hud-drag-start', (_event, point) => {
+  if (!HUD_EDIT) return;
+  if (!hudWindow || hudWindow.isDestroyed()) return;
+  const x = Number(point?.x);
+  const y = Number(point?.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  // 記住「按下嗰刻嘅視窗範圍」：之後每次 move 都係由呢個原點 + 總位移計，
+  // 唔會因為上一格嘅 setBounds 而累積誤差。
+  hudDrag = { sx: x, sy: y, bounds: hudWindow.getBounds(), dx: 0, dy: 0, at: Date.now() };
+  logHudBounds('開始拖', hudDrag.bounds);
+});
+
+ipcMain.on('hud-drag-move', (_event, delta) => {
+  if (!hudDrag || !hudWindow || hudWindow.isDestroyed()) return;
+  const dx = Number(delta?.dx);
+  const dy = Number(delta?.dy);
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+  hudDrag.dx = dx;
+  hudDrag.dy = dy;
+  hudDrag.at = Date.now();
+  try {
+    hudWindow.setBounds({
+      x: Math.round(hudDrag.bounds.x + dx),
+      y: Math.round(hudDrag.bounds.y + dy),
+      width: hudDrag.bounds.width,
+      height: hudDrag.bounds.height,
+    });
+  } catch (error) {
+    console.error(`[HUD] ⚠️ 拖曳 setBounds 失敗：${error?.message ?? error}`);
+    finishDrag(false); // 出錯就收手（唔好卡住拖曳狀態）
+  }
+});
+
+ipcMain.on('hud-drag-end', () => finishDrag(true));
 
 app.on('window-all-closed', () => {
   app.quit();

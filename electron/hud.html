@@ -37,6 +37,14 @@
       #total:empty, #stats:empty, #summary:empty, #note:empty, #edit:empty, #gold:empty { display: none; }
       /* 對位模式：顯示範圍／偏移（`UMAPYOI_HUD_EDIT=1`） */
       #edit { font-size: 10px; font-weight: 400; color: #ffd479; white-space: nowrap; }
+      /* 對位模式先出「可以拖」提示（同埋換鼠標）。⚠️ 正常模式呢個窗係穿透嘅，
+         根本收唔到滑鼠事件 —— 所以唔會擋住用戶點遊戲。 */
+      #hint { display: none; font-size: 10px; font-weight: 400; color: #6ec6ff; white-space: nowrap; }
+      body[data-state="edit"] #hint { display: block; }
+      body[data-state="edit"] { cursor: move; }
+      /* ⚠️ 唔用 `-webkit-app-region: drag`：佢同 `setIgnoreMouseEvents(true)` 物理上互斥
+         （穿透緊收唔到 mousedown），而且透明窗 + focusable:false 之下行為未文檔化。
+         手動拖（pointerdown/move/up + screenX/screenY）先可控。 */
       /* 狀態色：綠 = 即時、黃 = 用緊上一個穩定值、灰 = 未有數、藍 = 對位模式 */
       body[data-state="ok"] #note { color: #9ef0a8; }
       body[data-state="stale"] #note { color: #ffd479; }
@@ -55,6 +63,7 @@
       <div id="gold"></div>
       <div id="note">等待面板條（開育成主畫面）</div>
       <div id="edit"></div>
+      <div id="hint">✥ 按住拖我搬位（放手即寫入 hud-position.json）</div>
     </div>
     <script>
       const { ipcRenderer } = require('electron');
@@ -103,6 +112,61 @@
         //（唔係逐格）→ 只可以老實講「有」，唔可以標某一格（見 layout.js hudState 註解）。
         goldEl.textContent = view.gold ? '⭐ 金色格（≥1200）' : '';
       });
+
+      // ───────────────── 對位模式：手動拖位（只有 edit 態可以做）─────────────────
+      //
+      // 為何手動拖而唔用 `-webkit-app-region: drag`：
+      //   ① 佢同 `setIgnoreMouseEvents(true)` 物理上互斥（穿透緊收唔到 mousedown）
+      //   ② 透明窗 + `focusable:false` + `resizable:false` 之下行為未文檔化
+      //
+      // ⚠️ 一定要用 `e.screenX / e.screenY`（螢幕座標），**唔准**用 `clientX/clientY`：
+      //    後者相對視窗，主程序一 `setBounds()` 移窗，同一個手勢就會計出唔同嘅相對座標
+      //    → 自我回饋 → HUD 抖／暴走。
+      //
+      // 傳嘅係「相對按下嗰刻嘅**總位移**」（唔係每格增量），所以就算中間漏咗幾個
+      // pointermove 都唔會累積誤差。
+      let drag = null;
+      const dragEnabled = () => document.body.dataset.state === 'edit';
+
+      window.addEventListener('pointerdown', (e) => {
+        if (!dragEnabled() || e.button !== 0) return;
+        drag = { id: e.pointerId, x: e.screenX, y: e.screenY, dx: 0, dy: 0 };
+        // 捕捉指標：就算拖出窗外面放手都收得到 pointerup（唔會卡住拖曳狀態）。
+        try {
+          e.target.setPointerCapture?.(e.pointerId);
+        } catch {
+          /* 捕捉唔到都用得（主程序另有 watchdog） */
+        }
+        ipcRenderer.send('hud-drag-start', { x: e.screenX, y: e.screenY });
+        e.preventDefault();
+      });
+
+      window.addEventListener('pointermove', (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const dx = e.screenX - drag.x;
+        const dy = e.screenY - drag.y;
+        if (dx === drag.dx && dy === drag.dy) return; // 冇動過就唔好 send
+        drag.dx = dx;
+        drag.dy = dy;
+        ipcRenderer.send('hud-drag-move', { dx, dy });
+      });
+
+      function endDrag(e) {
+        if (!drag || (e && e.pointerId !== undefined && e.pointerId !== drag.id)) return;
+        const d = drag;
+        drag = null;
+        try {
+          e?.target?.releasePointerCapture?.(d.id);
+        } catch {
+          /* 已自動釋放 */
+        }
+        ipcRenderer.send('hud-drag-end', { dx: d.dx, dy: d.dy });
+      }
+
+      window.addEventListener('pointerup', endDrag);
+      window.addEventListener('pointercancel', endDrag);
+      // 窗失焦（例如 Alt+Tab）＝ 唔會再有 pointerup → 當收手，唔好永遠等落去。
+      window.addEventListener('blur', () => endDrag(null));
     </script>
   </body>
 </html>
