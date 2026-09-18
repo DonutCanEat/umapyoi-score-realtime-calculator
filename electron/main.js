@@ -201,8 +201,10 @@ const SKILL_MAX = Number(process.env.UMAPYOI_SKILL_MAX || 400) || 400;
  * （「賽馬娘詳情」彈窗裏面）。全畫面傳過去，偵測器要面對成個彈窗嘅其他文字
  * （能力值／適性／按鈕），列偵測會亂（實測 9–12 列，唔係 7 列）。
  *
- * 數值由**真值圖**反推：`shots/gt/uma1-p1-skills.png` 係 1140×950 純技能清單，
- * 對應遊戲內容區嘅 x 0.222–0.836、y 0.374–0.732（見 docs/skill-screen.md §5.8）。
+ * ⚠️ 數值係由**用戶實拍**量出嚟嘅（`tools/find-skill-crop.js` + 人手核對）：
+ * 技能清單喺擷取框嘅 x 約 0.06–0.38、y 約 0.16–0.95。
+ * 之前用 0.222,0.374,0.614,0.358（由真值圖反推）**剪得太右太窄**，剪走咗左欄 → 只有右欄名。
+ * ⚠️ 呢啲比例係**對擷取框**（唔一定係遊戲視窗）—— 換窗口大細／位置就要重新量。
  * 用 `UMAPYOI_DUMP_CROP=0,0,1,1` 可以還原成整個內容區。
  */
 function parseCrop(value) {
@@ -216,7 +218,7 @@ function parseCrop(value) {
   return { x, y, w, h };
 }
 const SKILL_CROP = SKILL_DUMP
-  ? parseCrop(process.env.UMAPYOI_DUMP_CROP ?? '0.222,0.374,0.614,0.358')
+  ? parseCrop(process.env.UMAPYOI_DUMP_CROP ?? '0.06,0.16,0.32,0.79')
   : null;
 
 let skillPages = 0;
