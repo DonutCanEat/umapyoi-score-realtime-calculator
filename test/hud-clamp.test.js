@@ -123,6 +123,23 @@ test('clampLayout：缺席嘅 size 用範圍做 fallback（同 anchorHud 同一�
 
 test('clampLayout：小數位數唔會令像素位置漂（@1920 之下 1px = 0.00052）', () => {
   assert.ok(LAYOUT_DECIMALS >= 4, `小數位要夠多（建議 ≥4），實得 ${LAYOUT_DECIMALS}`);
+  // ⚠️ 唔可以只斷言 `LAYOUT_DECIMALS >= 4` —— 審計實測：把 `round6()` 改成 3 位小數，
+  //    全套測試照樣 13 pass / 0 fail（`LAYOUT_DECIMALS` 冇跟住改，冇人捉得到）。
+  //    所以下面**硬編 6 位**嘅行為斷言係必須嘅（3 位 = 1920 闊之下 1.9px 漂移）。
+  assert.equal(LAYOUT_DECIMALS, 6, '`LAYOUT_DECIMALS` 要係 6（同 config.js / settings.html 嘅 6 位一致）');
+  // `x`／`y`／`size` 係 `clampLayout()` 真正做 rounding 嘅欄位（`offset` 冇 round）。
+  const six = clampLayout({ x: [0.1234567, 0.5], y: [0.7654321, 0.9], offset: {}, size: {} });
+  assert.equal(six.x[0], 0.123457, '⚠️ x0 要 6 位：0.1234567 → 0.123457（硬編值；改 3 位就會變 0.123）');
+  assert.equal(six.y[0], 0.765432, '⚠️ y0 要 6 位：0.7654321 → 0.765432（硬編值；改 3 位就會變 0.765）');
+  assert.equal(six.x[1], 0.5);
+  assert.equal(six.size.w, 0.376543, '⚠️ size.w 都要 6 位：0.5 − 0.1234567 = 0.3765433 → 0.376543');
+  // `offset` 唔經 rounding（只夾 ±1）→ 原值要原封不動（唔准偷偷變成 6 位）。
+  const off = clampLayout({ x: [0.598, 0.81], y: [0.03, 0.285], offset: { dx: 0.1234567, dy: -0.7654321 }, size: { w: 0.212, h: 0.255 } });
+  assert.equal(off.offset.dx, 0.1234567, 'offset 唔 round（clamp 只夾 ±1）');
+  assert.equal(off.offset.dy, -0.7654321);
+  assert.equal(off.size.w, 0.212);
+  assert.equal(off.size.h, 0.255);
+  assert.equal(off.x[1], 0.81, 'x1 = x0 + w（0.598 + 0.212 = 0.81）');
 
   const content = { x: 0, y: 0, width: 1920, height: 1080 };
   // 重複 20 次「夾 → 反推 → 再夾」，位置唔應該慢慢飄走
