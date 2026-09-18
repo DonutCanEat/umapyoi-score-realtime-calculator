@@ -535,11 +535,33 @@ UMAPYOI_NO_HUD=1 npm.cmd start       # ⭐ 兩個窗都唔開（淨係要 consol
 
 - **正常模式（冇 `UMAPYOI_HUD_EDIT`）一定係 `setIgnoreMouseEvents(true)` 穿透** ——
   呢個係底線：一旦漏咗還原，用戶就**點唔到遊戲**。
+  ✅ **已由獨立審計靜態證實**（讀 `main.js` 全檔，2026-09-19）：正常模式之下建立視窗硬寫
+  `setIgnoreMouseEvents(true)` ＋ `setFocusable(false)` **永遠**成立；令 `ignore=false`
+  只有 `setHudInteractive()`（funnel）**一條**路，而佢一定要 `UMAPYOI_HUD_EDIT` 開咗先得。
+  「四重保險」**全部真存在**：① funnel 係唯一入口；② `finishDrag()` 嘅 `try-catch-finally`；
+  ③ 拖位 watchdog（1200ms）；④ 每 500ms `assertHudPassthrough()` 再確認。
+  ⚠️ 呢個結構**唔准改**（任何「順手重構」都要當成動到本專案最嚴重嘅後果嚟做）。
+- ⚠️⚠️ **對位模式之下 HUD 係「全程」食滑鼠事件嘅（唔止拖緊嗰陣）** —— 用戶一定會撞到，
+  所以講清楚：
+  - `finally` 還原到嘅係**「對位模式嘅互動狀態」**，**唔係穿透**：`setHudInteractive(HUD_EDIT)`
+    而 `HUD_EDIT = true` → 放手之後**仍然唔穿透**。（舊版文件寫「三重保險…所有離開拖曳嘅
+    路徑都行 `finally` 叫 `setHudInteractive()`」，讀落好似「放手即還原穿透」—— 嗰個寫法係**錯**。）
+    放手只係結束拖曳（反推 ＋ 存檔），刻意唔會令 HUD 變返穿透：要拖就一定要收得到滑鼠事件，
+    兩者物理上互斥。
+  - 所以 `UMAPYOI_HUD_EDIT=1` 之下：**HUD 覆蓋範圍內點唔到遊戲**（連冇拖嗰陣都係）；
+    而且因為同時 `setFocusable(true)`，**點／拖 HUD 會攞走遊戲嘅 focus**
+    （遊戲可能變背景、鍵盤輸入去咗 HUD）。
+  - ⚠️ **要返正常模式（穿透）＝ 一定要重開程式**：對位模式係「開程式時用環境變數決定」，
+    冇選單／快捷鍵可以中途切走（HUD renderer 喺 `focusable:false` 之下收唔到鍵盤）。
+  - → 當佢係**一次性調位工具**：調完 → 存檔 → `Ctrl+C` 收工 → **唔帶環境變數**再開嚟用。
 - ⚠️ **一定要經 `setHudInteractive()` 呢個 funnel**：`electron.d.ts` **冇**
   `isIgnoreMouseEvents()` getter → 讀唔返而家嘅狀態 → 要自己用 flag（`hudInteractive`）記住。
-  再加三重保險：① 所有離開拖曳嘅路徑都行 `finally` 叫 `setHudInteractive()`；
+  再加三重保險：① 所有離開拖曳嘅路徑都行 `finally` 叫 `setHudInteractive()`
+  （⚠️ 佢還原到嘅係**對位模式嘅互動狀態**，唔係穿透 —— 見上面警告）；
   ② 拖位 watchdog（1200ms 冇新消息 = `pointerup` 唔見咗 → 收手）；
   ③ 每 500ms interval 喺正常模式**再確認**一次 `setIgnoreMouseEvents(true)`。
+  ⚠️ 呢三重保險嘅用途係「**正常模式**唔會因為漏還原而擋住遊戲」——
+  **唔係**「放手就回復穿透」（對位模式本身設計上就唔穿透）。
 - 拖法：renderer `pointerdown` → `setPointerCapture` → `pointermove`／`up` ＋
   **`screenX/screenY`**（⚠️ **唔准** `clientX/clientY`：相對視窗，`setBounds()` 一移窗就
   自我回饋 → 抖／暴走），傳「相對按下嗰刻嘅總位移」。
@@ -581,6 +603,14 @@ UMAPYOI_NO_HUD=1 npm.cmd start       # ⭐ 兩個窗都唔開（淨係要 consol
 
 ⚠️ **技能分未讀到唔可以出 0**：一定係 `技能分 ？／總分 ≥ 五維分`。
 呢個係本專案底線（見 §8）——估一個數比起唔顯示更差。
+
+⚠️ **HUD renderer reload／crash 之後一定要重推 view**（2026-09-19 修）：`pushHud()` 靠
+`lastHudKey` dedupe（key 冇變就唔 send），但 renderer 一由零開始（對位模式之下 HUD 有
+focus，**Ctrl+R 就踩得到**）就唔會再收到 view → 只要狀態唔變，HUD **永遠空白**。
+而家 `main.js` 喺 `did-finish-load`（首次／reload 都行）／`render-process-gone`
+（意外死亡會自動重載，上限 5 次）／`unresponsive`（只清 dedupe，唔強制重載）三條路都叫
+`resetHudView()`：清 dedupe ＋ 經 `placeHud()` 重新對位 ＋ 即刻 `pushHud()`。
+⚠️ 呢條路**唔准**改動滑鼠穿透狀態（穿透係**視窗**層屬性，renderer 生生死死唔影響）。
 
 ⚠️ **已知限制（用戶 2026-09-18 實機發現）**：遊戲視窗**移動**之後 HUD 唔會跟住 ——
 因為我哋冇 Win32 API 讀遊戲視窗嘅螢幕座標（`desktopCapturer` 只俾 id／標題／大細），
