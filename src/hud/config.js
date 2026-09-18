@@ -247,11 +247,12 @@ function validateLayout(raw, fromSource = {}, onWarn = console.warn) {
 
   // 逐欄查「呢一欄到底有冇被寫死」—— 唔可以攞個值同預設比較
   // （寫咗一個啱啱好等於預設嘅值都算寫咗）。
+  // ⚠️ 只有 `x`／`y` 要呢個旗標：大細係唔係寫死，係由 `validateSize()` 有冇交出嗰個鍵
+  //    直接判斷（下面 `assertAxis()` 嘅 `writtenSize = size !== undefined`）——
+  //    以前呢度仲有 `w`／`h` 兩個**冇任何地方讀**嘅旗標（死碼），已刪走。
   const written = {
     x: Boolean(fromSource.x ?? raw.x !== undefined),
     y: Boolean(fromSource.y ?? raw.y !== undefined),
-    w: Boolean(fromSource.w ?? (raw.size !== undefined && raw.size !== null && raw.size.w !== undefined)),
-    h: Boolean(fromSource.h ?? (raw.size !== undefined && raw.size !== null && raw.size.h !== undefined)),
   };
 
   // ⚠️ 範圍嘅原始值只查「型別／排序」（唔查 0–1）：全面嘅範圍檢查要等推導完
@@ -498,6 +499,22 @@ function validateDisplay(raw) {
 // ─────────────────────────── 讀／寫 ───────────────────────────
 
 /**
+ * 拆 `loadConfig()` 嘅第一個參數：`{ filePath, onWarn }`／舊式 `'path'`／`null`。
+ *
+ * ⚠️ **`onWarn` 一定要連同 `filePath` 一齊收**（缺一都唔可以）：呢兩個欄位係同一個
+ * options object 嘅一部分，所以解構一定要喺呢度一次做完（唔可以喺 `loadConfig()`
+ * 嘅參數位解構，因為舊式字串寫法要照收）。
+ *
+ * @param {{filePath?:string,onWarn?:(message:string)=>void}|string|null} [options]
+ * @returns {{filePath?:string,onWarn?:(message:string)=>void}}
+ */
+function normalizeLoadOptions(options) {
+  if (typeof options === 'string') return { filePath: options }; // 舊式：直接傳路徑
+  if (!isPlainObject(options)) return {};
+  return { filePath: options.filePath, onWarn: options.onWarn };
+}
+
+/**
  * 讀設定檔。
  *
  * - 檔案**唔存在** → 回預設（未存過檔係正常狀態）
@@ -505,11 +522,27 @@ function validateDisplay(raw) {
  * - 欄位唔合法 → **throw**（唔准靜默當 0、唔准靜默回預設）
  * - 其他 I/O 錯誤（權限、目錄）→ **throw**（一樣唔可以當冇事）
  *
- * @param {{filePath?:string}} [options]
+ * ## 警告鏈路（`onWarn`）：**由設定檔引起**嘅警告一樣要經 caller
+ *
+ * ⚠️ 實測（獨立審計）：以前呢度叫 `validateConfig(raw)` **冇傳 `onWarn`** →
+ * 檔案寫「同一個軸上面範圍同大細兩邊都寫死而唔一致」嗰陣，警告會**繞過 caller**
+ * 直接落**裸 `console.warn`**（冇 `[設定] ⚠️` 前綴、`main.js` 嘅 `warnHudConfig`
+ * 收唔到、設定窗亦唔會知）—— 同本檔／AGENTS §6.4 寫嘅「單一鏈路」唔一致，
+ * 而且呢條路零測試覆蓋。而家由 caller 傳入嘅 `onWarn` 一路傳落 `validateConfig()`。
+ *
+ * ⚠️ **唔准因為加轉發而變靜音**：`onWarn` 冇傳（或者唔係函數）＝ 照舊
+ * `console.warn`（`validateConfig()` 嘅預設），所以「設定檔冇問題」嘅路徑完全唔變。
+ *
+ * ⚠️ **throw／唔 throw 嘅決定一律唔變**：呢個參數**只係警告去處**，
+ * 唔會令任何本來 throw 嘅情況變成唔 throw（反之亦然）。
+ *
+ * @param {{filePath?:string,onWarn?:(message:string)=>void}|string} [options]
+ *        可以係 `{ filePath, onWarn }`；亦可以係 `loadConfig('hud-position.json')`（舊式路徑）
  * @returns {{layout:{x:number[],y:number[],offset:{dx:number,dy:number},size:{w:number,h:number}},
  *            display:Record<string,boolean>}}
  */
-export function loadConfig({ filePath } = {}) {
+export function loadConfig(options = {}) {
+  const { filePath, onWarn } = normalizeLoadOptions(options);
   const path = filePath ?? defaultConfigPath();
 
   let text;
@@ -528,7 +561,9 @@ export function loadConfig({ filePath } = {}) {
   }
 
   try {
-    return validateConfig(raw);
+    // ⚠️ `onWarn` 一定要傳落去（見上面「警告鏈路」）：唔傳嘅話由檔案引起嘅警告
+    //    會繞過 caller 直接落裸 `console.warn`（冇 `[設定] ⚠️` 前綴）。
+    return validateConfig(raw, { onWarn });
   } catch (err) {
     throw new Error(`HUD 設定檔「${path}」欄位唔合法：${err?.message ?? err}`);
   }
@@ -584,12 +619,20 @@ export function saveConfig(config, { filePath } = {}) {
  * @param {Record<string,string|undefined>} [env]
  * @param {object|null} [fileConfig] `loadConfig()` 嘅結果（null／undefined = 冇檔案）
  * @param {{onWarn?:(message:string)=>void}} [options] 警告去處（預設 `console.warn`）
+ *        ⚠️ **一定要轉發落所有內部嘅 `validateConfig()` 呼叫**（包括驗 `fileConfig`
+ *        嗰個）：唔轉發嘅話，**由設定檔引起**嘅「冗餘欄位唔一致」警告會繞過 caller
+ *        直接落裸 `console.warn`（實測：`resolveHudConfig({}, {layout:{x:[0.1,0.5],
+ *        size:{w:0.2}}}, {onWarn})` → caller 收 0 個、`console.warn` 收 1 個），
+ *        同本檔／AGENTS §6.4 寫嘅「單一鏈路」唔一致。
  * @returns {{layout:{x:number[],y:number[],offset:{dx:number,dy:number},size:{w:number,h:number}},
  *            display:Record<string,boolean>}}
  */
 export function resolveHudConfig(env = {}, fileConfig = null, { onWarn } = {}) {
   const e = env ?? {};
-  const file = fileConfig == null ? null : validateConfig(fileConfig); // 檔案自己一定要合法
+  // ⚠️ 驗 `fileConfig` 都要經 caller 嘅 `onWarn`：**檔案自己**已經合法先入到嚟
+  //    （`loadConfig()` 會 throw 唔合法嘅檔案），所以呢個呼叫唯一會出嘅係
+  //    「冗餘欄位唔一致」嘅警告 —— 正正就係以前靜默落裸 `console.warn` 嗰個。
+  const file = fileConfig == null ? null : validateConfig(fileConfig, { onWarn });
   const fromEnv = layoutFromEnv(e);
 
   const set = (name) => {

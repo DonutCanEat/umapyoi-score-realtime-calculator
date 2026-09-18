@@ -153,6 +153,163 @@ test('hud-config loadConfig：分節／欄位可以只寫一部分，其餘補�
   assert.deepEqual(Object.keys(cfg.layout).sort(), ['offset', 'size', 'x', 'y'], '回嘅係完整形狀');
 });
 
+// ── ⭐ onWarn 鏈路（檔案路徑）：設定檔引起嘅警告都一定要經 caller ──
+//
+// 為何要呢兩條測試（獨立審計實測嘅缺口）：`loadConfig()` 以前叫 `validateConfig(raw)`
+// **冇傳 `onWarn`**，`resolveHudConfig()` 又叫 `validateConfig(fileConfig)` **冇轉發**
+// → **由設定檔引起**嘅「冗餘欄位唔一致」警告會繞過 caller 嘅 `onWarn`，直接落**裸
+// `console.warn`**（冇 `[設定] ⚠️` 前綴、`main.js` 嘅 `warnHudConfig` 收唔到、
+// 設定窗亦唔會知）—— 同 `config.js` 自己嘅註釋同 AGENTS §6.4 寫嘅「單一鏈路」
+// 唔一致。⚠️ 呢條路以前**零測試覆蓋**（其他警告測試全部都係直接餵 `validateConfig()`）。
+
+test('hud-config ⭐ loadConfig：檔案引起嘅警告要經 caller 嘅 onWarn（唔准只係裸 console.warn）', () => {
+  const path = freshPath('redundant-conflict.json');
+  // ⚠️ `y` 唔寫大細 → 大細由 `y` 範圍推（0.9 − 0.7 = 0.2 ≤ 1 → 合法），
+  //    所以呢個檔**只會出一個警告**（x 軸）；咁「1 個」先係冇水份嘅斷言。
+  writeRaw(path, JSON.stringify({ layout: { x: [0.1, 0.5], y: [0.7, 0.9], size: { w: 0.2 } } }));
+
+  const collect = [];
+  const realWarn = console.warn;
+  const consoleHits = [];
+  console.warn = (...args) => { consoleHits.push(args.join(' ')); };
+  let cfg;
+  try {
+    cfg = loadConfig({ filePath: path, onWarn: (message) => collect.push(message) });
+  } finally {
+    console.warn = realWarn;
+  }
+
+  // ① caller 嘅 onWarn 要收到（而唔係 0 個）
+  assert.equal(collect.length, 1, `caller 要收到警告，實得 ${collect.length} 個：${collect.join('｜')}`);
+  assert.equal(consoleHits.length, 0,
+    `⭐ 唔准繞過 caller 落裸 console.warn，實得 ${consoleHits.length} 個：${consoleHits.join('｜')}`);
+  // ② 內容同 env 路徑嘅警告**格式一致**（同一種措辭）
+  const fileWarn = collect[0];
+  const envWarn = collectWarnings((opts) => resolveHudConfig(
+    { UMAPYOI_HUD_X: '0.1,0.5', UMAPYOI_HUD_W: '0.2' }, null, opts,
+  )).warnings[0];
+  for (const piece of ['layout.x[1]', 'layout.x[0] + layout.size.w', '以 size 為準', '唔影響渲染']) {
+    assert.ok(fileWarn.includes(piece), `檔案路徑警告要包住「${piece}」：${fileWarn}`);
+    assert.ok(envWarn.includes(piece), `env 路徑警告要包住「${piece}」：${envWarn}`);
+  }
+  // ⚠️ 唔可以用「兩條訊息逐字一樣」當斷言：同一個矛盾唔可能喺檔案同 env 打出一模一樣
+  //    嘅數值（檔案寫死 0.5／env 都寫死 0.5 已經係同一個數，冇額外信息）。所以格式
+  //    一致＝「同一組詞＋同一組數值欄位」，下面仲要驗證數值真係對得上。
+  assert.ok(fileWarn.includes('0.5') && fileWarn.includes('0.2') && fileWarn.includes('0.3'),
+    `檔案警告要講得出寫死嘅 0.5 ＋ size 0.2 → 推導 0.3：${fileWarn}`);
+  assert.equal(cfg.layout.x[1], 0.3, 'x[1] 由 size 推（0.1 + 0.2）');
+  assert.equal(cfg.layout.size.w, 0.2, 'size 為準');
+
+  // ③ 冇傳 `onWarn` 嘅舊呼叫一樣要大聲（預設 `console.warn`，唔准變靜音）
+  const silent = [];
+  const realWarn2 = console.warn;
+  console.warn = (...args) => { silent.push(args.join(' ')); };
+  try {
+    loadConfig({ filePath: path });
+  } finally {
+    console.warn = realWarn2;
+  }
+  assert.equal(silent.length, 1, `漏傳 onWarn → 照舊大聲（console.warn），實得 ${silent.length} 個`);
+  assert.ok(silent[0].includes('layout.x[1]'), `預設去處嘅訊息要完整：${silent[0]}`);
+});
+
+test('hud-config ⭐ resolveHudConfig：驗 fileConfig 嘅警告一樣要經 caller 嘅 onWarn（審計實測個案）', () => {
+  // ⭐ 審計實測：`resolveHudConfig({}, {layout:{x:[0.1,0.5],size:{w:0.2}}}, {onWarn})`
+  //    以前 → 傳入嘅 `onWarn` 收 **0** 個、`console.warn` 收 **1** 個。
+  const realWarn = console.warn;
+  const consoleHits = [];
+  console.warn = (...args) => { consoleHits.push(args.join(' ')); };
+  let file;
+  try {
+    file = resolveHudConfig(
+      {}, { layout: { x: [0.1, 0.5], size: { w: 0.2 } } }, { onWarn: (m) => consoleHits.push(`__caller__${m}`) },
+    );
+  } finally {
+    console.warn = realWarn;
+  }
+  const viaCaller = consoleHits.filter((m) => m.startsWith('__caller__'));
+  const viaBareConsole = consoleHits.filter((m) => !m.startsWith('__caller__'));
+  assert.equal(viaCaller.length, 1, `caller 嘅 onWarn 要收到 1 個，實得 ${viaCaller.length} 個：${consoleHits.join('｜')}`);
+  assert.deepEqual(viaBareConsole, [], `⭐ 唔准有警告繞過 caller 落裸 console.warn：${viaBareConsole.join('｜')}`);
+  assert.equal(file.layout.x[1], 0.3, 'x[1] 由 size 推（0.1 + 0.2 = 0.3）');
+
+  // ⭐ 格式一致：**同一條矛盾**由檔案路徑同 env 路徑出嚟嘅警告要係同一種措辭
+  //    （連推導出嚟嘅值都一樣：檔案寫死 0.5 ／ env 寫死 0.5）。
+  const fileMsg = viaCaller[0].replace('__caller__', '');
+  const envMsg = collectWarnings((opts) => resolveHudConfig(
+    { UMAPYOI_HUD_X: '0.1,0.5', UMAPYOI_HUD_W: '0.2' }, null, opts,
+  )).warnings[0];
+  assert.equal(typeof envMsg, 'string', `env 路徑都要出同一種警告：${envMsg}`);
+  assert.equal(
+    fileMsg,
+    envMsg,
+    `⚠️ 兩條路徑出嘅警告文字一定要一致（否則「單一鏈路」係假嘅）\n檔案：${fileMsg}\nenv ：${envMsg}`,
+  );
+
+  // 🔎 反證：一致嘅檔案**唔准**有警告（證明閘冇亂咬，唔係「逢係 fileConfig 都嘈」）
+  const clean = collectWarnings((opts) => resolveHudConfig(
+    {}, { layout: { x: [0.1, 0.3], size: { w: 0.2, h: 0.2 } } }, opts,
+  ));
+  assert.deepEqual(clean.warnings, [], `一致嘅檔案唔應該嘈：${clean.warnings.join('｜')}`);
+  assert.equal(clean.out.layout.size.w, 0.2);
+
+  // 🔎 反證：真嘅唔合法（推導出嚟嘅右邊界 > 1）**一樣要 throw** —— 加 onWarn 轉發
+  //    唔可以令任何本來 throw 嘅情況變成唔 throw。
+  assert.throws(
+    () => resolveHudConfig({}, { layout: { x: [0.9, 1.0], size: { w: 0.5 } } }, { onWarn: () => {} }),
+    /右邊界/,
+  );
+});
+
+// ───────── 向後兼容：`loadConfig()` 嘅呼叫寫法（唔准因為加 onWarn 而破）─────────
+
+test('hud-config 向後兼容：loadConfig 嘅所有舊呼叫寫法都要照 work（加 onWarn 之後）', () => {
+  // ① 冇參數／`{}` → 用預設路徑（repo 根嘅 `hud-position.json`）。
+  //    ⚠️ 呢兩個要同 `defaultConfigPath()` 嗰條路**完全一樣**（唔可以各自讀一次）：
+  //    `hud-position.json` 係 runtime 用戶狀態（唔入 git），所以唔可以斷言檔入面嘅值 ——
+  //    只可以斷言「三個寫法讀到嘅嘢一模一樣」同「形狀完整」。
+  const noArg = loadConfig();
+  const emptyObj = loadConfig({});
+  assert.deepEqual(noArg, emptyObj, '`loadConfig()` 同 `loadConfig({})` 一定要一樣');
+  assert.deepEqual(Object.keys(noArg).sort(), ['display', 'layout']);
+  assert.deepEqual(Object.keys(noArg.layout).sort(), ['offset', 'size', 'x', 'y']);
+  assert.equal(existsSync(defaultConfigPath()), true, '前提：repo 根有 hud-position.json（runtime 狀態）');
+
+  // ② `{ filePath }`（main.js 而家用嘅寫法）→ 照舊，只係多咗個可選嘅 `onWarn`
+  const path = freshPath('compat.json');
+  saveConfig(validateConfig({ layout: { x: [0.2, 0.5], size: { w: 0.3, h: 0.2 } } }), { filePath: path });
+  const byPath = loadConfig({ filePath: path });
+  assert.deepEqual(byPath.layout.x, [0.2, 0.5]);
+  assert.equal(byPath.layout.size.w, 0.3);
+
+  // ③ 多傳一個 `onWarn`（唔係函數／`undefined`／`null`）都唔准爆 —— 只係警告去處
+  for (const onWarn of [undefined, null, 'not-a-function', 42]) {
+    assert.deepEqual(loadConfig({ filePath: path, onWarn }), byPath, `onWarn=${String(onWarn)} 都要同冇傳一樣`);
+  }
+
+  // ④ 檔案唔存在 → 照舊回預設（未存過檔係正常狀態，唔准變成 throw）
+  assert.deepEqual(loadConfig({ filePath: freshPath('nope-compat.json') }), defaultHudConfig());
+
+  // ⑤ 舊式字串（直接傳路徑）一樣收（同 `filePath` 等價）
+  assert.deepEqual(loadConfig(path), byPath, 'loadConfig(path) 要等於 loadConfig({ filePath: path })');
+
+  // ⑥ `null`（等同「冇選項」）唔准爆
+  assert.deepEqual(loadConfig(null), noArg);
+
+  // ⑦ 三個參數嘅舊寫法：省略第三個（`onWarn` 預設 = console.warn，唔准靜音）
+  const warnPath = freshPath('compat-warn.json');
+  writeRaw(warnPath, JSON.stringify({ layout: { x: [0.1, 0.5], size: { w: 0.2, h: 0.2 } } }));
+  const realWarn = console.warn;
+  const hits = [];
+  console.warn = (...args) => { hits.push(args.join(' ')); };
+  try {
+    loadConfig({ filePath: warnPath }); // 舊寫法：唔傳 onWarn
+  } finally {
+    console.warn = realWarn;
+  }
+  assert.equal(hits.length, 1, `漏傳 onWarn → 照舊落 console.warn（唔准靜音），實得 ${hits.length} 個`);
+});
+
 // ───────────────────────── validateConfig ─────────────────────────
 
 test('hud-config validateConfig：回正規化新 object，唔會改到入嗰個', () => {
