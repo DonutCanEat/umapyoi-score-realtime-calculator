@@ -128,9 +128,18 @@ npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay 
 npm.cmd test              # 單元測試（155 個，必須全過）
 
 # HUD 相關開關（環境變數）
+#   ⚠️ 三個旗標（UMAPYOI_NO_HUD／UMAPYOI_NO_SETTINGS／UMAPYOI_HUD_EDIT）嘅**確切**語意
+#      （唯一讀法 = `electron/main.js` 嘅 `envFlag()`，唔准用 truthiness）：
+#        開  ＝ 只有 "1" 或者 "true"（**大小寫唔敏感**，"TRUE"/"True" 都算；前後空白忽略）
+#        閂  ＝ "0"／"false"／空字串／**冇 set**
+#        ⚠️ 其他值（"yes"／"on"／"2"…）＝ **當冇開，而且會 log 警告**
+#           （唔認識嘅值唔准靜默當開或者當閂）
+#        ⚠️ 以前用 truthiness → `UMAPYOI_NO_HUD=0` 竟然會**閂咗 HUD**（'0' 係非空字串 = truthy），
+#           同文件寫嘅「=1」對唔上（已修，見 §9.1）
 #   UMAPYOI_NO_HUD=1            唔開 HUD（⭐ 連設定窗都唔開；淨係要 console log 嗰陣用）
 #   UMAPYOI_NO_SETTINGS=1       唔開設定窗（HUD 照開）—— 做防擷取測試時想畫面乾淨就用
 #   UMAPYOI_HUD_EDIT=1          ⭐ 對位模式：HUD 顯示自己嘅範圍／偏移，而且可以直接拖（放手即存檔）
+#                               ⚠️ 對位模式下 HUD **全程**食滑鼠事件（唔止拖緊嗰陣）—— 見 §6.4
 #   UMAPYOI_HUD_X=0.01,0.20     HUD 左／右邊界（÷ 內容區闊度）
 #   UMAPYOI_HUD_Y=0.70,0.95     HUD 上／下邊界
 #   UMAPYOI_HUD_DX=-0.005       額外橫向偏移（同 _DY 一樣係相對值，可以負）
