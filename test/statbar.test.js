@@ -35,6 +35,7 @@ const GLYPH_W = 16;
 const GLYPH_H = 24;
 
 const INK = [140, 90, 50];      // 實測數字墨（色相 ≈ 26.7°、亮度 ≈ 0.39）
+const GOLD_INK = [190, 150, 80]; // 金色格（色相 ≈ 38°、亮度 ≈ 0.60）—— 屬性 ≥ 1200
 const BG = [240, 240, 240];     // 遊戲面板近白底
 
 function makeImage(width, height, bg = BG) {
@@ -95,7 +96,7 @@ function drawNumberRight(image, text, right, top, height, color = INK) {
  *   上限行高 0.0064×闊、大數值行頂 0.669×內容高、上限行頂 0.692×內容高。
  * 即係 5 個數值佔 0.164–0.385（左邊界 0.385 − 4×0.0495 − 3 位數闊 ≈ 0.164）。
  */
-function makeStatBarImage({ width = 1600, chrome = 0, values = [226, 54, 139, 85, 102], limits = [1946, 1600, 1600, 1500, 1450], valueHeight = null, limitHeight = null, inkColor = INK } = {}) {
+function makeStatBarImage({ width = 1600, chrome = 0, values = [226, 54, 139, 85, 102], limits = [1946, 1600, 1600, 1500, 1450], valueHeight = null, limitHeight = null, inkColor = INK, goldIndices = [] } = {}) {
   const contentH = Math.round((width * 9) / 16);
   const image = makeImage(width, contentH + chrome);
   const top = chrome; // 內容區由 chrome 之後開始
@@ -107,8 +108,10 @@ function makeStatBarImage({ width = 1600, chrome = 0, values = [226, 54, 139, 85
   const limitTop = top + Math.round(contentH * 0.692);
   values.forEach((v, i) => {
     const right = Math.round(rightMost - (values.length - 1 - i) * pitch);
-    drawNumberRight(image, String(v), right, valueTop, valueH, inkColor);
-    drawNumberRight(image, String(limits[i]), right, limitTop, limitH, inkColor);
+    // 屬性達到 1200 嗰格 → 遊戲即刻畫成金色（**逐格獨立**，用戶 2026-09-18 確認）
+    const color = goldIndices.includes(i) ? GOLD_INK : inkColor;
+    drawNumberRight(image, String(v), right, valueTop, valueH, color);
+    drawNumberRight(image, String(limits[i]), right, limitTop, limitH, color);
   });
   return image;
 }
@@ -263,11 +266,23 @@ test('statbar 金色高亮：數字變金（色相 ~38°）一樣要讀得準，
   // 一度改成「偵測到金色就唔出數」，但用戶確認**數值 > 1200 就會長期變金**
   // → 唔出數 = 千二點之後永遠冇數，唔可行。
   // 正解：金色格用放寬嘅結構條件（`goldLightFraction`）重做遮罩，令字形完整。
-  const gold = [190, 150, 80]; // 色相 ≈ 38°、亮度 ≈ 0.60（仍然過橙棕窗口）
-  const image = makeStatBarImage({ width: 1600, values: [1489, 543, 655, 624, 628], inkColor: gold });
+  const image = makeStatBarImage({ width: 1600, values: [1489, 543, 655, 624, 628], goldIndices: [0, 1, 2, 3, 4] });
   const read = readStatBar(image, templates);
   assert.equal(read.highlighted, true, `應該偵測到金色格，實得 reason：${read.reason}`);
   assert.deepEqual(read.stats, [1489, 543, 655, 624, 628], `金色格要讀得準，實得 ${read.stats}（${read.reason}）`);
+});
+
+test('statbar 金色格係逐格獨立：只有過 1200 嗰格金，其餘橙棕 —— 五個都要讀得準', () => {
+  // 用戶 2026-09-18 確認：**逐格獨立**，而且一達到 1200 就即刻變金。
+  // 實機量到嘅例子：1489（金）＋ 543/655/624/628（橙棕）→ 所以判斷一定要逐格做。
+  const image = makeStatBarImage({
+    width: 1600,
+    values: [1489, 543, 655, 624, 628],
+    goldIndices: [0],
+  });
+  const read = readStatBar(image, templates);
+  assert.equal(read.highlighted, true, `有金色格就應該標 highlighted，實得 reason：${read.reason}`);
+  assert.deepEqual(read.stats, [1489, 543, 655, 624, 628], `混色面板條要讀得準，實得 ${read.stats}（${read.reason}）`);
 });
 
 test('statbar 金色高亮：正常橙棕數字唔可以被誤判成金色', () => {
