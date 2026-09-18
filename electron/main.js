@@ -312,6 +312,22 @@ function replyHudConfig(sender, extra = {}) {
 }
 
 /**
+ * 回報錯誤專用嘅「唔會再拋」版本。
+ *
+ * 為何要：`hud-config-*` 三條路（preview／save／reset／get）都要「有錯就經 `hud-config`
+ * channel 話返畀設定窗知（紅色橫額）」。但如果**失敗嘅就係 `replyHudConfig()` 本身**
+ * （例如 sender 已經銷毀），喺 catch 裏面再叫一次就會再 throw → 變返主程序 uncaught 例外。
+ * 所以錯誤回報一定經呢個 wrapper（最後一重 try/catch ＋ log）。
+ */
+function replyHudConfigSafely(sender, extra = {}) {
+  try {
+    replyHudConfig(sender, extra);
+  } catch (error) {
+    console.error(`[設定] ⚠️ 連回報錯誤都失敗（設定窗收唔到訊息）：${error?.message ?? error}`);
+  }
+}
+
+/**
  * 套用一份（已經 validate 好嘅）設定 → **即刻**反映落 HUD。
  *
  * ⚠️ 一定要行 `placeHud()`（唔可以自己 `setBounds()`）：下一幀／
@@ -1001,9 +1017,21 @@ ipcMain.on('capture-error', (_event, message) => {
 // 全部係 `send`／`on`（冇 `invoke`／`handle`、冇 preload）—— 同本專案其他 IPC 一致：
 // 兩個 renderer 都係我哋自己嘅本機頁面，靠 `nodeIntegration:true + contextIsolation:false`。
 
-/** 設定窗開窗即問：而家生效嘅設定、設定檔路徑、有冇環境變數蓋過。 */
+/**
+ * 設定窗開窗即問：而家生效嘅設定、設定檔路徑、有冇環境變數蓋過。
+ *
+ * ⚠️ 一定要包 try/catch（同 `hud-config-preview`／`hud-config-save` 一致）：
+ * IPC handler 拋出嘅例外喺 Electron 主程序係 **uncaught** → 會彈錯誤對話／搞死主程序。
+ * 錯誤一樣經 `hud-config` channel 回報（`error` 欄位 → 設定窗出紅色橫額），唔准靜默。
+ */
 ipcMain.on('hud-config-get', (event) => {
-  replyHudConfig(event.sender);
+  try {
+    replyHudConfig(event.sender);
+  } catch (error) {
+    const message = error?.message ?? String(error);
+    console.error(`[設定] ⚠️ 設定窗開窗讀取設定失敗：${message}`);
+    replyHudConfigSafely(event.sender, { error: `讀取生效中嘅設定失敗：${message}` });
+  }
 });
 
 /** 設定窗改任何值 → **即時**套用落 HUD（未存檔）。 */
@@ -1040,11 +1068,19 @@ ipcMain.on('hud-config-save', (event, raw) => {
  *
  * ⚠️ 只即時套用，**唔會**寫檔：用戶有可能只係想睇下預設係咩樣。
  * 要寫入就要再按「儲存」（設定窗有寫明）。
+ * ⚠️ 一樣要包 try/catch（見 `hud-config-get` 嘅註解）：而家只叫純預設所以冇 throw，
+ * 但將來加嘢就會變成主程序 uncaught 例外 → 錯誤照樣經 `hud-config` 回報（紅橫額）。
  */
 ipcMain.on('hud-config-reset', (event) => {
-  const config = resolveHudConfig({}, null);
-  applyHudConfig(config, { why: '設定窗：還原預設（未存檔）' });
-  replyHudConfig(event.sender);
+  try {
+    const config = resolveHudConfig({}, null);
+    applyHudConfig(config, { why: '設定窗：還原預設（未存檔）' });
+    replyHudConfig(event.sender);
+  } catch (error) {
+    const message = error?.message ?? String(error);
+    console.error(`[設定] ⚠️ 還原預設失敗（設定窗今次唔會變）：${message}`);
+    replyHudConfigSafely(event.sender, { error: `還原預設失敗（HUD 冇改變）：${message}` });
+  }
 });
 
 // ─────────────────── 對位模式：拖 HUD（`electron/hud.html` → 主程序）───────────────────
