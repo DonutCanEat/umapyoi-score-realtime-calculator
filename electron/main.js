@@ -149,7 +149,19 @@ function createHudWindow() {
     },
   });
   win.setAlwaysOnTop(true, 'screen-saver');
-  win.setIgnoreMouseEvents(true); // 穿透點擊：唔會搶遊戲嘅滑鼠（⭐ 底線，無條件）
+  // 穿透點擊：唔會搶遊戲嘅滑鼠（⭐ 底線，無條件）。
+  // ⚠️ 呢一句係**全檔唯一**唔經 `setHudInteractive()` funnel 嘅 `setIgnoreMouseEvents()`
+  //    （funnel 喺下面 + 500ms 兜底都會再叫一次）—— 所以一定要包 try/catch ＋ 大聲 log：
+  //    失敗嘅話 HUD 會變成「食滑鼠事件」嘅窗（唔應該靜默），而且即刻接落去嘅
+  //    `setHudInteractive()` 會再試一次穿透。
+  try {
+    win.setIgnoreMouseEvents(true);
+  } catch (error) {
+    console.error(
+      `[HUD] ⚠️ 建立 HUD 窗時 setIgnoreMouseEvents(true) 失敗：${error?.message ?? error}` +
+      '（穿透係本專案底線；下面 setHudInteractive() 同 500ms 兜底會再試）',
+    );
+  }
   win.setContentProtection(true); // 唔會入到自己嘅擷取（見上面註解）
   try {
     win.setVisibleOnAllWorkspaces(true);
