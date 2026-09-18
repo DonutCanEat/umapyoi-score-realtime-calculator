@@ -104,6 +104,8 @@ let settingsWindow = null;
  * 差一個 `scaleFactor` 就會令用戶拖完之後重開程式 HUD 跳位。
  */
 let hudContent = null;
+/** 上次警告過嘅「HUD 走出內容區」位置簽名（同一個位置只嘈一次）。 */
+let lastOffContentKey = '';
 
 /**
  * 環境變數「開關旗標」（`UMAPYOI_NO_HUD`／`UMAPYOI_NO_SETTINGS`／`UMAPYOI_HUD_EDIT`）
@@ -365,6 +367,14 @@ function replyHudConfig(sender, extra = {}) {
     why: hudConfigWhy,
     envOverridden: hudEnvOverridden,
     loadError: hudConfigLoadError,
+    // ⭐ HUD 而家嘅**實際**螢幕範圍（px）＋ 遊戲內容區（px）。
+    //
+    // 為何一定要報（用戶 2026-09-19 實機原話）：「佢去到某個數值就話會令 hud 跑出遊戲
+    // 內容區，但係其實根本就冇」—— 一句籠統警告用戶核對唔到，所以要有真數字。
+    // 而且 HUD 有 `setContentProtection(true)`（唔會出現喺任何截圖）→ 呢兩個數係
+    // 「HUD 到底擺咗喺邊」嘅**唯一**可見證據（同 `[HUD/位]` log 一樣）。
+    bounds: hudWindow && !hudWindow.isDestroyed() ? hudWindow.getBounds() : null,
+    content: hudContent,
     changed: false,
     saved: null,
     ...extra,
@@ -576,6 +586,47 @@ function finishDrag(commit) {
 }
 
 /**
+ * HUD 擺咗喺遊戲內容區**外面** → 大聲警告（唔准靜默，亦唔准自動改用戶設定）。
+ *
+ * 為何要（用戶 2026-09-19 實機原話）：「佢去到某個數值就話會令 hud 跑出遊戲內容區，
+ * 但係其實根本就冇」—— 即係用戶根本冇一個可信嘅依據。而 HUD 有
+ * `setContentProtection(true)`（**唔會**出現喺任何截圖）→ 位置只可以靠數字核對，
+ * 所以呢句話一定要有**實際像素範圍**同比對（而唔係一句籠統警告）。
+ *
+ * ⚠️ 承諾：呢個函數**只出警告**，唔會改 `hudConfig`／唔會寫檔。
+ *    用戶嘅位置係用戶嘅（AGENTS §6.4：「唔好見到位置數值古怪就當係 bug 去修」）。
+ *    修復路徑只有兩條：設定窗撳「還原預設」，或者拖 HUD（拖位會自動夾返入內容區）。
+ *
+ * @param {{x:number,y:number,width:number,height:number}} target 想擺嘅位置（`anchorHud()` 結果）
+ */
+function warnIfHudOffContent(target) {
+  if (!hudContent) return;
+  const c = hudContent;
+  const inside = target.x >= c.x - 1 && target.y >= c.y - 1
+    && target.x + target.width <= c.x + c.width + 1
+    && target.y + target.height <= c.y + c.height + 1;
+  if (inside) {
+    lastOffContentKey = '';
+    return;
+  }
+  const key = `${target.x},${target.y},${target.width},${target.height}`;
+  if (key === lastOffContentKey) return; // 同一個位置只嘈一次（唔想每幀洗版）
+  lastOffContentKey = key;
+  const overlapW = Math.min(target.x + target.width, c.x + c.width) - Math.max(target.x, c.x);
+  const overlapH = Math.min(target.y + target.height, c.y + c.height) - Math.max(target.y, c.y);
+  const visible = overlapW > 0 && overlapH > 0;
+  console.warn(
+    `[HUD/位] ⚠️ HUD 走出遊戲內容區：要求 x ${target.x} y ${target.y} ${target.width}×${target.height}，` +
+    `內容區 ${c.x},${c.y} ${c.width}×${c.height}${visible ? '（只有一部分睇得到）' : '（**完全睇唔到**）'}。`,
+  );
+  console.warn(
+    '[HUD/位] 　→ 成因通常係 offset（dx／dy）太大。修法：① HUD 設定窗撳「還原預設」；' +
+    '② 或者將 dx／dy 調返 0（設定窗會顯示實際螢幕像素範圍）。' +
+    '⚠️ 程式**唔會**自動改你嘅設定檔 —— 要寫入就喺設定窗撳「儲存」。',
+  );
+}
+
+/**
  * 把 HUD 擺去遊戲內容區（位置由 `hudConfig.layout` 決定）。
  *
  * 我哋冇 Win32 API 直接讀「遊戲視窗嘅螢幕座標」（`desktopCapturer` 只俾 id／標題／大細），
@@ -608,6 +659,7 @@ function placeHud(game) {
   hudContent = contentRect(windowRect); // ⭐ 單一來源：拖位反推一定用返呢個物件
   const target = anchorHud(hudContent, hudConfig.layout);
   hudWindow.setBounds(target);
+  warnIfHudOffContent(target);
   // ⚠️ 實機量測鉤（只有對位模式先 log，免得正常模式洗版）：確認
   //    `getBounds().x === 目標 x`。Electron 41.3+ 有「frameless 窗 getBounds() 唔等於
   //    肉眼框」嘅已知 bug（electron#51679／#51876，未確認 44.4.1 修咗未），

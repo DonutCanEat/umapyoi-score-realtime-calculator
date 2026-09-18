@@ -69,6 +69,36 @@ function numKeysFromHtml(text) {
   return [...block[1].matchAll(/\bkey:\s*'([^']+)'/g)].map((m) => m[1]);
 }
 
+/**
+ * 由 HTML **真係抽**出「slider 上下限」嘅純函數 `fieldBounds()` 再執行佢。
+ *
+ * 為何要用 `new Function()` 而唔係 regex 硬比字面值：呢條規則係**行為**（唔同 w／h 之下
+ * x0／y0 可以拉到幾多），唔係一組常數。用戶實機報嘅「拉到某個位就唔再跟」
+ * 就係呢個函數嘅行為出錯 —— 只有真係執行佢先驗得到。
+ *
+ * ⚠️ 唔准改成「自己喺測試入面再寫一次同一條公式」（咁樣只係測自己）。
+ * 抽出嚟嘅嘢（`MIN_SIZE`／`DECIMALS`／`ceil6`／`floor6`／`fieldBounds`）全部**真係由 HTML 嚟**。
+ */
+function fieldBoundsFromHtml(text) {
+  const src = readSettings(text);
+  const pick = (re, label) => {
+    const m = re.exec(src);
+    assert.ok(m, `⚙️ 由 settings.html 揾唔到 ${label} —— 測試要更新 regex（唔准改 HTML）`);
+    return m[0];
+  };
+  const code = [
+    pick(/const STEP\s*=\s*[^;]+;/, '`const STEP = …`'),
+    pick(/const MIN_SIZE\s*=\s*[^;]+;/, '`const MIN_SIZE = …`'),
+    pick(/const DECIMALS\s*=\s*[^;]+;/, '`const DECIMALS = …`'),
+    pick(/function round\([^)]*\)\s*\{[\s\S]*?\n {6}\}/, '`function round()`'),
+    pick(/function stepFloor6\([^)]*\)\s*\{[^}]*\}/, '`function stepFloor6()`'),
+    pick(/function stepCeil6\([^)]*\)\s*\{[^}]*\}/, '`function stepCeil6()`'),
+    pick(/function fieldBounds\([\s\S]*?\n {6}\}/, '`function fieldBounds()`'),
+  ].join('\n');
+  // eslint-disable-next-line no-new-func
+  return new Function(`${code}\nreturn fieldBounds;`)();
+}
+
 // ───────────── 4. display checkbox ↔ HUD_DISPLAY_KEYS ─────────────
 
 test('設定窗：display checkbox 集合要同 config.js 嘅 HUD_DISPLAY_KEYS **完全一樣**（加一個 key 少一格就 fail）', () => {
@@ -117,4 +147,52 @@ test('設定窗：7 個 display ＋ 8 個數值欄位以外，HTML 唔可以再�
   const keys = [...displayKeysFromHtml(), ...numKeysFromHtml()];
   assert.equal(keys.length, HUD_DISPLAY_KEYS.length + 8,
     `設定窗欄位總數要係 ${HUD_DISPLAY_KEYS.length} + 8，實得 ${keys.length}：${keys}`);
+});
+
+// ───────────── 6. slider 上下限（fieldBounds()）↔ 「唔可以再有死區」 ─────────────
+
+test('⭐ 回歸：x0 嘅上限唔可以再寫死成 1（用戶實機報「拉到某個位就唔再跟」）', () => {
+  const fieldBounds = fieldBoundsFromHtml();
+  // 用戶實機個設定：w = 0.335 → x0 最多只可以 0.665；舊版 slider 俾人拉到 1 →
+  // 主程序夾返 → reply 改返 slider → thumb 彈返原位。
+  assert.equal(fieldBounds({ x0: 0, y0: 0, w: 0.335, h: 0.464 }).x0[1], 0.665);
+  assert.equal(fieldBounds({ x0: 0, y0: 0, w: 0.212, h: 0.255 }).x0[1], 0.788);
+  assert.equal(fieldBounds({ x0: 0, y0: 0, w: 0.5, h: 0.5 }).y0[1], 0.5);
+  // 大細唔同 → 上限跟住變（唔係常數）
+  assert.notEqual(fieldBounds({ w: 0.2 }).x0[1], fieldBounds({ w: 0.6 }).x0[1]);
+});
+
+test('⭐ slider 冇死區：任何情況下「拉到最大」都仍然合法（x0 + w ≤ 1、y0 + h ≤ 1）', () => {
+  const fieldBounds = fieldBoundsFromHtml();
+  for (const w of [0.01, 0.05, 0.212, 0.335, 0.5, 0.9, 1]) {
+    for (const x0 of [0, 0.1, 0.4, 0.665, 0.99]) {
+      const b = fieldBounds({ x0, y0: x0, w, h: w });
+      // ① 位置拉到最大：仍然要放得落內容區
+      assert.ok(b.x0[1] + w <= 1 + 1e-9, `w=${w}：x0 上限 ${b.x0[1]} + ${w} 走出內容區`);
+      assert.ok(b.y0[1] + w <= 1 + 1e-9, `h=${w}：y0 上限 ${b.y0[1]} + ${w} 走出內容區`);
+      // ② 大細拉到最大：連埋位置起點都仍然放得落
+      assert.ok(x0 + b.w[1] <= 1 + 1e-9, `x0=${x0}：w 上限 ${b.w[1]} + ${x0} 走出內容區`);
+      assert.ok(x0 + b.h[1] <= 1 + 1e-9, `y0=${x0}：h 上限 ${b.h[1]} + ${x0} 走出內容區`);
+      // ③ 上下限向外收 → 本身合法嘅值一定唔會被夾（唔會出假警報）
+      assert.ok(b.x0[1] >= Math.min(x0, 1 - w) - 1e-9, 'x0 上限唔可以比合法值細');
+      assert.ok(b.w[1] >= Math.min(w, 1 - x0) - 1e-9, 'w 上限唔可以比合法值細');
+    }
+  }
+});
+
+test('slider 上下限：大細下限、x1／y1 嘅起碼值、dx／dy 嘅 ±1 都要一致', () => {
+  const fieldBounds = fieldBoundsFromHtml();
+  const b = fieldBounds({ x0: 0.4, y0: 0.2, w: 0.3, h: 0.5 });
+  assert.deepEqual(b.w, [0.01, 0.6], 'x0 = 0.4 → w 最多 0.6（下限 0.01 一定要喺度）');
+  assert.equal(b.w[0], 0.01, '大細下限（同 MIN_HUD_SIZE 一致）');
+  assert.ok(b.x1[0] > 0.4, `x1 一定要大過 x0（實得 ${b.x1[0]}）`);
+  assert.equal(b.x1[1], 1);
+  assert.deepEqual(b.dx, [-1, 1]);
+  assert.deepEqual(b.dy, [-1, 1]);
+  // 冇參數（或者傳垃圾）都唔可以 throw（開窗第一秒就會叫）
+  for (const input of [undefined, {}, { w: NaN }, { x0: -5, w: 3 }]) {
+    const out = fieldBounds(input);
+    assert.ok(Array.isArray(out.x0) && out.x0[0] <= out.x0[1], `唔合法輸入要回一個可用嘅範圍：${JSON.stringify(input)}`);
+    assert.ok(out.w[1] >= out.w[0] && out.h[1] >= out.h[0]);
+  }
 });

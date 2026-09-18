@@ -71,6 +71,9 @@
     <p class="hint">
       x0／y0 ＝ HUD 左上角；w／h ＝ HUD 大細。x1／y1 同 w／h 係**同一個數**
       （x1 = x0 + w），改任何一邊另一邊會跟住變 —— 咁就唔會出現「有兩個大細、唔知邊個算」。
+      ⚠️ HUD 一定要留喺遊戲內容區之內，所以 **x0 最多 = 1 − w**（y0 最多 = 1 − h）：
+      slider 嘅上限會跟住 w／h 自動收，**唔會**再有「拉得到但一定被夾返」嘅死區。
+      拖 HUD 拖出界嘅話，主程序會自動夾返入去（HUD 唔會擺到搵唔返）。
     </p>
     <div id="layoutFields"></div>
     <div id="effective"></div>
@@ -112,8 +115,20 @@
       ];
 
       const STEP = 0.001;
-      let lastSent = '';     // 上一次送落主程序嘅設定（避免重複送）
-      let pending = null;    // 節流用
+      /** 大細嘅下限（同 `src/hud/layout.js` 嘅 `MIN_HUD_SIZE` 一致）。 */
+      const MIN_SIZE = 0.01;
+      /** 小數位（同 `layout.js` 嘅 `LAYOUT_DECIMALS` 一致）。 */
+      const DECIMALS = 6;
+
+      let lastSent = '';        // 上一次送落主程序嘅設定（JSON 字串，避免重複送）
+      let lastSentConfig = null; // 同一個設定嘅物件版本（用嚟算出「主程序夾過邊幾個值」）
+      let lastConfig = null;    // 主程序最後確認生效嘅設定（互動完之後對帳用）
+      let lastBounds = null;    // HUD 視窗嘅實際螢幕範圍（px；主程序報返嚟，可能係 null）
+      let lastContent = null;   // 遊戲內容區（px；同上）
+      let pending = null;       // 節流用
+      let interacting = false;  // 用戶而家喺度拖 slider／打字
+      let idle = null;          // 「冇再動」嘅 watchdog（pointerup 唔見咗都救得返）
+      let settle = null;        // 放手之後等 reply 返嚟嘅緩衝
 
       // ── 建 UI ──────────────────────────────────────────────
       const layoutBox = document.getElementById('layoutFields');
@@ -166,12 +181,49 @@
         box.addEventListener('change', onEdit);
       }
 
+      // ── 「用戶仲喺度郁」嘅偵測（呢個係修好「拉咗又彈返」嘅關鍵）──────
+      //
+      // 為何要：主程序每次收到 preview 都會回一個 `hud-config`，而舊版收到就**無條件
+      // `writeForm()`** —— 包括用戶**正拖緊嗰個 slider**。萬一中間有夾值（例如 x0 超過
+      // `1 − w`），reply 就會把 slider 個值改返 → thumb 彈返原位、數值跳。
+      // 而家：互動中唔准改佢個控制；放手之後先同主程序對帳。
+      function touchInteracting() {
+        interacting = true;
+        if (idle) clearTimeout(idle);
+        // ⚠️ watchdog 係必要嘅：拖出窗外面放手嗰陣 `pointerup` 可能收唔到，
+        //    冇呢個就會永遠當「互動中」→ 表單同 HUD 長期唔一致。
+        idle = setTimeout(() => { idle = null; releaseInteracting(); }, 400);
+      }
+      function releaseInteracting() {
+        if (!interacting) return;
+        interacting = false;
+        if (settle) clearTimeout(settle);
+        settle = setTimeout(() => { settle = null; resyncFromServer(); }, 250);
+      }
+      document.addEventListener('pointerdown', (e) => {
+        if (e.target && e.target.tagName === 'INPUT') touchInteracting();
+      }, true);
+      document.addEventListener('pointerup', releaseInteracting, true);
+      for (const key of Object.keys(numEls)) {
+        numEls[key].addEventListener('focus', touchInteracting);
+        numEls[key].addEventListener('blur', releaseInteracting);
+      }
+
       // ── 讀寫表單（表單就係唯一嘅 user intent 來源）────────────
+      /** 夾一個輸入去佢自己嘅 `min`／`max`（slider 同數字框都用同一套）。 */
+      function clampTo(el, value) {
+        const n = Number(value);
+        const lo = Number(el.min);
+        const hi = Number(el.max);
+        if (!Number.isFinite(n)) return Number.isFinite(lo) ? lo : 0;
+        return Math.min(Number.isFinite(hi) ? hi : n, Math.max(Number.isFinite(lo) ? lo : n, n));
+      }
+
       /** 由表單砌出 config。⚠️ 維持不變式 x1 = x0 + w、y1 = y0 + h。 */
       function readForm() {
-        const v = (k) => Number(numEls[k].value) || 0;
-        const w = Math.max(0.01, v('w'));
-        const h = Math.max(0.01, v('h'));
+        const v = (k) => clampTo(numEls[k], numEls[k].value);
+        const w = Math.max(MIN_SIZE, v('w'));
+        const h = Math.max(MIN_SIZE, v('h'));
         return {
           layout: {
             x: [v('x0'), v('x0') + w],
@@ -184,9 +236,13 @@
       }
 
       /** 由 config 寫返落表單（x1／y1 由 w／h 推 —— size 才係真正嘅大細來源）。 */
-      function writeForm(config) {
+      function writeForm(config, { keepFocused = false } = {}) {
         const { layout, display } = config;
+        const active = document.activeElement;
         const set = (k, value) => {
+          // ⚠️ `keepFocused` ＝ 用戶啱啱郁緊（onEdit 路徑）→ 唔准搶佢手上嗰個控制
+          //    （搶咗就會「拉咗又彈返」）。reply 路徑一律 `keepFocused: false`。
+          if (keepFocused && (active === rangeEls[k] || active === numEls[k])) return;
           numEls[k].value = String(round(value));
           rangeEls[k].value = String(value);
         };
@@ -199,19 +255,114 @@
         set('dx', layout.offset.dx);
         set('dy', layout.offset.dy);
         for (const f of DISPLAY_FIELDS) checkEls[f.key].checked = display[f.key] !== false;
+        syncRanges();
+        renderEffective(layout);
+      }
+
+      /**
+       * 由表單值算出每個欄位嘅 `min`／`max`（**純函數**：唔碰 DOM、唔碰 IPC）。
+       *
+       * 為何要抽（唔係為咗靚）：呢條規則就係「拉咗又彈返／拉到某個位就唔再跟」嘅根因所在，
+       * 而 renderer 入唔到 `node --test`（classic script ＋ DOM）→ 抽成純函數之後，
+       * `test/hud-settings-html.test.js` 可以**真係由呢個檔抽**佢出嚟驗（見嗰個檔嘅註解），
+       * 唔會再出現「規則改返做 `max = 1` 而冇人知」。
+       *
+       * 模型（同 `src/hud/config.js` 一致）：`x0 + w ≤ 1`、`y0 + h ≤ 1`、`w／h > 0`。
+       * ⚠️ 上下限要**向外**收（max 用 ceil6、min 用 floor6）：用 round 嘅話可能比真值細
+       * 5e-7，令「本身合法」嘅值都被夾 → 主程序照樣回 `changed` 警告（假警報）。
+       */
+      function fieldBounds({ x0 = 0, y0 = 0, w = MIN_SIZE, h = MIN_SIZE } = {}) {
+        const size = (v) => Math.max(MIN_SIZE, Number.isFinite(v) ? v : MIN_SIZE);
+        const at = (v) => (Number.isFinite(v) ? v : 0);
+        const W = size(w);
+        const H = size(h);
+        const X0 = at(x0);
+        const Y0 = at(y0);
+        return {
+          x0: [0, stepFloor6(Math.max(0, 1 - W))],
+          y0: [0, stepFloor6(Math.max(0, 1 - H))],
+          w: [MIN_SIZE, stepFloor6(Math.max(MIN_SIZE, 1 - X0))],
+          h: [MIN_SIZE, stepFloor6(Math.max(MIN_SIZE, 1 - Y0))],
+          x1: [stepCeil6(Math.min(1 - MIN_SIZE, X0 + MIN_SIZE)), 1],
+          y1: [stepCeil6(Math.min(1 - MIN_SIZE, Y0 + MIN_SIZE)), 1],
+          // 偏移係「明確嘅微調旋鈕」，主程序只夾到 ±1（同 config.js 一致）
+          dx: [-1, 1],
+          dy: [-1, 1],
+        };
+      }
+
+      /**
+       * 向上／向下貼去 slider 嘅**格仔**（`STEP`），而唔係純數學上下限。
+       *
+       * 為何要貼格（唔可以就咁 ceil／floor 到 6 位小數）：
+       *   - 「最多可以幾多」（`stepFloor6`）一定要係**用戶拉得到**嘅值，而且一定合法。
+       *     例：`x0 = 0.99` → `1 − x0 = 0.010000000000000009` → 數學 ceil 會變 `0.010001`
+       *     → `x0 + w = 1.000001 > 1` → 主程序夾返 → 又一個假警告。貼格 = `0.01` ✓ 合法。
+       *   - 「最少要幾多」（`stepCeil6`）同理：`x1` 最少要 `x0 + 0.01`，貼格之後仍然拉得到。
+       *   - `+/-1e-9` 係為咗抵銷浮點誤差（`0.665 × 1000 = 664.9999999999999`），
+       *     令本身係格仔上嘅值唔會白白跌一格（跌一格 = 用戶重開設定窗就見到值飄咗）。
+       */
+      function stepFloor6(v) { return round(Math.floor(v / STEP + 1e-9) * STEP); }
+      function stepCeil6(v) { return round(Math.ceil(v / STEP - 1e-9) * STEP); }
+
+      /**
+       * 依表單而家嘅值，更新 slider／數字框嘅 `min`／`max`（規則見 `fieldBounds()`）。
+       *
+       * 為何一定要（用戶 2026-09-19 實機報「拉到某個位就唔再跟」＋「拉咗之後自己彈返」）：
+       * 舊版將 x0／y0 嘅 `max` 寫死成 **1**，但模型係 `x0 + w ≤ 1`
+       * → x0 一超過 `1 − w`（實測用戶 w = 0.335 → 上限 0.665）就會俾主程序夾返，
+       * 而 reply 又會改返 slider 個值 → 用戶見到 thumb 彈返原位，以為壞咗。
+       * 而家直接令 slider 拉唔到去唔合法嘅位（冇死區、冇「拉咗但冇反應」）。
+       */
+      function syncRanges() {
+        const bounds = fieldBounds({
+          x0: Number(numEls.x0.value) || 0,
+          y0: Number(numEls.y0.value) || 0,
+          w: Number(numEls.w.value) || 0,
+          h: Number(numEls.h.value) || 0,
+        });
+        for (const [key, [lo, hi]] of Object.entries(bounds)) {
+          rangeEls[key].min = String(lo);
+          rangeEls[key].max = String(hi);
+          numEls[key].min = String(lo);
+          numEls[key].max = String(hi);
+        }
+      }
+
+      /**
+       * 顯示「實際會擺去邊」＋「係唔係走出內容區」。
+       *
+       * ⚠️ 一定要顯示**真數字**（主程序報返嚟嘅螢幕 px）：用戶實機原話係
+       * 「佢去到某個數值就話會令 hud 跑出遊戲內容區，但係其實根本就冇」——
+       * 一句籠統警告根本核對唔到。而 HUD 有 `setContentProtection(true)`
+       * （唔會出現喺任何截圖）→ 呢幾個數就係唯一可見證據。
+       */
+      function renderEffective(layout = lastConfig?.layout ?? null) {
+        const el = document.getElementById('effective');
+        if (!layout) { el.textContent = ''; return; }
         const dx = layout.offset.dx;
         const dy = layout.offset.dy;
         const ex = layout.x[0] + dx;
         const ey = layout.y[0] + dy;
-        // ⚠️ 偏移係「明確嘅微調旋鈕」，主程序只夾到 ±1（同 config.js 一致）——
-        //    極端偏移會令 HUD 走出畫面，所以呢度一定要老實顯示實際位置 + 警告。
-        const out = ex < 0 || ey < 0
-          || ex + layout.size.w > 1.0005 || ey + layout.size.h > 1.0005;
-        document.getElementById('effective').innerHTML =
+        const out = [];
+        if (ex < -1e-6) out.push(`左 ${round(-ex)}`);
+        if (ey < -1e-6) out.push(`上 ${round(-ey)}`);
+        if (ex + layout.size.w > 1 + 1e-6) out.push(`右 ${round(ex + layout.size.w - 1)}`);
+        if (ey + layout.size.h > 1 + 1e-6) out.push(`下 ${round(ey + layout.size.h - 1)}`);
+        const px = lastBounds
+          ? `　→ 螢幕像素 <code>x ${lastBounds.x}　y ${lastBounds.y}　${lastBounds.width}×${lastBounds.height}</code>`
+          : '';
+        const area = lastContent
+          ? `　（遊戲內容區 ${lastContent.width}×${lastContent.height} @ ${lastContent.x},${lastContent.y}）`
+          : '';
+        el.innerHTML =
           `實際左上角（含偏移）：<code>x ${round(ex)}　y ${round(ey)}</code>　` +
-          `大細 <code>${round(layout.size.w)} × ${round(layout.size.h)}</code>` +
-          (out ? '<br /><span style="color:#ffc9bd">⚠️ 呢個位置會令 HUD 有一部分走出遊戲內容區' +
-            '（偏移 dx／dy 太大）—— 睇唔到 HUD 就將 dx／dy 調返 0。</span>' : '');
+          `大細 <code>${round(layout.size.w)} × ${round(layout.size.h)}</code>${px}${area}` +
+          (out.length
+            ? `<br /><span style="color:#ffc9bd">⚠️ 有 ${out.length} 邊走出內容區（${out.join('、')}）` +
+              ' → 嗰橛喺遊戲區域以外（可能俾其他窗遮住或者喺螢幕外）。' +
+              ' 修法：改 x0／y0（拖 HUD 會自動夾返入去）或者將 dx／dy 調返 0。</span>'
+            : '<br /><span style="color:#8b949e">✓ 完全喺遊戲內容區之內。</span>');
       }
 
       function round(v) {
@@ -219,33 +370,31 @@
         if (!Number.isFinite(n)) return v;
         // 6 位小數（同主程序 `LAYOUT_DECIMALS` 一致）：3 位小數喺 3000px 闊之下已經係 1.5px，
         // 每次「讀表單 → 送 → 存」都會蝕少少，幾次之後 HUD 就自己走位。
-        return Math.round(n * 1000000) / 1000000;
+        return Math.round(n * 10 ** DECIMALS) / 10 ** DECIMALS;
       }
 
       // ── 送落主程序（節流，避免拉 slider 時每格都送）──────────
       function onEdit(changedKey) {
         // 改 x1／y1 ＝ 改大細（同一個數）；改 w／h 就係改大細本身。
-        if (changedKey === 'x1') {
-          const v = Number(numEls.x1.value) || 0;
-          const w = Math.max(0.01, v - (Number(numEls.x0.value) || 0));
-          numEls.w.value = String(round(w));
-          rangeEls.w.value = String(w);
+        if (changedKey === 'x1' || changedKey === 'y1') {
+          const axis = changedKey === 'x1'
+            ? { end: 'x1', start: 'x0', size: 'w' }
+            : { end: 'y1', start: 'y0', size: 'h' };
+          const end = clampTo(numEls[axis.end], numEls[axis.end].value);
+          const start = clampTo(numEls[axis.start], numEls[axis.start].value);
+          numEls[axis.size].value = String(round(Math.max(MIN_SIZE, end - start)));
         }
-        if (changedKey === 'y1') {
-          const v = Number(numEls.y1.value) || 0;
-          const h = Math.max(0.01, v - (Number(numEls.y0.value) || 0));
-          numEls.h.value = String(round(h));
-          rangeEls.h.value = String(h);
-        }
+        touchInteracting();
+        syncRanges();
         const config = readForm();
-        // 表單自己顯示嘅 x1／y1 跟返不變式（用戶改 w／h 之後即刻睇得到）
-        numEls.x1.value = String(round(config.layout.x[1]));
-        numEls.y1.value = String(round(config.layout.y[1]));
+        // 表單即刻顯示真正生效嘅值（x1 = x0 + w；x0／y0 亦可能被上限夾過）
+        writeForm(config, { keepFocused: true });
         setStatus('改動即時生效（未存檔）', '');
         scheduleSend(config);
       }
 
       function scheduleSend(config) {
+        lastSentConfig = config;
         if (pending) clearTimeout(pending);
         pending = setTimeout(() => {
           pending = null;
@@ -256,9 +405,22 @@
         }, 40);
       }
 
+      /**
+       * 互動完之後同主程序對帳：表單要顯示**主程序真正生效**嘅值。
+       *
+       * 為何要：互動期間我哋刻意唔改用戶手上嗰個控制（避免彈返），所以佢可能顯示緊
+       * 一個被夾過嘅值 → 放手之後一定要校返，唔可以長期同 HUD 唔一致。
+       */
+      function resyncFromServer() {
+        if (lastConfig) writeForm(lastConfig, { keepFocused: false });
+        else renderEffective();
+      }
+
       // ── 收主程序 ───────────────────────────────────────────
       ipcRenderer.on('hud-config', (_e, payload) => {
         const { config, path, why, envOverridden, loadError, changed, saved, error } = payload;
+        if (payload.bounds !== undefined) lastBounds = payload.bounds;
+        if (payload.content !== undefined) lastContent = payload.content;
         // 防呆：正常情況主程序一定已經載入好設定（設定窗係載入之後先開），
         // 但係如果將來有第條路徑喺 `loadHudConfig()` 之前就問設定，呢度唔應該爆。
         if (!config || !config.layout || !config.display) {
@@ -287,8 +449,14 @@
             '環境變數**優先過**呢個設定檔（env &gt; 檔案 &gt; 預設）→ ' +
             '呢度改嘅值會即時生效，但**重開程式之後會俾環境變數蓋過**。</div>');
         }
+        // ⚠️ 唔可以再出一句籠統「有數值超出合法範圍」：要講**邊個欄位**、由咩變成咩、
+        //    同**點解**（用戶實機報「佢去到某個數值就話會令 hud 跑出遊戲內容區，
+        //    但係其實根本就冇」—— 因為佢睇到嘅係一句唔對應任何實際數字嘅警告）。
         if (changed) {
-          banners.push('<div class="banner warn">⚠️ 有數值超出合法範圍／前後倒轉，主程序已自動夾到合法值（下面顯示嘅就係真正生效嘅值）。</div>');
+          const why = describeClamp(lastSentConfig, config);
+          banners.push('<div class="banner warn">⚠️ 主程序夾過呢啲值（下面顯示嘅係真正生效嘅值）：' +
+            (why.length ? `<br />・${why.map(escapeHtml).join('<br />・')}` : '') +
+            '<br />（x0／y0 最多 ＝ 1 − 對應大細；dx／dy 只可以 −1〜1。）</div>');
         }
         if (error) banners.push(`<div class="banner">⚠️ ${escapeHtml(error)}</div>`);
         if (saved) {
@@ -297,9 +465,31 @@
             : `<div class="banner">⚠️ 儲存失敗：${escapeHtml(saved.error)}</div>`);
         }
         document.getElementById('banners').innerHTML = banners.join('');
-        writeForm(config);
+        lastConfig = config;
         lastSent = JSON.stringify(config);
+        // ⚠️ 用戶仲喺度拖／打字 → **唔准**改佢個控制（舊 bug：thumb 彈返、數值跳）。
+        //    放手之後由 `releaseInteracting()` → `resyncFromServer()` 對帳。
+        if (interacting) renderEffective(config.layout);
+        else writeForm(config, { keepFocused: false });
       });
+
+      /** 比較「我哋送咗咩」同「主程序真正用咩」，砌出人類讀得明嘅夾值原因。 */
+      function describeClamp(sent, got) {
+        if (!sent || !sent.layout) return [];
+        const out = [];
+        const add = (label, a, b, reason) => {
+          if (Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) > 1e-9) {
+            out.push(`${label}：${round(a)} → ${round(b)}（${reason}）`);
+          }
+        };
+        add('x0', sent.layout.x[0], got.layout.x[0], 'x0 + w 唔可以大過 1');
+        add('y0', sent.layout.y[0], got.layout.y[0], 'y0 + h 唔可以大過 1');
+        add('w', sent.layout.size.w, got.layout.size.w, '大細要 > 0，而且 x0 + w 唔可以大過 1');
+        add('h', sent.layout.size.h, got.layout.size.h, '大細要 > 0，而且 y0 + h 唔可以大過 1');
+        add('dx', sent.layout.offset.dx, got.layout.offset.dx, '偏移要喺 −1 到 1');
+        add('dy', sent.layout.offset.dy, got.layout.offset.dy, '偏移要喺 −1 到 1');
+        return out;
+      }
 
       function renderPath(path, why) {
         const el = document.getElementById('path');
