@@ -278,7 +278,12 @@ function loadHudConfig() {
   let fileConfig = null;
   hudConfigLoadError = null;
   try {
-    fileConfig = loadConfig({ filePath: path });
+    // ⚠️ `onWarn` 一定要傳落去（同下面 `resolveHudConfig()` 一樣）：唔傳嘅話**由設定檔引起**
+    //    嘅「冗餘欄位唔一致」警告會繞過 `warnHudConfig()` 直接落裸 `console.warn`
+    //    （冇 `[設定] ⚠️` 前綴，同其他設定訊息撈唔埋一齊）。實測（2026-09-19）：
+    //    矛盾嘅 `hud-position.json` → 改前 caller 收 0 條／裸 `console.warn` 收 1 條；
+    //    改後 caller 收 1 條（帶前綴）／裸 0 條。
+    fileConfig = loadConfig({ filePath: path, onWarn: warnHudConfig });
     // 檔案唔存在係正常狀態（未存過檔）→ `loadConfig()` 會回預設，唔算錯。
     console.log(`[設定] 檔案：${path}\n[設定] 　（${why}）`);
   } catch (error) {
