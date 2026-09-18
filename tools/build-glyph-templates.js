@@ -149,7 +149,10 @@ for (const source of sources) {
 /** 實機面板條：用 `collectStatBarGlyphs()`（同讀數完全同一條路）。 */
 for (const source of liveSources) {
   if (source.highlighted) {
-    console.log(`⏭ ${source.shot}（金色高亮幀：字元被侵蝕，唔入訓練；驗證時判「應該跳過」）`);
+    // 金色格（屬性 > 1200，長期金色）：讀數已經有專用遮罩（`goldLightFraction`）處理，
+    // 但金色字形係「空心輪廓」、比棕色實心字形薄，**唔適合混入模板訓練**
+    // （會拉歪同一數字嘅平均值）→ 只作驗證，訓練跳過。
+    console.log(`⏭ ${source.shot}（金色格：字形係空心輪廓，唔入訓練；驗證時要「highlighted 而且讀到真值」）`);
     continue;
   }
   const img = decodePng(readFileSync(join(ROOT, source.shot)));
@@ -256,22 +259,23 @@ if (liveSources.length) {
     const image = { data: img.data, width: img.width, height: img.height };
     const read = readStatBar(image, runtime, { whole: source.cropped });
     liveTotal += 1;
-    // 金色高亮幀：**應該跳過**（唔出數）→ 讀到反而係錯
-    const ok = source.highlighted
-      ? read.highlighted === true && read.stats === null
-      : read.stats && read.stats.every((v, i) => v === source.truth[i]);
+    // 金色格（屬性 > 1200，長期金色）：**一樣要讀到真值**，而且一定要標記 `highlighted`
+    // （2026-09-18 用戶確認：「只要數值超過 1200 就會變金」→ 唔可以唔出數）
+    const statsOk = read.stats && read.stats.every((v, i) => v === source.truth[i]);
+    const ok = source.highlighted ? Boolean(read.highlighted) && statsOk : statsOk;
     if (ok) liveHits += 1;
     else {
       liveFailures.push(
         `${source.shot}：讀「${read.stats ? read.stats.join('/') : `❌ ${read.reason}`}」` +
-          `，${source.highlighted ? '應該判「金色高亮、唔出數」' : `真值 ${source.truth.join('/')}`}` +
+          `，${source.highlighted ? '（金色格）應該判 highlighted 而且要讀到真值' : '真值'} ${source.truth.join('/')}` +
           `（信心 ${read.confidence.toFixed(2)}）`,
       );
     }
     console.log(
       `  ${source.shot.replace('shots/live/', '').padEnd(22)} ` +
         `${read.stats ? read.stats.join('/') : `❌ ${read.reason}`}  ` +
-        `${ok ? '✅' : source.highlighted ? '❌（應該跳過）' : `❌(${source.truth.join('/')})`}`,
+        `${ok ? '✅' : `❌(${source.truth.join('/')})`}` +
+        `${source.highlighted ? `（金色格 highlighted=${read.highlighted}）` : ''}`,
     );
   }
   console.log(`\n完全命中 ${liveHits}/${liveTotal}（實機面板條）`);

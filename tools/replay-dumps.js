@@ -58,7 +58,7 @@ console.log('幀（時間戳）              當時       現在          讀數
 const summary = new Map();
 let fixed = 0;
 let regressed = 0;
-let skippedGold = 0;
+let goldNowRead = 0;
 for (const name of raws) {
   const metaPath = join(DIR, name.replace(/\.raw$/, '.json'));
   const meta = existsSync(metaPath) ? JSON.parse(readFileSync(metaPath, 'utf8')) : {};
@@ -74,12 +74,16 @@ for (const name of raws) {
   const after = read.stats ? 'OK' : tagOf(read.reason ?? '');
   summary.set(`${before} → ${after}`, (summary.get(`${before} → ${after}`) ?? 0) + 1);
   if (before !== 'OK' && after === 'OK') fixed += 1;
-  else if (before === 'OK' && after === 'GOLD') skippedGold += 1;
-  else if (before === 'OK' && after !== 'OK') regressed += 1;
+  // 金色格（屬性 > 1200 長期金色）：而家會照讀（有 `goldLightFraction` 專用遮罩）
+  // → 唔再算「跳過」，但如果信心偏低（< 0.5）就仍然要當退步查。
+  else if (before === 'GOLD' && read.stats) {
+    if (read.confidence >= 0.5) goldNowRead += 1;
+    else regressed += 1;
+  } else if (before === 'OK' && after !== 'OK') regressed += 1;
 
   const stamp = basename(name, '.raw').replace(/Z-.*/, 'Z');
   const detail = read.stats
-    ? `${read.stats.join('/')}  信心 ${read.confidence.toFixed(2)}`
+    ? `${read.stats.join('/')}  信心 ${read.confidence.toFixed(2)}${read.highlighted ? '（金色格）' : ''}`
     : (read.reason ?? '').slice(0, 70);
   console.log(`${stamp.padEnd(26)} ${before.padEnd(14)} ${after.padEnd(14)} ${verbose || after !== 'OK' ? detail : ''}`);
 }
@@ -88,7 +92,7 @@ console.log('\n=== 轉變統計 ===');
 for (const [k, n] of [...summary.entries()].sort((a, b) => b[1] - a[1])) console.log(`  ${k.padEnd(28)} ${n}`);
 console.log(
   `\n修好（失敗 → 成功）：${fixed}　` +
-    `正確跳過（原本讀到但係金色高亮幀 —— 之前讀嘅值係錯嘅）：${skippedGold}　` +
+    `金色格而家讀得返（信心 ≥ 0.5）：${goldNowRead}　` +
     `退步：${regressed}`,
 );
 if (regressed > 0) {

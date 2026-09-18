@@ -174,8 +174,10 @@ for (const entry of list) {
     let ok;
     let want = '';
     if (wantHighlighted) {
-      ok = read.highlighted === true && read.stats === null;
-      want = `　真值 ${(truth ?? []).join('/')}（金色 → 應該唔出數）`;
+      // ⭐ 金色格（屬性 > 1200 長期金色）：**一樣要讀到真值**，但一定要標記 `highlighted`
+      ok = read.highlighted === true && read.stats !== null
+        && read.stats.every((n, i) => n === truth[i]);
+      want = `　真值 ${(truth ?? []).join('/')}（金色格 → 要讀得準 ＋ highlighted）`;
     } else {
       ok = truth && read.stats && read.stats.every((n, i) => n === truth[i]);
       want = truth ? `　真值 ${truth.join('/')}` : '';

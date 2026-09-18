@@ -155,14 +155,15 @@ ipcMain.on('frame', (_event, frame) => {
     tracker.push(null);
     const now = Date.now();
     // 三種「唔出數」：
-    //   ① 金色高亮（屬性啱啱升咗）—— 字形被侵蝕，讀就會讀錯 → 跳過，沿用上一個穩定值
+    //   ① 金色格（屬性 > 1200，長期金色）—— 唔應該再出現（有 `goldLightFraction` 專用遮罩，
+    //      實測 1489 讀得返）；如果真係出現，通常係格框切得唔準
     //   ② 唔見／唔似面板條（換咗畫面）—— 屬正常
     //   ③ 其他（面板喺度但讀唔清）—— 真問題，要 dump 幀查
     const quietMs = read.notBar ? 30000 : read.highlighted ? 10000 : 5000;
     if (read.reason && now - lastLog > quietMs) {
       lastLog = now;
       if (read.highlighted) {
-        console.log(`[跳過] ${read.reason}（會沿用上一個穩定值，等佢回復正常色）`);
+        console.log(`[跳過] ${read.reason}（會沿用上一個穩定值）`);
       } else if (read.notBar) {
         console.log(`[讀唔到] （唔見面板條 —— 可能喺其他畫面／轉場，屬正常：${read.reason}）`);
       } else {
@@ -197,6 +198,8 @@ ipcMain.on('frame', (_event, frame) => {
   const summary =
     `五維 ${stats.join('/')} → 五維分 ${score.statScore}　評價点 ${score.total}（${score.rank}）` +
     `　信心 ${read.confidence.toFixed(2)}` +
+    // 金色格（屬性 > 1200）：數值照出（用 `goldLightFraction` 專用遮罩讀），只係標明
+    `${read.highlighted ? '　[金色格]' : ''}` +
     `　來源 ${cropped ? `面板條 ${width}×${height}（原生像素）` : `縮圖 ${width}×${height}`}` +
     `（遊戲原始 ${fullWidth}×${fullHeight}）`;
 

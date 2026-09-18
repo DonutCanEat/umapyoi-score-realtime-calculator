@@ -256,17 +256,18 @@ test('statbar expectedGlyphHeight：跟圖闊等比（實測 1356→12px、2560�
   assert.ok(Math.abs(at(2560) - 24) < 2, `2560 闊應該 ~24px，實得 ${at(2560).toFixed(1)}`);
 });
 
-/* ──────────────────── 金色高亮（屬性升咗 → 唔准出數） ──────────────────── */
+/* ────────── 金色高亮（屬性 > 1200 → 長期金色，但**一樣要讀得準**） ────────── */
 
-test('statbar 金色高亮：數字變金（色相 ~38°）→ 應該唔出數，唔可以讀錯', () => {
+test('statbar 金色高亮：數字變金（色相 ~38°）一樣要讀得準，唔准讀錯都唔准唔出數', () => {
   // 2026-09-18 實機：遊戲顯示 1489，但金色狀態下字形被侵蝕 → 讀成 1483（靜默讀錯）。
-  // 正解係偵測到金色就跳過（寧願顯示上一個穩定值）。
+  // 一度改成「偵測到金色就唔出數」，但用戶確認**數值 > 1200 就會長期變金**
+  // → 唔出數 = 千二點之後永遠冇數，唔可行。
+  // 正解：金色格用放寬嘅結構條件（`goldLightFraction`）重做遮罩，令字形完整。
   const gold = [190, 150, 80]; // 色相 ≈ 38°、亮度 ≈ 0.60（仍然過橙棕窗口）
   const image = makeStatBarImage({ width: 1600, values: [1489, 543, 655, 624, 628], inkColor: gold });
   const read = readStatBar(image, templates);
-  assert.equal(read.highlighted, true, `應該偵測到金色高亮，實得 reason：${read.reason}`);
-  assert.equal(read.stats, null, '金色狀態唔可以出數（出錯數比唔出數差）');
-  assert.match(read.reason ?? '', /金色/);
+  assert.equal(read.highlighted, true, `應該偵測到金色格，實得 reason：${read.reason}`);
+  assert.deepEqual(read.stats, [1489, 543, 655, 624, 628], `金色格要讀得準，實得 ${read.stats}（${read.reason}）`);
 });
 
 test('statbar 金色高亮：正常橙棕數字唔可以被誤判成金色', () => {
@@ -276,13 +277,14 @@ test('statbar 金色高亮：正常橙棕數字唔可以被誤判成金色', () 
   assert.deepEqual(read.stats, [226, 54, 139, 85, 102]);
 });
 
-test('statbar 金色高亮：實機金色幀要判 highlighted（永久回歸）', () => {
+test('statbar 金色高亮：實機金色幀要判 highlighted 而且讀到真值（永久回歸）', () => {
   const png = `${ROOT}/shots/live/roi-regress-gold.png`;
   if (!existsSync(png)) return; // 冇檔案就跳過（唔應該發生，但唔想 flaky）
   const img = decodePng(readFileSync(png));
   const read = readStatBar({ data: img.data, width: img.width, height: img.height }, templates, { whole: true });
   assert.equal(read.highlighted, true, `實機金幀應該判金色，實得 reason：${read.reason}`);
-  assert.equal(read.stats, null);
+  // 真值 1489/543/655/624/628 —— 舊版會靜默讀成 1483（「9」被侵蝕成「3」）
+  assert.deepEqual(read.stats, [1489, 543, 655, 624, 628], `金色幀要讀到真值，實得 ${read.stats}`);
 });
 
 test('statbar：DEFAULT_STATBAR_OPTIONS 嘅 ROI 同實測數值一致', () => {
