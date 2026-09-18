@@ -64,7 +64,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 | Phase 1 | 畫面擷取（`npm start` 跑得通）| ✅ |
 | Phase 1 | **五維數字辨識（零校準）** | ✅ 兩條路都通：**畫面 A 面板條**（`statbar.js`）**9/9 全中**（1356→2560 五個解析度 ＋ 4 個實機失敗／金色格回歸）；ステータス面板排法 **30/30**。✅ 已實機跑過（`npm start`，1920 窗），修好間歇性「讀唔清」（地雷 #25）同**金色格靜默讀錯**（地雷 #26）|
 | Phase 1 | HUD overlay ＋ 設定面板 | 🚧 **HUD 可用**（透明置頂穿透；顯示評價点 + 五維逐格 + 技能分 `？／總分 ≥ X`；對位模式可即時調位）。⏳ 未做：跟住遊戲視窗移動、用家拖位、設定面板 |
-| Phase 2 | 技能 icon 識別（自動知學咗邊啲技能）| 🚧 **兩步做好**：① 技能畫面欄／行偵測器（`skillscreen.js`，8 張實機圖全部搵到 7 行）；② **名稱框抽取**（112 個全部抽到）＋ **影像比對可行性已量化**（互相最佳配對中位數 0.981、撞分上限 0.439 —— 見 `docs/skill-screen.md` §5）。⏳ 未做：接上**候選名單**（見 §9）|
+| Phase 2 | 技能 icon 識別（自動知學咗邊啲技能）| 🚧 **兩步做好**：① 技能畫面欄／行偵測器（`skillscreen.js`，8 張實機圖全部搵到 7 行）；② **名稱框抽取**（112 個全部抽到）＋ **影像比對可行性已量化**（互相最佳配對中位數 **0.986**、撞分上限 **0.604** —— 見 `docs/skill-screen.md` §5）。⏳ 未做：接上**候選名單**（見 §9）|
 | Phase 3 | what-if 模擬（加一招加幾多分／Pt）、成長曲線 | 未開始 |
 | Phase 4 | 事件選項助手（已 mark，見 `docs/vision-design.md` §5.5）| 暫緩 |
 
@@ -125,7 +125,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay
-npm.cmd test              # 單元測試（102 個，必須全過）
+npm.cmd test              # 單元測試（114 個，必須全過）
 
 # HUD 相關開關（環境變數）
 #   UMAPYOI_NO_HUD=1            唔開 HUD（淨係要 console log 嗰陣用）
@@ -181,10 +181,17 @@ node tools/dump-namebox.js uma1-p1-skills.png 1 1 --scale=4  # 單一格像素�
 node tools/diag-namepairs.js --top=20 --dump  # 跨圖最佳配對 + 對照圖
 node tools/diag-nameocl.js --tol=3            # 幾何自標註（⚠️ 前提唔完全成立，見 docs §5.4）
 node tools/diag-namematch.js --dump           # ⭐ 唔需要真值嘅可行性檢定（互相最佳配對／假陰性）
+
+# ── Phase 2：收圖 → 建技能名影像庫 ──
+#   UMAPYOI_SKILL_DUMP=1 npm.cmd start   ⭐ 連拍模式：1:1 整個內容區、逐頁存 PNG（同一頁自動略過）
+#   UMAPYOI_SKILL_MAX=400                最多存幾頁（預設 400）
+#   UMAPYOI_CAPTURE_FPS=1                連拍幀率（預設 1；一幀 4–6MB，唔需要密）
+node tools/build-skill-library.js             # ⭐ 逐頁抽名框 → 跨頁去重 → data/skill-name-lib/
+node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最可疑排前面）
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **102 個**）
+1. `npm.cmd test` 全過（現時 **114 個**）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 4/4　完全命中 4/4　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（雙閘：**實機面板條 9/9**），兩個都要中
@@ -217,6 +224,8 @@ src/vision/
   reader.js       # ⭐ 影像 → 五維 → 評價分；幀間多數投票（StatTracker）
   png.js          # 零依賴 PNG 解碼器（讀實機截圖用）
   pngwrite.js     # 零依賴 PNG **編碼**器（dump 實機幀做證據用；有 round-trip 測試）
+  skillscreen.js  # ⭐ 技能畫面（畫面 B）欄／行／名框偵測（見 §6.5）
+  skillname.js    # ⭐ 技能名「影像特徵」＋比對（絕對尺度；Phase 2 識字路線，見 §6.5）
   anchor.js       # ⚠️ 已棄用（靠粉紅色揾面板 → 見地雷 #10/#11），保留只為舊測試
   panel.js        # ⚠️ 同上（粉紅比例版），未接入主流程
 
@@ -252,6 +261,8 @@ tools/
   diag-namepairs.js      # 跨圖最佳配對（--show=… 查墨跡尺寸、--dump 寫對照圖）
   diag-nameocl.js        # 幾何自標註（⚠️ 前提唔完全成立，見 docs/skill-screen.md §5.4）
   diag-namematch.js      # ⭐ 唔需要真值嘅可行性檢定（互相最佳配對／假陰性；--dump）
+  build-skill-library.js # ⭐ 逐頁技能畫面 → 抽名框 → 跨頁去重 → data/skill-name-lib/
+  skill-lib-sheet.js     # ⭐ 把影像庫拼成一張大圖（人手覆核「同一招有冇重複項目」）
   crop-png.js            # 剪一個區域出 PNG（--scale=N 放大，睇字形用）
   replay-dumps.js        # ⭐ 重播 `shots/live-debug/*.raw`（驗證「讀唔清」修正，見地雷 #25）
   raw-to-png.js          # dump 幀（.raw ＋ .json）轉 PNG，畀上面兩個工具讀
@@ -262,6 +273,8 @@ data/
   skill-overrides.json   # 主 DB 冇收錄嘅技能（繼承技）
   glyph-templates.json   # ⭐ 10 個數字字形模板（16×24，NCC 用）
   live-truth.json        # ⭐ 實機面板條真值（values ＋ 每張圖 perShot 例外；`roi-*` = 已剪 ROI）
+  skill-name-lib/        # ⭐ 技能名影像庫（index.json ＋ img/*.png；個名未配）
+  skill-name-labels.json # ⚠️ 我第一次人手標註嘅 112 格（**已知有錯位**，唔要當真值）
   calc-page-tw.html      # bwiki 頁面 cache
   ground-truth/*.json    # 4 條培育完成紀錄（誤差 0 嘅證據）
 
@@ -269,6 +282,7 @@ shots/
   gt/*.png               # ステータス面板排法（30/30 嘅證據）
   live/live-*.png        # ⭐ 實機育成主畫面 1356→2560 五個解析度
   live/roi-regress-*.png # ⭐ **實機失敗幀**（已剪 ROI）—— 永久回歸案例（地雷 #25/#26）
+  skill-dump/            # ⭐ 技能連拍收到嘅頁面 PNG（UMAPYOI_SKILL_DUMP=1；唔入 git）
   live-debug/            # ⚠️ 執行時自動 dump（.raw ＋ .json，唔入 git）；有代表性嘅
                          #    手動複製去 shots/live/ 再入 live-truth 做正式回歸
 
@@ -508,17 +522,28 @@ src/vision/skillscreen.js
 
 - ✅ `nameBoxesInRow()` 由每列切出左右兩個名框 → **8 圖 × 7 列 × 2 欄 = 112 個全部抽得到**。
   ⚠️ 名框闊度係**跟隨該頁最長名**（左對齊、右邊留白）→ **唔可以假設框闊 = 名長**。
-- ⚠️ **特徵一定要「絕對尺度」**（1 像素 = 1 格、上下居中，240×40 網格）。
+- ⚠️ **特徵一定要「絕對尺度」**（1 像素 = 1 格、上下居中，**480×40** 網格）。
   兩個做錯過嘅做法：① 拉伸到固定闊度 → 唔同名都有 **1.000** 相似度
   （「短名＋空白」被拉成同「長名」一樣）；② 去 tight box 後按自己高度縮放
   → 一樣撞 1.000（所有名框高度一樣 → 任何框都撐滿 24 格）。
-- 實測（`node tools/diag-namematch.js`）：互相最佳配對 35 對、
-  **中位數 0.981**、最差 0.718；跨組撞分上限 **0.439** → **形狀夠分辨**。
-  但同一招跨圖嘅保守下限可以低到 0.47，而且 **60/112 格「最佳同次佳」差距 ≤0.05**
-  （只覆蓋幾十招、每招只得 2–7 個樣本）→ **最大瓶頸係「唔唯一」，唔係比對本身**。
+- 實測（`node tools/diag-namematch.js`）：互相最佳配對 34 對、
+  **中位數 0.986**、最差 0.727；唔同招撞分上限 **0.604** → **形狀夠分辨**（安全線 0.65）。
+  但 **63/112 格「最佳同次佳」差距 ≤0.05**（8 張圖只覆蓋幾十招、每招得 2–7 個樣本）
+  → **最大瓶頸係「唔唯一」，唔係比對本身**。
+- ⚠️ **名框入面唔止有名**：左邊會有 `Lv5 ★★★` 徽章（實測徽章同名之間空 **111px**），
+  而且**徽章唔一定喺右邊** → 舊做法「由右邊掃空洞」剔唔到。正解：切**墨跡段**
+  （空隙 ≥ 10px），剔走「貼住框最左邊、闊 ≤ 0.22×框闊」嘅前綴段。
+  ⚠️ 特徵網格要夠闊（**480**）：實測最闊框 **446px**，用 240／384 會剪走右邊嘅字。
 - ⚠️ **唔可以承諾全自動讀名**：一定要有候選名單（見 §9）。
 - ⚠️ `data/skill-name-labels.json`（我第一次人手標註）**已知有錯位**，
   唔要當真值用；要真值就用上面「唔需要真值」嘅檢定。
+
+**技能名影像庫（`data/skill-name-lib/`）**：`node tools/build-skill-library.js`
+由逐頁技能畫面建庫 —— 每頁 14 個名框 → 跨頁去重（相似度 ≥ 0.95 當同一招）
+→ 實測 8 張真值圖 **112 個名框 → 79 個項目**。⭐ **去重可以自己驗證**：
+uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併 7、uma4 併 6，
+冇併錯／漏併嘅迹象。⚠️ 門檻兩邊都貼（併入最低 **0.952**、未併最高 **0.949**）
+→ 一定要人手覆核（`node tools/skill-lib-sheet.js --sort=merge`）。個名**未配**。
 
 ---
 
@@ -536,7 +561,7 @@ src/vision/skillscreen.js
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **102 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **114 個測試必須全過**
 2. `node tools/fit-score.js` — 必須 `完全命中 4/4　總絕對誤差 0`
 3. 如果改咗五維／技能／ランク相關嘅嘢，`node tools/breakdown.js` 逐招核對一次
 4. **如果改咗影像相關嘅嘢**：
@@ -566,5 +591,5 @@ src/vision/skillscreen.js
 | 中 | **模板覆蓋**：實機樣本仍然偏少（每個數字十幾個）。再收幾張實機圖（唔同培育進度／唔同馬／唔同主題色）可以令相似度同信心再升 |
 | 中 | **其他畫面／其他狀態嘅面板條**：現時只驗證咗育成主畫面（畫面 A）。仲未試：ステータス面板、比賽前後、訓練動畫期間 |
 | 中 | **實機效能**：5fps 之下嘅延遲、CPU、記憶體未正式量過（dump 機制本身只喺失敗時寫檔，唔影響）|
-| 中 | **Phase 2 下一步：接「候選名單」**（`skillscreen.js` 已做到：7 行／左右兩欄 → **112 個名框全部抽到**；影像比對已量到可行 —— 互相最佳配對中位數 **0.981**、撞分上限 **0.439**，見 `docs/skill-screen.md` §5）：<br>⏳ **卡喺一個問題：候選名單邊度嚟？** 冇遊戲字型檔、冇 1300 招標註樣本 → 唔可以通用 OCR；可行路線係「用影像比對**已知**名單」。三個可能來源：<br>　 ① **用家自己提供**（貼佢學咗嗰 20–40 招名 → 由技能庫拎名，但**冇名嘅影像**，所以仲要一次性建「名 → 影像」模板庫：開一頁技能畫面 dump 一次就夠）；<br>　 ② **由技能庫按適性篩**（例如只考慮草地／中距離 → 候選由 1323 跌到幾十）；<br>　 ③ **先做「唔靠名」嘅近似**：淨係靠**技能列數 + icon 顏色**估技能分範圍。<br>⚠️ 另一個已量到嘅難點：**一半格「最佳同次佳」差距 ≤0.05**（8 張圖只覆蓋幾十招、每招得 2–7 個樣本）→ 樣本一少就唔唯一，所以建模板庫嗰步唔可以慳。<br>⚠️ 用戶未拍板之前**唔好**開工做「全自動讀名」。|
+| ⭐ 高 | **Phase 2 下一步：用戶翻頁收圖 → 建技能名影像庫**（用戶 2026-09-18 拍板：「你直接用返個程式截圖遊戲畫面，我盡量開得幾多得幾多」）：<br>　 ✅ **已完成**：① 連拍模式 `UMAPYOI_SKILL_DUMP=1 npm.cmd start`（1:1 傳整個內容區、逐頁存 PNG、同一頁自動略過）；② `tools/build-skill-library.js` 逐頁抽名框 → 跨頁去重 → `data/skill-name-lib/`（8 張真值圖實測 **112 → 79 項**）；③ 人手覆核工具 `tools/skill-lib-sheet.js --sort=merge`。<br>　 ⏳ **下一步（等用戶收圖）**：用戶喺遊戲逐頁翻技能清單 → 我跑建庫 → 覆核有冇漏頁 → **配名**。<br>　 ⚠️ **配名仲有一個未解決嘅問題**：清單順序 ↔ 技能庫條目嘅對應未確認（遊戲清單可能按稀有度／類型排，唔一定跟 DB id）。可行做法：用「每頁新項目數」檢查有冇跳頁（已做），再用「相似度對齊」將 DB 順序套上去，最後人手抽查。<br>　 ⚠️ 建庫之前一定要人手覆核（門檻兩邊都貼：併入最低 **0.952**、未併最高 **0.949**）。|
 | 低 | **舊 Phase 2 待辦（已細化為上面一條）**：技能 icon 識別 |
