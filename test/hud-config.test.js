@@ -29,6 +29,7 @@ import {
   DEFAULT_HUD_LAYOUT,
   DEFAULT_HUD_OFFSET,
   DEFAULT_HUD_SIZE,
+  anchorHud,
   layoutFromEnv,
 } from '../src/hud/layout.js';
 
@@ -120,7 +121,9 @@ test('hud-config loadConfig：分節／欄位可以只寫一部分，其餘補�
   const cfg = loadConfig({ filePath: path });
   assert.deepEqual(cfg.layout.x, [0.1, 0.2]);
   assert.deepEqual(cfg.layout.y, [...DEFAULT_HUD_LAYOUT.y], '冇寫嘅欄位補預設');
-  assert.deepEqual(cfg.layout.size, { ...DEFAULT_HUD_SIZE });
+  // ⚠️ 淨係寫咗 `x` → 大細由範圍推（見 validateConfig 規則表：用戶冇寫 `size` 就唔算意圖，
+  //    唔可以攞預設 0.212 去砌出 x[1] = 0.312）。y 冇寫 → 用預設大細。
+  assert.deepEqual(cfg.layout.size, { w: 0.1, h: DEFAULT_HUD_SIZE.h }, '只寫範圍 → 大細由範圍推');
   assert.equal(cfg.display.total, false);
   assert.equal(cfg.display.skillScore, true, '冇寫嘅顯示項照預設開');
   assert.deepEqual(Object.keys(cfg.layout).sort(), ['offset', 'size', 'x', 'y'], '回嘅係完整形狀');
@@ -144,32 +147,237 @@ test('hud-config validateConfig：回正規化新 object，唔會改到入嗰個
   assert.deepEqual(validateConfig({}), defaultHudConfig());
 });
 
+// ───────── 不變式 x[1] = x[0] + size.w（⚠️ 呢條係「HUD 靜默走出畫面」嘅閘）─────────
+//
+// 為何要喺 validateConfig 呢一層測：設定窗／拖位路徑有 `clampLayout()` 夾住呢條不變式，
+// 但**手寫 `hud-position.json` 唔會經 clampLayout()**。實測（獨立審計）：
+// `validateConfig({ layout: { x: [0.9, 1.0], size: { w: 0.5, h: 0.2 } } })` 以前照過
+// → `anchorHud()` 用 `size.w` 做實際大細 → 右邊界 0.9 + 0.5 = 1.4 × 1920 = 2688 > 1920
+// → **HUD 靜默走出畫面**（唔會有任何錯誤訊息）。
+
+test('hud-config 不變式：一致嘅佈局一定過（預設／檔案範例／浮點邊界都要照過）', () => {
+  const consistent = [
+    ['預設（0.598 + 0.212 = 0.81）', { layout: defaultHudConfig().layout }],
+    ['檔案範例（0.598 + 0.212、0.03 + 0.255）', {
+      layout: { x: [0.598, 0.81], y: [0.03, 0.285], offset: { dx: 0, dy: 0 }, size: { w: 0.212, h: 0.255 } },
+    }],
+    ['整數（0.125 + 0.375 = 0.5）', { layout: { x: [0.125, 0.5], y: [0.25, 1], size: { w: 0.375, h: 0.75 } } }],
+    ['貼邊（0 + 1 = 1）', { layout: { x: [0, 1], y: [0, 1], size: { w: 1, h: 1 } } }],
+  ];
+  for (const [name, body] of consistent) {
+    const out = validateConfig(body);
+    // ⚠️ 唔可以用 `assert.equal`：0.598 + 0.212 喺 IEEE754 之下係 0.8099999999999999，
+    //    而檔案寫嘅係 0.81 —— 呢個 1.1e-16 嘅差就係「容差」存在嘅唯一理由。
+    assert.ok(
+      Math.abs(out.layout.x[1] - (out.layout.x[0] + out.layout.size.w)) <= 1e-9,
+      `${name}：x[1] 要等於 x[0] + size.w`,
+    );
+    assert.ok(
+      Math.abs(out.layout.y[1] - (out.layout.y[0] + out.layout.size.h)) <= 1e-9,
+      `${name}：y[1] 要等於 y[0] + size.h`,
+    );
+  }
+});
+
+test('hud-config 不變式：唔一致就 throw，而且訊息要講得出兩個數同「應該係幾多」（唔准靜默）', () => {
+  // ⭐ 呢個就係審計實測嗰個個案：以前照過 → HUD 靜默走出畫面（0.9 + 0.5 = 1.4 × 1920 = 2688）
+  assert.throws(
+    () => validateConfig({ layout: { x: [0.9, 1.0], size: { w: 0.5, h: 0.2 } } }),
+    /layout\.x\[1\] 應該等於 layout\.x\[0\] \+ layout\.size\.w/,
+  );
+  const err = (() => {
+    try {
+      validateConfig({ layout: { x: [0.9, 1.0], size: { w: 0.5, h: 0.2 } } });
+      return null;
+    } catch (e) { return e; }
+  })();
+  for (const piece of ['0.9', '0.5', '1.4', '1']) {
+    assert.ok(err.message.includes(piece), `訊息要包住「${piece}」：${err.message}`);
+  }
+
+  // x[1] 太大（0.4 + 0.1 = 0.5 ≠ 0.9）／x[1] 太小（0.1 + 0.5 = 0.6 ≠ 0.2）都要捉
+  assert.throws(
+    () => validateConfig({ layout: { x: [0.4, 0.9], size: { w: 0.1, h: 0.2 } } }),
+    /layout\.x\[1\]/,
+  );
+  assert.throws(
+    () => validateConfig({ layout: { x: [0.1, 0.2], size: { w: 0.5, h: 0.2 } } }),
+    /layout\.x\[1\]/,
+  );
+  // y 一樣要守（x 用預設：0.598 + 0.212 = 0.81 ✓ 自己一致，所以 throw 一定係講 y）
+  assert.throws(
+    () => validateConfig({ layout: { y: [0.03, 0.285], size: { w: 0.212, h: 0.5 } } }),
+    /layout\.y\[1\]/,
+  );
+  // 連檔案都要擋得住（`loadConfig` 係使用者真係會行到嘅路徑）
+  const path = freshPath('inconsistent.json');
+  writeRaw(path, JSON.stringify({ layout: { x: [0.9, 1.0], size: { w: 0.5, h: 0.2 } } }));
+  assert.throws(() => loadConfig({ filePath: path }), /欄位唔合法.*layout\.x\[1\]/s);
+  // 同 `resolveHudConfig` 一樣唔准靜默（main.js 會 catch 佢、大聲講、然後 app.exit(1)）
+  assert.throws(
+    () => resolveHudConfig({}, { layout: { x: [0.9, 1.0], size: { w: 0.5, h: 0.2 } } }),
+    /layout\.x\[1\]/,
+  );
+  // env 砌出矛盾組合（X 講範圍 0.1–0.5，W 講大細 0.2）一樣要 throw（見下面專門測試）
+});
+
+test('hud-config 不變式：env 同檔案／預設矛盾 → throw（但「冇寫」嘅一邊唔算矛盾，唔可以亂 throw）', () => {
+  const content = { x: 0, y: 0, width: 1920, height: 1080 };
+
+  // ① env 只改範圍 → 大細跟範圍推（唔會攞檔案／預設嘅大細砌出矛盾）
+  const onlyX = resolveHudConfig({ UMAPYOI_HUD_X: '0.1,0.3' }, null);
+  assert.deepEqual(onlyX.layout.x, [0.1, 0.3]);
+  assert.ok(Math.abs(onlyX.layout.size.w - 0.2) <= 1e-9, `env 只講範圍 → 大細由範圍推：${onlyX.layout.size.w}`);
+  assert.ok(
+    anchorHud(content, onlyX.layout).x + anchorHud(content, onlyX.layout).width <= 1920,
+    '右邊界唔可以走出內容區',
+  );
+
+  // ② env 只改大細 → 範圍由 x0 ＋ 新大細推（x0 本身跟檔案／預設）→ 唔會砌出矛盾
+  const onlyW = resolveHudConfig({ UMAPYOI_HUD_W: '0.1' }, null);
+  assert.equal(onlyW.layout.size.w, 0.1);
+  assert.equal(onlyW.layout.x[0], DEFAULT_HUD_LAYOUT.x[0], 'x0 唔受 _W 影響');
+  assert.ok(
+    Math.abs(onlyW.layout.x[1] - (onlyW.layout.x[0] + onlyW.layout.size.w)) <= 1e-9,
+    `x1 要由 x0 + w 推：${onlyW.layout.x[1]}`,
+  );
+
+  // ③ env 同時講範圍（0.1–0.5）同大細（0.2）→ 兩者矛盾（0.1 + 0.2 = 0.3 ≠ 0.5）→ throw
+  assert.throws(
+    () => resolveHudConfig({ UMAPYOI_HUD_X: '0.1,0.5', UMAPYOI_HUD_W: '0.2' }, null),
+    /layout\.x\[1\]/,
+  );
+  // ④ 檔案只寫範圍、env 只寫大細 → 唔算矛盾（大細由 env 話事、範圍跟返新大細）
+  const fileSpanEnvW = resolveHudConfig({ UMAPYOI_HUD_W: '0.2' }, { layout: { x: [0.1, 0.4] } });
+  assert.deepEqual(fileSpanEnvW.layout.size, { w: 0.2, h: DEFAULT_HUD_SIZE.h }, '大細跟 env');
+  assert.ok(
+    Math.abs(fileSpanEnvW.layout.x[1] - (fileSpanEnvW.layout.x[0] + 0.2)) <= 1e-9,
+    'x1 要跟新大細（唔可以留住舊範圍嘅 0.4 ← 咁就係矛盾）',
+  );
+  assert.equal(fileSpanEnvW.layout.x[0], 0.1, 'x0（位置）唔變');
+  // ⑤ 冇 env、檔案只寫範圍 → 照舊收（大細由範圍推），行為同 validateConfig 一致
+  const legacy = resolveHudConfig({}, { layout: { x: [0.1, 0.3] } });
+  assert.deepEqual(legacy.layout.x, [0.1, 0.3]);
+  assert.ok(Math.abs(legacy.layout.size.w - 0.2) <= 1e-9, `大細由範圍推：${legacy.layout.size.w}`);
+});
+
+test('hud-config 不變式：浮點誤差 1e-9 之內要放行，但真嘅數值錯誤一定要捉（唔准放寬到冇閘）', () => {
+  // （前提）0.1 + 0.7 喺 IEEE754 之下係 0.7999999999999999（唔係 0.8）——
+  // 呢種「同一個數嘅兩種寫法」唔可以當錯，否則正常檔案都開唔到。
+  const expected = 0.1 + 0.7;
+  assert.notEqual(expected, 0.8);
+  assert.ok(Math.abs(expected - 0.8) < 1e-15, `差幾多：${Math.abs(expected - 0.8)}`);
+  const okAx = validateConfig({ layout: { x: [0.1, 0.8], size: { w: 0.7, h: 0.2 } } }).layout;
+  assert.deepEqual(okAx.x, [0.1, 0.8]);
+  assert.equal(okAx.size.w, 0.7);
+  // 1e-13（＝1920px 之下 1.9e-10 px，只係浮點雜訊）都要放行
+  assert.ok(validateConfig({ layout: { x: [0.1, 0.8 + 1e-13], size: { w: 0.7, h: 0.2 } } }).layout.x[1] > 0.8);
+  // 0.1 + 0.7 = 0.7999999999999999，但寫 0.8（同一個數嘅兩種寫法）→ 一定要過，
+  // 否則正常檔案都開唔到。
+  assert.ok(validateConfig({ layout: { x: [0.1, 0.8], size: { w: 0.7, h: 0.2 } } }));
+  // ⚠️ 但 1e-4（＝1920px 之下 0.19px，來自「改咗大細唔記得改範圍」）一定要捉 ——
+  //    呢個就係「唔准為咗過測試而放寬檢查」嘅底線。
+  assert.throws(
+    () => validateConfig({ layout: { x: [0.598, 0.8101], size: { w: 0.212, h: 0.255 } } }),
+    /layout\.x\[1\]/,
+  );
+});
+
+test('hud-config 不變式：只寫一邊（範圍 或 大細）→ 由寫咗嗰邊推另一邊，唔會砌出矛盾', () => {
+  // 只寫範圍（舊檔案格式）→ 大細由範圍推；唔可以攞預設 0.212 砌出 x[1] = 0.312（＝靜默改咗用戶寫嘅範圍）
+  const onlySpan = validateConfig({ layout: { x: [0.1, 0.3], y: [0.2, 0.6] } });
+  assert.deepEqual(onlySpan.layout.x, [0.1, 0.3]);
+  assert.ok(Math.abs(onlySpan.layout.size.w - 0.2) <= 1e-9, `大細要由範圍推：${onlySpan.layout.size.w}`);
+  assert.ok(Math.abs(onlySpan.layout.size.h - 0.4) <= 1e-9, `大細要由範圍推：${onlySpan.layout.size.h}`);
+
+  // 只寫大細 → 範圍由「起點 + 大細」推（x0／y0 起點用預設，唔可以攞預設範圍末端）
+  const onlySize = validateConfig({ layout: { size: { w: 0.1, h: 0.3 } } });
+  assert.deepEqual(onlySize.layout.size, { w: 0.1, h: 0.3 });
+  assert.equal(onlySize.layout.x[0], DEFAULT_HUD_LAYOUT.x[0], 'x0 起點跟預設');
+  assert.equal(onlySize.layout.y[0], DEFAULT_HUD_LAYOUT.y[0], 'y0 起點跟預設');
+  assert.ok(
+    Math.abs(onlySize.layout.x[1] - (onlySize.layout.x[0] + 0.1)) <= 1e-9,
+    `x1 = x0 + w（唔可以留住預設範圍嘅 0.81）：${onlySize.layout.x[1]}`,
+  );
+  assert.ok(
+    Math.abs(onlySize.layout.y[1] - (onlySize.layout.y[0] + 0.3)) <= 1e-9,
+    `y1 = y0 + h：${onlySize.layout.y[1]}`,
+  );
+
+  // 只寫「大細 ＋ x0」：x[1] 由 x0 + w 推（唔可以用預設 x[1] 砌出矛盾）
+  const onlySizeX0 = validateConfig({ layout: { x: [0.4, 0.5], size: { w: 0.1 } } });
+  assert.deepEqual(onlySizeX0.layout.size, { w: 0.1, h: DEFAULT_HUD_SIZE.h });
+  assert.ok(Math.abs(onlySizeX0.layout.x[1] - 0.5) <= 1e-9, `x1 要等於 x0 + w：${onlySizeX0.layout.x[1]}`);
+
+  // ⭐ anchorHud 嘅實際後果：只寫範圍唔會再走出畫面（以前會用預設大細 0.212 砌到 x[1] = 0.312）
+  const content = { x: 0, y: 0, width: 1920, height: 1080 };
+  const rhs = validateConfig({ layout: { x: [0.9, 1.0] } }).layout;
+  const box = anchorHud(content, rhs);
+  assert.ok(box.x + box.width <= 1920, `右邊界唔可以走出內容區：${box.x} + ${box.width}`);
+
+  // 兩邊都有寫但矛盾 → 一定 throw（唔准靜默揀一個）
+  assert.throws(() => validateConfig({ layout: { x: [0.9, 1.0], size: { w: 0.5 } } }), /layout\.x\[1\]/);
+});
+
+test('hud-config 不變式：x 同 y 兩個軸要對稱（唔准只守 x 唔守 y）—— 連 loadConfig／resolveHudConfig 條路都要守', () => {
+  // ⭐ 審計實測嗰個個案：以前 `validateConfig({ layout: { x: [0.9, 1.0], size: { w: 0.5, h: 0.2 } } })`
+  //    照過 → `anchorHud()` 用 size.w 做實際大細 → 右邊界 0.9 + 0.5 = 1.4 × 1920 = 2688 > 1920
+  //    → HUD 靜默走出畫面。而家兩個軸、三條路徑都要 throw。
+  const axes = [
+    // ⚠️ 「壞」嗰個一定要**兩個值都喺 0–1**（唔可以靠「超出範圍」嗰條檢查矇混過關），
+    //    否則測唔到不變式本身。
+    { axis: 'x', sizeKey: 'w', bad: { x: [0.9, 1.0], size: { w: 0.5, h: 0.2 } }, good: { x: [0.4, 0.9], size: { w: 0.5, h: 0.2 } } },
+    { axis: 'y', sizeKey: 'h', bad: { y: [0.03, 0.285], size: { w: 0.212, h: 0.5 } }, good: { y: [0.4, 0.9], size: { w: 0.212, h: 0.5 } } },
+  ];
+  for (const { axis, bad, good } of axes) {
+    const re = new RegExp(`layout\\.${axis}\\[1\\]`);
+    assert.throws(() => validateConfig({ layout: bad }), re, `${axis}：validateConfig 要 throw`);
+    // loadConfig（用戶手寫 hud-position.json 真係會行到嘅路）
+    const path = freshPath(`invariant-${axis}.json`);
+    writeRaw(path, JSON.stringify({ layout: bad }));
+    assert.throws(() => loadConfig({ filePath: path }), re, `${axis}：loadConfig 要 throw`);
+    // resolveHudConfig（main.js 啟動路徑）
+    assert.throws(() => resolveHudConfig({}, { layout: bad }), re, `${axis}：resolveHudConfig 要 throw`);
+    // 🔎 反證：一致嘅版本一定過（證明上面 throw 真係因為「唔一致」，唔係因為閘亂咬）
+    const ok = validateConfig({ layout: good });
+    assert.ok(ok, `${axis}：一致就要過`);
+    // 🔎 而且真嘅綁到 anchorHud：一致版本唔會走出內容區
+    const box = anchorHud({ x: 0, y: 0, width: 1920, height: 1080 }, ok.layout);
+    assert.ok(box.x + box.width <= 1920 && box.y + box.height <= 1080, `${axis}：右／下邊界要喺內容區內`);
+  }
+});
+
 // ───────────────────────── 優先次序 ─────────────────────────
 
 test('hud-config resolveHudConfig：環境變數 > config 檔 > 預設（逐欄位）', () => {
+  // ⚠️ 檔案自己一定要成一致（x[1] = x[0] + size.w：0.1 + 0.3 = 0.4；y[1] = y[0] + size.h：0.3 + 0.2 = 0.5）——
+  //    呢條不變式而家由 validateConfig() 守住，所以測試資料唔可以再自相矛盾。
   const fileConfig = {
-    layout: { x: [0.1, 0.2], y: [0.3, 0.4], offset: { dx: 0.01, dy: 0.02 }, size: { w: 0.3, h: 0.4 } },
+    layout: { x: [0.1, 0.4], y: [0.3, 0.5], offset: { dx: 0.01, dy: 0.02 }, size: { w: 0.3, h: 0.2 } },
     display: { total: false, goldMark: true },
   };
 
   // 冇 env → 檔案值勝過預設
   const fromFile = resolveHudConfig({}, fileConfig);
-  assert.deepEqual(fromFile.layout.x, [0.1, 0.2]);
-  assert.deepEqual(fromFile.layout.y, [0.3, 0.4]);
+  assert.deepEqual(fromFile.layout.x, [0.1, 0.4]);
+  assert.deepEqual(fromFile.layout.y, [0.3, 0.5]);
   assert.equal(fromFile.layout.size.w, 0.3);
   assert.equal(fromFile.display.total, false, 'display 冇 env 呢回事 → 跟檔案');
 
   // env 逐欄位蓋過檔案，冇 set 嘅欄位保持檔案值
+  // ⚠️ `_X` 同 `_W` **一齊** set 嗰陣兩個值一定要互相一致（`x[1] = x[0] + w`）：
+  //    0.5 + 0.2 = 0.7 ✓。舊寫法（X=0.5,0.7 加 W=0.6）本身就矛盾（0.7 ≠ 1.1），
+  //    係嗰時 validateConfig 未守呢條不變式先過到 —— 而家會 throw（見下面新測試）。
   const mixed = resolveHudConfig(
-    { UMAPYOI_HUD_X: '0.5,0.7', UMAPYOI_HUD_DX: '-0.05', UMAPYOI_HUD_W: '0.6' },
+    { UMAPYOI_HUD_X: '0.5,0.7', UMAPYOI_HUD_DX: '-0.05', UMAPYOI_HUD_W: '0.2' },
     fileConfig,
   );
   assert.deepEqual(mixed.layout.x, [0.5, 0.7], 'env 要蓋過檔案');
-  assert.deepEqual(mixed.layout.y, [0.3, 0.4], '冇 set env 嘅欄位跟檔案');
+  assert.deepEqual(mixed.layout.y, [0.3, 0.5], '只 set 咗 X／DX／W → y 要跟檔案');
   assert.equal(mixed.layout.offset.dx, -0.05);
   assert.equal(mixed.layout.offset.dy, 0.02, 'dx／dy 各自獨立');
-  assert.equal(mixed.layout.size.w, 0.6);
-  assert.equal(mixed.layout.size.h, 0.4);
+  assert.equal(mixed.layout.size.w, 0.2);
+  assert.equal(mixed.layout.size.h, 0.2, '冇 set _H → 大細高跟檔案（唔係預設）');
 
   // 冇檔案 → 預設，env 照樣蓋過預設
   const noFile = resolveHudConfig({ UMAPYOI_HUD_Y: '0.8,0.9' }, null);
@@ -179,12 +387,23 @@ test('hud-config resolveHudConfig：環境變數 > config 檔 > 預設（逐欄�
 });
 
 test('hud-config resolveHudConfig：env 打嘅值啱啱好等於預設都要蓋過檔案（唔准用「同預設比較」判斷有冇 set）', () => {
-  const fileConfig = validateConfig({ layout: { x: [0.1, 0.2] } });
+  // 檔案寫嘅範圍（闊 0.3）同 env 打嘅預設範圍（闊 0.212）**都係自成一致嘅寫法**，
+  // 所以呢度測到嘅係純粹嘅「優先次序」，唔會被不變式檢查干擾。
+  const fileConfig = validateConfig({
+    layout: { x: [0.1, 0.4], size: { w: 0.3, h: 0.2 } },
+    display: { goldMark: false },
+  });
   const cfg = resolveHudConfig(
     { UMAPYOI_HUD_X: `${DEFAULT_HUD_LAYOUT.x[0]},${DEFAULT_HUD_LAYOUT.x[1]}` },
     fileConfig,
   );
   assert.deepEqual(cfg.layout.x, [...DEFAULT_HUD_LAYOUT.x], 'env 有 set 就算等於預設都要贏');
+  assert.ok(
+    Math.abs(cfg.layout.size.w - DEFAULT_HUD_SIZE.w) <= 1e-9,
+    `大細要同 env 個範圍同源（唔可以留住檔案嘅 0.3）：${cfg.layout.size.w}`,
+  );
+  assert.equal(cfg.layout.size.h, 0.2, '冇 set _H → 跟檔案');
+  assert.equal(cfg.display.goldMark, false, 'display 唔受 env 影響');
 });
 
 test('hud-config resolveHudConfig：env 唔合法／超範圍／檔案唔合法 → 一律 throw', () => {
@@ -194,7 +413,9 @@ test('hud-config resolveHudConfig：env 唔合法／超範圍／檔案唔合法 
   // layoutFromEnv 只查「係唔係數字」，範圍由合併之後嘅 validate 守住
   assert.throws(() => resolveHudConfig({ UMAPYOI_HUD_X: '0.9,0.5' }, null), /前細後大/);
   assert.throws(() => resolveHudConfig({ UMAPYOI_HUD_X: '0.1,1.5' }, null), /0–1/);
-  assert.throws(() => resolveHudConfig({ UMAPYOI_HUD_W: '0' }, null), /layout\.size\.w/);
+  // ⚠️ `_W=0` 而家會由「範圍要前細後大」捉（env 只講大細 → 範圍＝`x0 + 0`＝`x0`），
+  //    一樣係 throw（唔准靜默擺去一個唔可能嘅位置），訊息亦講得出個 0 係問題。
+  assert.throws(() => resolveHudConfig({ UMAPYOI_HUD_W: '0' }, null), /前細後大/);
   // 檔案唔合法都唔可以靜默當冇事
   assert.throws(() => resolveHudConfig({}, { layout: { x: [0.9, 0.1] } }), /前細後大/);
   // 回傳一定要係完整形狀
@@ -206,8 +427,10 @@ test('hud-config resolveHudConfig：env 唔合法／超範圍／檔案唔合法 
 test('hud-config saveConfig → loadConfig：round-trip 一致（UTF-8 JSON、檔名 hud-position.json）', () => {
   const dir = freshPath('save-dir');
   const path = join(dir, HUD_CONFIG_FILENAME); // 連目錄都未存在 → saveConfig 要自己開
+  // ⚠️ x[1] = x[0] + size.w、y[1] = y[0] + size.h（0.05 + 0.31 = 0.36、0.1 + 0.41 = 0.51）——
+  //    呢條不變式而家由 validateConfig() 守住，所以測試資料一定要自成一對。
   const custom = {
-    layout: { x: [0.11, 0.22], y: [0.33, 0.44], offset: { dx: -0.015, dy: 0.25 }, size: { w: 0.31, h: 0.41 } },
+    layout: { x: [0.05, 0.36], y: [0.1, 0.51], offset: { dx: -0.015, dy: 0.25 }, size: { w: 0.31, h: 0.41 } },
     display: { total: false, statScore: false },
   };
 
@@ -217,7 +440,9 @@ test('hud-config saveConfig → loadConfig：round-trip 一致（UTF-8 JSON、�
 
   const loaded = loadConfig({ filePath: path });
   assert.deepEqual(loaded, validateConfig(custom), '讀返嚟要同寫入嘅一模一樣');
-  assert.deepEqual(loaded.layout.x, [0.11, 0.22]);
+  assert.deepEqual(loaded.layout.x, [0.05, 0.36]);
+  assert.deepEqual(loaded.layout.y, [0.1, 0.51]);
+  assert.deepEqual(loaded.layout.size, { w: 0.31, h: 0.41 }, 'round-trip 唔可以改到大細');
   assert.equal(loaded.display.total, false);
   assert.equal(loaded.display.goldMark, true, '冇寫嘅顯示項寫檔時會補預設');
 
