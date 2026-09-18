@@ -23,8 +23,31 @@ import { validateConfig } from '../src/hud/config.js';
 /** 夾完之後一定要過 `config.js` 嘅 validate（＝真嘅可以存檔）。 */
 function assertValid(layout, note = '') {
   const ok = validateConfig({ layout }); // display 唔傳 → 用預設（唔可以用 null，validateDisplay 會 throw）
-  assert.deepEqual(ok.layout, layout, `夾完嘅 layout 唔應該再被 validate 改：${note}`);
+  assertSameLayout(ok.layout, layout, `夾完嘅 layout 唔應該再被 validate 改：${note}`);
   return ok;
+}
+
+/**
+ * 兩個佈局係唔係「同一個佈局」（逐個數字差 ≤ 1e-9）。
+ *
+ * ⚠️ 為何唔用 `deepEqual`：`config.js` 而家係「**`size` 為準**、`x[1]` 由 `x[0] + size.w` 推導」
+ * → `validateConfig(clampLayout(x))` 同 `x` 之間可能差**最後一個 bit**
+ * （實測 `0.598 + 0.212 = 0.8099999999999999`，而 `clampLayout()` 交嘅係靚仔嘅 `0.81`；
+ * 差 1.1e-16 ＝ 1920px 之下 2e-13 px）。呢個唔係行為改變，但**唔可以**當成「冇事」：
+ * 所以下面**逐個欄位**比對（唔准少欄位／多欄位），值就要喺 1e-9 之內。
+ */
+function assertSameLayout(actual, expected, note = '') {
+  const fields = [
+    'x.0', 'x.1', 'y.0', 'y.1', 'offset.dx', 'offset.dy', 'size.w', 'size.h',
+  ];
+  const get = (o, path) => path.split('.').reduce((acc, k) => acc?.[k], o);
+  assert.deepEqual(Object.keys(actual).sort(), Object.keys(expected).sort(), `欄位要一樣：${note}`);
+  for (const f of fields) {
+    const a = get(actual, f);
+    const e = get(expected, f);
+    assert.ok(Number.isFinite(a), `${f} 要係有限數字（實得 ${a}）：${note}`);
+    assert.ok(Math.abs(a - e) <= 1e-9, `${f} 要一樣（${a} vs ${e}，差 ${Math.abs(a - e)}）：${note}`);
+  }
 }
 
 test('clampLayout：預設佈局原封不動（唔可以一夾就變位）', () => {
@@ -35,7 +58,7 @@ test('clampLayout：預設佈局原封不動（唔可以一夾就變位）', () 
     size: { ...DEFAULT_HUD_SIZE },
   };
   const out = clampLayout(base);
-  assert.deepEqual(out, base);
+  assertSameLayout(out, base, '預設佈局');
   assertValid(out);
 });
 

@@ -151,8 +151,14 @@ function clamp(v, lo, hi) {
   return Math.min(hi, Math.max(lo, v));
 }
 
-/** 6 位小數已經遠細過一個像素（1920 闊之下 1px = 0.0005），純粹係令存檔靚仔。 */
-function round6(v) {
+/**
+ * 6 位小數已經遠細過一個像素（1920 闊之下 1px = 0.0005），純粹係令存檔靚仔。
+ *
+ * ⚠️ **要 export**：`config.js` 推導出嚟嘅 `size`／`x[1]`／`y[1]` 一定要收斂到同樣嘅
+ * 小數位，唔係嘅話「還原預設 → 拖 → 存」會把 `0.21200000000000008` 呢類
+ * `x[1] − x[0]` 嘅浮點噪音寫入用戶個檔（實測：空 env 之下 `size.w` 就係咁）。
+ */
+export function round6(v) {
   return Math.round(v * 10 ** LAYOUT_DECIMALS) / 10 ** LAYOUT_DECIMALS;
 }
 
