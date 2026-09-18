@@ -47,6 +47,11 @@
       //    相對範圍由主程序（statbar.js 嘅 DEFAULT_STATBAR_OPTIONS）經 IPC 傳落嚟，
       //    兩邊一定同一個來源，唔會各自寫死一組數字。
       let roi = null;
+      // ⭐ 連拍模式可以再剪細：主程序經 IPC 傳一個「內容區比例」矩形落嚟，
+      //    只傳嗰橛（例如「賽馬娘詳情」彈窗嘅技能清單）——
+      //    全畫面 1928×1085 一幀 8MB，而且技能清單淨係佔中間一小橛，冇必要傳晒。
+      let crop = null;
+      const CROP_MAX_W = 1200; // 剪完之後最闊幾多（夠放 7 列技能名）
 
       let started = false;
       let lastSent = 0;
@@ -67,6 +72,14 @@
           targetFps = n;
           frameMs = 1000 / n;
         }
+      });
+
+      // 主程序可以再指定一個「內容區比例」矩形（連拍模式專用；null = 唔剪）。
+      ipcRenderer.on('crop', (_event, rect) => {
+        crop = rect && rect.w > 0 && rect.h > 0 ? rect : null;
+        hintEl.textContent = crop
+          ? ` · 只剪內容區 ${(crop.w * 100).toFixed(0)}%×${(crop.h * 100).toFixed(0)}%`
+          : '';
       });
 
       ipcRenderer.on('start', async (_event, sourceId) => {
@@ -130,15 +143,36 @@
         const sw = Math.min(vw - sx0, sx1 - sx0);
         const sh = Math.min(vh - sy0, sy1 - sy0);
 
+        // ⭐ 連拍模式可以再剪細（crop 係「相對於上面嗰個 ROI 範圍」嘅比例）。
+        let cx = sx0;
+        let cy = sy0;
+        let cw = sw;
+        let ch = sh;
+        if (crop) {
+          cx = sx0 + Math.round(sw * crop.x);
+          cy = sy0 + Math.round(sh * crop.y);
+          cw = Math.max(16, Math.round(sw * crop.w));
+          ch = Math.max(16, Math.round(sh * crop.h));
+          cw = Math.min(cw, vw - cx);
+          ch = Math.min(ch, vh - cy);
+        }
+
         const scale = roi ? 1 : Math.min(1, 640 / vw);
-        const width = Math.max(1, Math.round(sw * scale));
-        const height = Math.max(1, Math.round(sh * scale));
+        let width = Math.max(1, Math.round(cw * scale));
+        let height = Math.max(1, Math.round(ch * scale));
+
+        // ⚠️ 剪細之後仍然太闊（例如全畫面）→ 等比縮到 ≤ CROP_MAX_W，避免一幀 8MB。
+        if (width > CROP_MAX_W) {
+          const k = CROP_MAX_W / width;
+          width = CROP_MAX_W;
+          height = Math.max(1, Math.round(height * k));
+        }
 
         if (canvas.width !== width || canvas.height !== height) {
           canvas.width = width;
           canvas.height = height;
         }
-        ctx.drawImage(video, sx0, sy0, sw, sh, 0, 0, width, height);
+        ctx.drawImage(video, cx, cy, cw, ch, 0, 0, width, height);
         const image = ctx.getImageData(0, 0, width, height);
 
         ipcRenderer.send('frame', {

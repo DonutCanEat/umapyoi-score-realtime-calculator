@@ -193,6 +193,32 @@ let everyCount = 0;
 const SKILL_DUMP = Boolean(process.env.UMAPYOI_SKILL_DUMP);
 const SKILL_DIR = join(ROOT, 'shots', 'skill-dump');
 const SKILL_MAX = Number(process.env.UMAPYOI_SKILL_MAX || 400) || 400;
+
+/**
+ * ⭐ 連拍模式預設只剪「技能清單」嗰橛（內容區比例）。
+ *
+ * 為何要：實測全畫面 1928×1085 一幀 ~2MB raw、而且**技能清單只佔中間一小橛**
+ * （「賽馬娘詳情」彈窗裏面）。全畫面傳過去，偵測器要面對成個彈窗嘅其他文字
+ * （能力值／適性／按鈕），列偵測會亂（實測 9–12 列，唔係 7 列）。
+ *
+ * 數值由**真值圖**反推：`shots/gt/uma1-p1-skills.png` 係 1140×950 純技能清單，
+ * 對應遊戲內容區嘅 x 0.222–0.836、y 0.374–0.732（見 docs/skill-screen.md §5.8）。
+ * 用 `UMAPYOI_DUMP_CROP=0,0,1,1` 可以還原成整個內容區。
+ */
+function parseCrop(value) {
+  if (!value) return null;
+  const parts = String(value).split(',').map(Number);
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) {
+    throw new Error(`UMAPYOI_DUMP_CROP 格式應該係 x,y,w,h（內容區比例），實得「${value}」`);
+  }
+  const [x, y, w, h] = parts;
+  if (w <= 0 || h <= 0) throw new Error(`UMAPYOI_DUMP_CROP 嘅 w／h 要 > 0，實得「${value}」`);
+  return { x, y, w, h };
+}
+const SKILL_CROP = SKILL_DUMP
+  ? parseCrop(process.env.UMAPYOI_DUMP_CROP ?? '0.222,0.374,0.614,0.358')
+  : null;
+
 let skillPages = 0;
 let skillSkipped = 0;
 const skillSignatures = []; // 已存頁面嘅指紋（正規化逐列墨量）
@@ -324,7 +350,7 @@ app.whenReady().then(async () => {
     //    收到第一幀之後 `pushHud()` 會自動對位。
     // 面板條嘅相對範圍由**呢度**（statbar.js）話俾 renderer 知，
     // renderer 只負責 1:1 剪出嚟傳返嚟（唔可以兩邊各自寫死一組數字）。
-    // ⭐ 技能連拍模式：唔剪面板條，1:1 傳**整個內容區**（見 `SKILL_DUMP` 註解）。
+    // ⭐ 技能連拍模式：唔剪面板條，傳整個內容區（再由 `SKILL_CROP` 剪技能清單嗰橛）。
     win.webContents.send('roi', SKILL_DUMP
       ? { x0: 0, x1: 1, y0: 0, y1: 1, aspect: DEFAULT_STATBAR_OPTIONS.aspect }
       : {
@@ -337,13 +363,23 @@ app.whenReady().then(async () => {
     win.webContents.send('start', hit.id);
     if (SKILL_DUMP) {
       win.webContents.send('fps', Number(process.env.UMAPYOI_CAPTURE_FPS || 1) || 1);
+      if (SKILL_CROP) win.webContents.send('crop', SKILL_CROP);
       console.log('');
       console.log('📸 技能連拍模式（UMAPYOI_SKILL_DUMP=1）');
-      console.log('   ① 喺遊戲開「賽馬娘詳情 → 技能」清單畫面');
+      console.log('   ① 喺遊戲開「賽馬娘詳情 → 技能」清單畫面（即係彈窗嗰個清單）');
       console.log('   ② 慢慢向下翻頁（每頁停約 1 秒）—— 同一頁重複拍會自動略過');
-      console.log(`   ③ 存去 shots/skill-dump/（每頁一個 PNG，新頁面先會存）`);
-      console.log('   ④ 翻完就 Ctrl+C；之後跑 node tools/skillpages-to-library.js');
-      console.log('   ⑤ 冇開 HUD、亦唔會讀五維（呢個模式只係收圖）');
+      if (SKILL_CROP) {
+        console.log(
+          `   ③ 只剪技能清單嗰橛：內容區 x ${SKILL_CROP.x}–${(SKILL_CROP.x + SKILL_CROP.w).toFixed(3)}、` +
+          `y ${SKILL_CROP.y}–${(SKILL_CROP.y + SKILL_CROP.h).toFixed(3)}`,
+        );
+        console.log('      （要傳整個內容區就設 UMAPYOI_DUMP_CROP=0,0,1,1）');
+      } else {
+        console.log('   ③ 傳整個內容區（UMAPYOI_DUMP_CROP=0,0,1,1）');
+      }
+      console.log('   ④ 存去 shots/skill-dump/（每頁一個 PNG）');
+      console.log('   ⑤ 翻完就 Ctrl+C；之後跑 node tools/build-skill-library.js');
+      console.log('   ⑥ 冇開 HUD、亦唔會讀五維（呢個模式只係收圖）');
       console.log('');
     }
   });

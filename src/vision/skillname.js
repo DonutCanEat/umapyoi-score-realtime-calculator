@@ -58,10 +58,17 @@ export const SKILLNAME_MAYBE = 0.65;
  *   ② 名 = 剩低最闊嗰段；③ 由名往右（同一段或者緊接嘅段）延伸，
  *      吃掉「類似 `Lv`」嘅短段（闊 ≤ 0.2×框闊）。
  *
- * @returns {{from:number,to:number}|null} 名喺框內嘅相對欄範圍（含頭含尾；-1 = 冇）
+ * @param {Int32Array} cols 框內逐欄墨量
+ * @param {number} boxWidth 框闊（像素）
+ * @param {number} [scale] 尺度因子（1 = 參考尺度 1140 闊）。
+ *   ⚠️ 「段與段之間幾闊先算分隔」係**像素**門檻 → 要跟尺度，
+ *   否則換個窗大細就會切錯（見 `skillscreen.js` 嘅 `referenceWidth` 同 docs §5.8）。
+ * @returns {{from:number,to:number}|null} 名喺框內嘅相對欄範圍（含頭含尾）
  */
-export function trimNameSegments(cols, boxWidth) {
+export function trimNameSegments(cols, boxWidth, scale = 1) {
   const segs = [];
+  const gapNeed = Math.max(2, Math.round(NAME_LEVEL_GAP * scale));
+  const edgeTol = Math.max(1, Math.round(5 * scale));
   let start = -1;
   let gap = 0;
   for (let i = 0; i < cols.length; i += 1) {
@@ -72,7 +79,7 @@ export function trimNameSegments(cols, boxWidth) {
     }
     if (start >= 0) {
       gap += 1;
-      if (gap >= NAME_LEVEL_GAP) {
+      if (gap >= gapNeed) {
         segs.push({ from: start, to: i - gap });
         start = -1;
         gap = 0;
@@ -84,7 +91,7 @@ export function trimNameSegments(cols, boxWidth) {
 
   const maxPrefix = Math.max(6, Math.round(boxWidth * 0.22));
   // ① 貼住最左邊嘅窄前綴 = 徽章／icon
-  while (segs.length > 1 && segs[0].from <= 5 && (segs[0].to - segs[0].from + 1) <= maxPrefix) {
+  while (segs.length > 1 && segs[0].from <= edgeTol && (segs[0].to - segs[0].from + 1) <= maxPrefix) {
     segs.shift();
   }
   // ② 名 = 最闊嗰段
@@ -112,7 +119,7 @@ export function trimNameSegments(cols, boxWidth) {
  * @param {number} y1 該技能列底
  * @returns {{vec:Float32Array,bw:number,bh:number,inkL:number,inkR:number,inkT:number,inkB:number}|null}
  */
-export function nameBoxFeature(image, mask, box, y0, y1) {
+export function nameBoxFeature(image, mask, box, y0, y1, referenceWidth = 1140) {
   const { x0, x1 } = box;
   const boxWidth = x1 - x0 + 1;
   const cols = new Int32Array(boxWidth);
@@ -120,7 +127,7 @@ export function nameBoxFeature(image, mask, box, y0, y1) {
     const base = y * image.width;
     for (let x = x0; x <= x1; x += 1) cols[x - x0] += mask[base + x];
   }
-  const span = trimNameSegments(cols, boxWidth);
+  const span = trimNameSegments(cols, boxWidth, image.width / referenceWidth);
   if (!span) return null;
   const inkL = span.from;
   const inkR = span.to;

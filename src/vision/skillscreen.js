@@ -30,7 +30,7 @@ import { buildInkMask } from './inkmask.js';
  * 窗太細就會被「窗口要夠多淺色底」呢個條件篩走。
  */
 export const DEFAULT_SKILLSCREEN_OPTIONS = Object.freeze({
-  /** 墨點遮罩窗半徑（技能畫面用大窗，見上面註解）。 */
+  /** 墨點遮罩窗半徑（技能畫面用大窗，見上面註解）。**呢個係「參考尺度」嘅像素值。** */
   windowRadius: 11,
   /** 窗口淺色比例門檻（技能畫面放寬到 0.2）。 */
   lightFraction: 0.2,
@@ -47,7 +47,30 @@ export const DEFAULT_SKILLSCREEN_OPTIONS = Object.freeze({
   iconMinWidth: 0.045,
   /** 技能名同右邊 `Lv5` 之間嘅空隙（÷ 圖闊），夠闊就當右邊嗰舊係 Lv。 */
   lvGap: 0.03,
+  /**
+   * ⭐ **參考闊度**（像素）：`windowRadius` 同「最低像素門檻」都係喺**呢個尺度**量出嚟嘅。
+   *
+   * 為何要有：遊戲**冇固定解析度**（地雷 #24），所以同一套 UI 喺細窗／大窗之下，
+   * 字高可以差一倍以上。所有寫死嘅**像素**門檻（遮罩窗半徑 11、最低列高 8px、
+   * 名框前綴 5px…）喺另一半尺度就會失效。
+   *
+   * ⚠️ **實測踩過**：用戶收返嚟嘅實拍係 1928 窗（技能名 ~10px 高、行距 ~63px），
+   * 而真值圖係 1140 尺度（字高 ~25px、行距 **124px**）→ 同一張技能清單，
+   * 用 11px 遮罩窗去讀 10px 嘅字 → 列偵測爆到 **9–12 列**（正解 7 列）。
+   * → 所有像素門檻一律 × (圖闊 ÷ referenceWidth)。
+   */
+  referenceWidth: 1140,
 });
+
+/**
+ * 由圖闊推尺度因子（1.0 = 參考尺度 1140 闊）。
+ *
+ * 所有**像素**門檻都要 × 呢個值，否則換個窗大細就失效（見 `referenceWidth` 註解）。
+ */
+export function skillScale(width, options = {}) {
+  const o = { ...DEFAULT_SKILLSCREEN_OPTIONS, ...options };
+  return width / o.referenceWidth;
+}
 
 /**
  * 逐列墨量（用背景受控遮罩，同主線一致）。
@@ -58,7 +81,9 @@ export const DEFAULT_SKILLSCREEN_OPTIONS = Object.freeze({
  */
 export function rowInkProfile(image, options = {}) {
   const o = { ...DEFAULT_SKILLSCREEN_OPTIONS, ...options };
-  const mask = buildInkMask(image, { windowRadius: o.windowRadius, lightFraction: o.lightFraction });
+  // ⭐ 遮罩窗半徑要跟尺度（細窗要用細窗，大窗要用大窗）
+  const radius = Math.max(3, Math.round(o.windowRadius * skillScale(image.width, o)));
+  const mask = buildInkMask(image, { windowRadius: radius, lightFraction: o.lightFraction });
   const counts = new Int32Array(image.height);
   for (let y = 0; y < image.height; y += 1) {
     let c = 0;
@@ -66,7 +91,7 @@ export function rowInkProfile(image, options = {}) {
     for (let x = 0; x < image.width; x += 1) c += mask[base + x];
     counts[y] = c;
   }
-  return { counts, mask };
+  return { counts, mask, windowRadius: radius, scale: skillScale(image.width, o) };
 }
 
 /**
@@ -80,8 +105,11 @@ export function rowInkProfile(image, options = {}) {
  */
 export function findSkillRows(counts, width, height, options = {}) {
   const o = { ...DEFAULT_SKILLSCREEN_OPTIONS, ...options };
-  const minInk = Math.max(4, Math.round(width * o.minRowInk));
-  const maxH = Math.max(8, Math.round(height * o.maxRowHeight));
+  const scale = skillScale(width, o);
+  const minInk = Math.max(2, Math.round(width * o.minRowInk));
+  const maxH = Math.max(4, Math.round(height * o.maxRowHeight));
+  // ⭐ 「最低幾高先算一列」係像素門檻 → 要跟尺度（實測 1140 尺度 = 8px）
+  const minH = Math.max(2, Math.round(8 * scale));
   // ① 連續夠墨嘅列段
   const raw = [];
   let y = 0;
@@ -112,7 +140,7 @@ export function findSkillRows(counts, width, height, options = {}) {
 
   return out
     .map((s) => ({ ...s, height: s.y1 - s.y0 + 1 }))
-    .filter((s) => s.height >= Math.max(4, Math.round(height * o.minRowHeight)));
+    .filter((s) => s.height >= Math.max(minH, Math.round(height * o.minRowHeight)));
 }
 
 /**
