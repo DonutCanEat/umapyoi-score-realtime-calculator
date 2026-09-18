@@ -19,6 +19,7 @@ import {
   locateStatBar,
   readStatBar,
   pickFiveBySpacing,
+  dropNonDigits,
   DEFAULT_STATBAR_OPTIONS,
 } from '../src/vision/statbar.js';
 
@@ -159,6 +160,42 @@ test('statbar pickFiveBySpacing：用右邊界間距，唔會被「闊度唔一�
     [42, 132, 223, 311, 403],
     '應該揀頭 5 個（右邊界等距），而唔係連「技能Pt」格',
   );
+});
+
+/* ──────────────────────────── 剔碎片（實機回歸） ──────────────────────────── */
+
+test('statbar dropNonDigits：剔走唔可能係數字嘅細碎片（2026-09-18 實機 bug）', () => {
+  // 實機實測：數字右邊多咗一舊 3×4 像素嘅碎片（格線／高亮邊緣），
+  // 而「由右邊貪心收」一撞到低分就停 → 成格報「?」，連左邊正確嘅數字都讀唔到。
+  const glyphs = [
+    { width: 13, height: 18 },
+    { width: 14, height: 18 },
+    { width: 14, height: 18 },
+    { width: 3, height: 4 }, // ← 碎片
+  ];
+  const kept = dropNonDigits(glyphs);
+  assert.equal(kept.length, 3, '應該淨係剩返三個真數字');
+  assert.ok(!kept.includes(glyphs[3]), '碎片要剔走');
+});
+
+test('statbar dropNonDigits：同樣高度就唔會誤剔', () => {
+  const glyphs = [
+    { width: 13, height: 18 },
+    { width: 14, height: 18 },
+    { width: 5, height: 18 }, // 「1」好窄但一樣高 → 要保留
+  ];
+  assert.equal(dropNonDigits(glyphs).length, 3);
+});
+
+test('statbar dropNonDigits：唔會剔到一個都冇，亦唔會郁單一字元', () => {
+  const single = [{ width: 3, height: 4 }];
+  assert.equal(dropNonDigits(single).length, 1, '單一字元唔郁（可能真係細字）');
+  // 全部都好矮（例如細字行）→ 唔敢剔
+  const tiny = [
+    { width: 6, height: 5 },
+    { width: 6, height: 3 },
+  ];
+  assert.equal(dropNonDigits(tiny).length, 2);
 });
 
 /* ──────────────────────────── 端到端 ──────────────────────────── */

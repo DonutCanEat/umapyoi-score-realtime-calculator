@@ -35,6 +35,16 @@ export const DEFAULT_STATBAR_OPTIONS = Object.freeze({
   roiY: [0.645, 0.735], // 實測面板列 y 0.691–0.703，上下各留邊
   targetGlyphHeight: 17, // 模板建立時嘅字高（gt 截圖實測）
   minBandInk: 20,
+  minValuesSpread: 0.6,
+  minLimitsSpread: 0.5,
+  /**
+   * 接受門檻（原本 0.55）。實機數字係**漸變色**（上淺下深），
+   * 墨點遮罩會削走較淺嘅上半 → 同模板嘅相似度天然偏低：
+   * 實測一幀嘅真數字「2」得 0.52（差 0.03 就讀唔到）。降到 0.45。
+   * 安全網仍然喺：① 由右邊貪心收（一撞到唔似數字就停）；
+   * ② 剔走唔可能係數字嘅細碎片（見 `dropNonDigits()`）；③ 幀間多數投票。
+   */
+  minAccept: 0.45,
 });
 
 /**
@@ -220,6 +230,26 @@ export function pickFiveBySpacing(numbers, options = {}) {
 }
 
 /**
+ * 剔走「唔可能係數字」嘅碎片。
+ *
+ * 為何需要（2026-09-18 實機 dump 實測）：第 5 格數字右邊有時會多一舊 **3×4 像素**
+ * 嘅碎片（格線／高亮邊緣之類）。`readNumberTrimmed()` 係由右邊貪心收，
+ * 一撞到低分就即刻停 → 成格報「?」，連左邊三個正確嘅數字都讀唔到。
+ *
+ * 判準：同一個數字入面，**所有字元高度一定一樣**（同一字型、同一行），
+ * 所以矮過最高字元 55% 嘅一定唔係數字。
+ */
+export function dropNonDigits(glyphs, options = {}) {
+  if (!glyphs || glyphs.length <= 1) return glyphs ?? [];
+  const ratio = options.minGlyphHeightRatio ?? 0.55;
+  const maxHeight = Math.max(...glyphs.map((g) => g.height));
+  if (maxHeight < 6) return glyphs; // 太細就唔敢剔（可能係細字）
+  const minHeight = Math.max(4, Math.round(maxHeight * ratio));
+  const kept = glyphs.filter((g) => g.height >= minHeight);
+  return kept.length ? kept : glyphs;
+}
+
+/**
  * 抽出實機面板條嘅 5 個數值框同各自嘅字元（讀數同**建模板**共用同一條路，
  * 唔可以兩邊各寫一次，否則會出現「訓練用一套、讀數用另一套」嘅偏差）。
  *
@@ -256,10 +286,10 @@ export function collectStatBarGlyphs(image, options = {}) {
       reason: `候選數字唔夠／唔等距（候選 ${all.length} 個：${candidates.join(' ')}）`,
     };
   }
-  const entries = picked.numbers.map((num) => ({
-    num,
-    glyphs: extractGlyphs(roi, mask, { x0: num.x0, x1: num.x1 }, values.y0, values.y1),
-  }));
+  const entries = picked.numbers.map((num) => {
+    const raw = extractGlyphs(roi, mask, { x0: num.x0, x1: num.x1 }, values.y0, values.y1);
+    return { num, glyphs: dropNonDigits(raw, o), rawGlyphs: raw.length };
+  });
   return { located, entries, candidates, reason: undefined };
 }
 

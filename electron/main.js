@@ -156,7 +156,10 @@ ipcMain.on('frame', (_event, frame) => {
     const now = Date.now();
     if (read.reason && now - lastLog > 5000) {
       lastLog = now;
-      console.log(`[讀唔到] ${read.reason}`);
+      // 分清「根本冇面板條」（換咗畫面／轉場 —— 正常）同「面板喺度但讀唔清」（真問題）
+      const noBar = read.reason.includes('條帶') || read.reason.includes('搵唔到面板條');
+      if (noBar) console.log('[讀唔到] （唔見面板條 —— 可能喺其他畫面／轉場，屬正常）');
+      else console.log(`[讀唔到] ${read.reason}`);
       if (read.candidates) console.log(`         候選：${read.candidates.join(' ')}`);
       const dumped = dumpFrame(image, { kind: 'fail', reason: read.reason, candidates: read.candidates, cropped });
       if (dumped) console.log(`         已存幀：${dumped.replace(`${ROOT}\\`, '')}`);

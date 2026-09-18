@@ -70,16 +70,25 @@ const sources = discoverSources();
  *
  * 為何要入訓練：實機字高跟解析度變（12–24px），最細尺度（1356 闊 → 12px）字形資訊少，
  * 淨用 gt（17px）訓練會出現「6 vs 8」混淆。加實機樣本可以覆蓋細尺度。
+ *
+ * 兩種圖：
+ *   - `live-*.png`：**整個遊戲視窗**（要靠相對 ROI 定位面板條）
+ *   - `roi-*.png` ：**已經剪好嘅面板條**（renderer 傳過嚟嘅幀；實機失敗幀就係呢種）
  */
 function discoverLiveSources() {
   if (!existsSync(LIVE_TRUTH_PATH)) return [];
   const db = JSON.parse(readFileSync(LIVE_TRUTH_PATH, 'utf8'));
   if (!Array.isArray(db.values) || db.values.length !== 5) return [];
   return (db.shots ?? [])
-    .map((f) => `shots/live/${f}`)
-    .filter((rel) => existsSync(join(ROOT, rel)))
-    .filter((rel) => !excludes.some((e) => rel.includes(e)))
-    .map((shot) => ({ truth: db.values, shot, live: true }));
+    .map((file) => ({
+      shot: `shots/live/${file}`,
+      file,
+      live: true,
+      cropped: file.startsWith('roi-'),
+      truth: db.perShot?.[file] ?? db.values,
+    }))
+    .filter((s) => existsSync(join(ROOT, s.shot)))
+    .filter((s) => !excludes.some((e) => s.shot.includes(e)));
 }
 
 const liveSources = discoverLiveSources();
@@ -138,7 +147,7 @@ for (const source of sources) {
 for (const source of liveSources) {
   const img = decodePng(readFileSync(join(ROOT, source.shot)));
   const image = { data: img.data, width: img.width, height: img.height };
-  const { entries, reason } = collectStatBarGlyphs(image);
+  const { entries, reason } = collectStatBarGlyphs(image, { whole: source.cropped });
   if (!entries) {
     console.log(`✗ ${source.shot}（實機面板條）：${reason}`);
     continue;
@@ -164,7 +173,7 @@ for (const source of liveSources) {
     });
     collected.push(`${value}✓`);
   });
-  console.log(`✓ ${source.shot}（實機面板條）字高 ${entries.length ? entries[0].num.x1 - entries[0].num.x0 + 1 : '?'}px  ${collected.join(' ')}`);
+  console.log(`✓ ${source.shot}（實機面板條）${source.cropped ? '［已剪 ROI］' : ''}  ${collected.join(' ')}`);
 }
 
 console.log('');
@@ -238,7 +247,7 @@ if (liveSources.length) {
   for (const source of liveSources) {
     const img = decodePng(readFileSync(join(ROOT, source.shot)));
     const image = { data: img.data, width: img.width, height: img.height };
-    const read = readStatBar(image, runtime);
+    const read = readStatBar(image, runtime, { whole: source.cropped });
     liveTotal += 1;
     const ok = read.stats && read.stats.every((v, i) => v === source.truth[i]);
     if (ok) liveHits += 1;

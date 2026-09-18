@@ -18,7 +18,7 @@
  *   node tools/diag-statbar.js --read --cropped     # 模擬 renderer 先剪 ROI（執行時路徑）
  */
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -53,6 +53,23 @@ const maskOverride = maskArg
 const files = args.filter((a) => !a.startsWith('--'));
 const cropped = args.includes('--cropped');
 
+/** 真值：CLI `--expect` 優先，否則讀 `data/live-truth.json`（per-shot 例外行先）。 */
+const LIVE_TRUTH_PATH = join(ROOT, 'data', 'live-truth.json');
+const liveTruth = existsSync(LIVE_TRUTH_PATH) ? JSON.parse(readFileSync(LIVE_TRUTH_PATH, 'utf8')) : null;
+const truthOf = (rel) => expect ?? liveTruth?.perShot?.[basename(rel)] ?? liveTruth?.values ?? null;
+
+/**
+ * `shots/live/` 有兩種圖：
+ *   - `live-*.png`：整個遊戲視窗 → 要行相對 ROI 定位
+ *   - `roi-*.png` ：已經剪好嘅 ROI（實機 dump 嘅幀）→ 直接當成 ROI
+ */
+const list = files.length
+  ? files.map((f) => ({ rel: f, cropped: basename(f).startsWith('roi-') }))
+  : readdirSync(join(ROOT, 'shots', 'live'))
+      .filter((f) => f.endsWith('.png'))
+      .sort()
+      .map((f) => ({ rel: `shots/live/${f}`, cropped: f.startsWith('roi-') }));
+
 /**
  * 模擬 `electron/capture.html` 嘅剪法：由遊戲視窗尺寸推內容框，再剪面板條（1:1）。
  * 呢個函式同 renderer 嗰段邏輯要一致 —— 用途就係保證「執行時路徑」都 5/5。
@@ -66,20 +83,14 @@ function cropLikeRenderer(image) {
   const y1 = box.top + Math.round(box.height * o.roiY[1]);
   return cropImage(image, x0, y0, x1, y1);
 }
-const list = files.length
-  ? files
-  : readdirSync(join(ROOT, 'shots', 'live'))
-      .filter((f) => f.endsWith('.png'))
-      .sort()
-      .map((f) => `shots/live/${f}`);
 
 const templates = doRead
   ? loadTemplates(JSON.parse(readFileSync(join(ROOT, 'data', 'glyph-templates.json'), 'utf8')))
   : null;
 
 /** 逐步印出「大數值行 → 切字 → 模板比對」嘅中間結果（睇邊一步塌）。 */
-function traceRead(image, tpl, maskOpts = {}) {
-  const located = locateStatBar(image);
+function traceRead(image, tpl, maskOpts = {}, whole = false) {
+  const located = locateStatBar(image, { whole });
   if (!located.values) {
     console.log('     [trace] 冇大數值行');
     return;
@@ -121,16 +132,19 @@ function traceRead(image, tpl, maskOpts = {}) {
 let pass = 0;
 let total = 0;
 console.log('檔案              圖大細        內容框top   ROI                     帶數  大數值行(高/覆蓋)  上限行(高/覆蓋)  縮放');
-for (const rel of list) {
+for (const entry of list) {
+  const rel = entry.rel;
   const img = decodePng(readFileSync(join(ROOT, rel)));
   const image = { data: img.data, width: img.width, height: img.height };
   const box = contentBox(image);
-  const located = locateStatBar(image);
+  // roi-* 已經係剪好嘅面板條 → 唔使（亦唔應該）再計內容框／ROI
+  const located = locateStatBar(image, { whole: entry.cropped });
   const v = located.values;
   const l = located.limits;
   const fmt = (b) => (b ? `y${b.y0}..${b.y1}(${b.height}/${b.spread.toFixed(2)})` : '—');
   console.log(
-    `${basename(rel).padEnd(17)} ${String(`${img.width}x${img.height}`).padEnd(12)} ${String(box.top).padStart(8)}   ` +
+    `${basename(rel).padEnd(17)} ${String(`${img.width}x${img.height}`).padEnd(12)} ` +
+      `${String(entry.cropped ? '—（已剪）' : box.top).padStart(8)}   ` +
       `${String(`${located.roi.x},${located.roi.y} ${located.roi.width}x${located.roi.height}`).padEnd(22)} ` +
       `${String(located.bands.length).padStart(3)}   ${fmt(v).padEnd(18)} ${fmt(l).padEnd(16)} ${located.scale.toFixed(2)}` +
       `${located.reason ? `  ❌ ${located.reason}` : ''}`,
@@ -144,17 +158,24 @@ for (const rel of list) {
     }
   }
   if (doRead) {
-    const target = cropped ? cropLikeRenderer(image) : image;
-    const read = readStatBar(target, templates, { minConfidence: 0, ...maskOverride, whole: cropped });
+    // 三種情況：① roi-* 直接當 ROI；② --cropped 模擬 renderer 剪法；③ 普通全圖
+    let target = image;
+    let whole = entry.cropped;
+    if (!entry.cropped && cropped) {
+      target = cropLikeRenderer(image);
+      whole = true;
+    }
+    const read = readStatBar(target, templates, { minConfidence: 0, ...maskOverride, whole });
+    const truth = truthOf(rel);
     total += 1;
-    const ok = expect && read.stats && read.stats.every((n, i) => n === expect[i]);
+    const ok = truth && read.stats && read.stats.every((n, i) => n === truth[i]);
     if (ok) pass += 1;
     console.log(
       `     讀：${read.stats ? read.stats.join('/') : `❌ ${read.reason}`}` +
         `　信心 ${read.confidence.toFixed(2)}` +
-        (expect ? `　真值 ${expect.join('/')}　${ok ? '✅' : '❌'}` : ''),
+        (truth ? `　真值 ${truth.join('/')}　${ok ? '✅' : '❌'}` : ''),
     );
-    if (trace) traceRead(image, templates, maskOverride);
+    if (trace) traceRead(image, templates, maskOverride, entry.cropped);
   }
 }
-if (doRead && expect) console.log(`\n完全命中 ${pass}/${total}`);
+if (doRead && (expect || liveTruth)) console.log(`\n完全命中 ${pass}/${total}`);
