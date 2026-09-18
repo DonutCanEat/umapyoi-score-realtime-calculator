@@ -38,14 +38,37 @@ export const DEFAULT_STATBAR_OPTIONS = Object.freeze({
   minValuesSpread: 0.6,
   minLimitsSpread: 0.5,
   /**
-   * 接受門檻（原本 0.55）。實機數字係**漸變色**（上淺下深），
-   * 墨點遮罩會削走較淺嘅上半 → 同模板嘅相似度天然偏低：
-   * 實測一幀嘅真數字「2」得 0.52（差 0.03 就讀唔到）。降到 0.45。
-   * 安全網仍然喺：① 由右邊貪心收（一撞到唔似數字就停）；
-   * ② 剔走唔可能係數字嘅細碎片（見 `dropNonDigits()`）；③ 幀間多數投票。
+   * 接受門檻（原本 0.55）。
+   * 實機數字係**漸變色**（上淺下深），墨點遮罩會削走較淺嘅上半 →
+   * 同模板嘅相似度天然偏低。實測掃描（`shots/live-debug/` 47 幀 ＋ 8 張真值圖）：
+   *   0.45 → 讀到 9 幀；0.40 → 讀到 10 幀（多一幀，真值「8」得 0.41）；
+   *   再低（0.35/0.30/0.25）冇任何額外好處，而且讀到嘅值**全部同已知值一致**（零不一致）。
+   * 安全網：① 由右邊貪心收；② `dropNonDigits()`；③ `looksLikeStatBar()` 尺寸檢查；
+   * ④ 幀間多數投票（3/5）。
    */
-  minAccept: 0.45,
+  minAccept: 0.40,
+  /**
+   * 「唔似面板條」檢查：由 ROI 闊度**推算**正常面板條嘅字高。
+   * 因為 UI 係等比縮放 → 數值字高 ≈ 0.0098×圖闊（實測 5 個解析度），
+   * 而 ROI 佔圖闊 (roiX[1] − roiX[0])。
+   * 用途：其他畫面（例如選單、ステータス列表）都有「一行字」，但字會細好多；
+   * 咁樣就唔應該報「讀唔清」嚇人，而係老實講「唔似面板條」。
+   */
+  minGlyphHeightRatio: 0.6,
+  expectedGlyphHeightK: 0.0098,
+  minGlyphHeight: 6,
 });
+
+/**
+ * 由 ROI 闊度推算「正常面板條嘅字高」（像素）。
+ * @param {number} roiWidth
+ * @param {object} [options]
+ */
+export function expectedGlyphHeight(roiWidth, options = {}) {
+  const o = { ...DEFAULT_STATBAR_OPTIONS, ...options };
+  const span = o.roiX[1] - o.roiX[0];
+  return (roiWidth * o.expectedGlyphHeightK) / span;
+}
 
 /**
  * 內容區（扣走 Windows 標題列）。截圖如果比 16:9 高，多出嘅部分係頂部標題列。
@@ -259,7 +282,12 @@ export function collectStatBarGlyphs(image, options = {}) {
   const o = { ...DEFAULT_STATBAR_OPTIONS, ...options };
   const located = locateStatBar(image, o);
   if (!located.values) {
-    return { located, entries: null, reason: located.reason ?? '搵唔到面板條' };
+    return {
+      located,
+      entries: null,
+      notBar: true,
+      reason: located.reason ?? '搵唔到面板條',
+    };
   }
   const { values } = located;
   const roi = located.image;
@@ -290,6 +318,25 @@ export function collectStatBarGlyphs(image, options = {}) {
     const raw = extractGlyphs(roi, mask, { x0: num.x0, x1: num.x1 }, values.y0, values.y1);
     return { num, glyphs: dropNonDigits(raw, o), rawGlyphs: raw.length };
   });
+
+  // 「唔似面板條」檢查：真面板條嘅數字會填滿收窄後嘅帶（實測字高 ≈ 帶高），
+  // 而字高應該 ≈ 0.0098×圖闊（UI 等比縮放）。其他畫面雖然都有「一行字」，
+  // 但字會細好多 → 唔應該報「讀唔清」嚇人，老實講「唔似面板條」就好。
+  const heights = entries.flatMap((e) => e.glyphs.map((g) => g.height)).sort((a, b) => a - b);
+  const medianHeight = heights.length ? heights[Math.floor(heights.length / 2)] : 0;
+  const expected = expectedGlyphHeight(roi.width, o);
+  const minHeight = Math.max(o.minGlyphHeight, expected * o.minGlyphHeightRatio);
+  if (medianHeight < minHeight) {
+    return {
+      located,
+      entries: null,
+      notBar: true,
+      candidates,
+      reason:
+        `唔似面板條（字元高 ${medianHeight}px 遠細過預期 ${Math.round(expected)}px；` +
+        `帶高 ${values.height}px）`,
+    };
+  }
   return { located, entries, candidates, reason: undefined };
 }
 
@@ -313,10 +360,10 @@ export function collectStatBarGlyphs(image, options = {}) {
  */
 export function readStatBar(image, templates, options = {}) {
   const o = { ...DEFAULT_STATBAR_OPTIONS, ...options };
-  const { located, entries, reason, candidates } = collectStatBarGlyphs(image, o);
+  const { located, entries, reason, candidates, notBar } = collectStatBarGlyphs(image, o);
   const values = located.values;
   if (!entries) {
-    return { stats: null, texts: null, confidence: 0, row: values ?? null, reason, candidates };
+    return { stats: null, texts: null, confidence: 0, row: values ?? null, reason, candidates, notBar: Boolean(notBar) };
   }
 
   const texts = [];

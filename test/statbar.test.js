@@ -20,6 +20,7 @@ import {
   readStatBar,
   pickFiveBySpacing,
   dropNonDigits,
+  expectedGlyphHeight,
   DEFAULT_STATBAR_OPTIONS,
 } from '../src/vision/statbar.js';
 
@@ -92,14 +93,14 @@ function drawNumberRight(image, text, right, top, height) {
  *   上限行高 0.0064×闊、大數值行頂 0.669×內容高、上限行頂 0.692×內容高。
  * 即係 5 個數值佔 0.164–0.385（左邊界 0.385 − 4×0.0495 − 3 位數闊 ≈ 0.164）。
  */
-function makeStatBarImage({ width = 1600, chrome = 0, values = [226, 54, 139, 85, 102], limits = [1946, 1600, 1600, 1500, 1450] } = {}) {
+function makeStatBarImage({ width = 1600, chrome = 0, values = [226, 54, 139, 85, 102], limits = [1946, 1600, 1600, 1500, 1450], valueHeight = null, limitHeight = null } = {}) {
   const contentH = Math.round((width * 9) / 16);
   const image = makeImage(width, contentH + chrome);
   const top = chrome; // 內容區由 chrome 之後開始
   const pitch = width * 0.0495;
   const rightMost = width * 0.385;
-  const valueH = Math.max(8, Math.round(width * 0.0098));
-  const limitH = Math.max(6, Math.round(width * 0.0064));
+  const valueH = valueHeight ?? Math.max(8, Math.round(width * 0.0098));
+  const limitH = limitHeight ?? Math.max(6, Math.round(width * 0.0064));
   const valueTop = top + Math.round(contentH * 0.669);
   const limitTop = top + Math.round(contentH * 0.692);
   values.forEach((v, i) => {
@@ -234,6 +235,23 @@ test('statbar readStatBar：ROI 冇面板條（例如轉場）→ 老實回報�
   const read = readStatBar(blank, templates);
   assert.equal(read.stats, null);
   assert.ok(read.reason, '要有一個原因，唔可以靜靜哋出錯數');
+  assert.equal(read.notBar, true, '應該標記成「唔見面板條」（換咗畫面，屬正常）');
+});
+
+test('statbar readStatBar：其他畫面嘅「細字」唔算面板條（唔應該報「讀唔清」）', () => {
+  // 2026-09-18 實機：選單／列表畫面都有一行細字，舊版會報「第 N 個數值讀唔清」嚇人。
+  // 真面板條字高 ≈ 0.0098×圖闊（1600 闊 → 15.7px）；呢度畫 7px 高嘅字。
+  const image = makeStatBarImage({ width: 1600, valueHeight: 7, limitHeight: 5 });
+  const read = readStatBar(image, templates);
+  assert.equal(read.stats, null);
+  assert.equal(read.notBar, true, `應該判成「唔似面板條」，實得：${read.reason}`);
+  assert.match(read.reason ?? '', /唔似面板條/);
+});
+
+test('statbar expectedGlyphHeight：跟圖闊等比（實測 1356→12px、2560→24px）', () => {
+  const at = (frameWidth) => expectedGlyphHeight(frameWidth * 0.29);
+  assert.ok(Math.abs(at(1356) - 12) < 1.5, `1356 闊應該 ~12px，實得 ${at(1356).toFixed(1)}`);
+  assert.ok(Math.abs(at(2560) - 24) < 2, `2560 闊應該 ~24px，實得 ${at(2560).toFixed(1)}`);
 });
 
 test('statbar：DEFAULT_STATBAR_OPTIONS 嘅 ROI 同實測數值一致', () => {

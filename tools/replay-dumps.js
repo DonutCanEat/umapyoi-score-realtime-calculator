@@ -38,6 +38,7 @@ function tagOf(reason) {
   if (!reason) return 'OK';
   if (reason.includes('冇一條帶')) return 'NO_BAND_SPAN';
   if (reason.includes('只搵到')) return 'NO_BAND_ZERO';
+  if (reason.includes('唔似面板條')) return 'NOT_BAR';
   if (reason.includes('讀唔清')) return 'GLYPH_FAIL';
   if (reason.includes('唔等距') || reason.includes('候選')) return 'PICK_FAIL';
   if (reason.includes('信心')) return 'LOW_CONF';
