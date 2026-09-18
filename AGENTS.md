@@ -125,7 +125,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）
-npm.cmd test              # 單元測試（89 個，必須全過）
+npm.cmd test              # 單元測試（90 個，必須全過）
 
 node src/cli.js 600 600 600 600 600        # 手動試算 → 5715 / C+
 
@@ -164,7 +164,7 @@ node tools/diag-shots.js                   # 列出所有截圖尺寸
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **89 個**）
+1. `npm.cmd test` 全過（現時 **90 個**）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 4/4　完全命中 4/4　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（雙閘：**實機面板條 9/9**），兩個都要中
@@ -422,7 +422,7 @@ renderer 由 `file://` 載入，**ESM import 會被 Chromium CORS 擋**。
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **89 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **90 個測試必須全過**
 2. `node tools/fit-score.js` — 必須 `完全命中 4/4　總絕對誤差 0`
 3. 如果改咗五維／技能／ランク相關嘅嘢，`node tools/breakdown.js` 逐招核對一次
 4. **如果改咗影像相關嘅嘢**：
