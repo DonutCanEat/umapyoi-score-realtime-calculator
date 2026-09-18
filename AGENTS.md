@@ -126,6 +126,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
 npm.cmd test              # 單元測試（195 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+node tools/check-renderer-syntax.js  # ⭐ renderer inline script 語法閘（三個 HTML ＋ main.js；見 §8 4b）
 
 # HUD 相關開關（環境變數）
 #   ⚠️ 三個旗標（UMAPYOI_NO_HUD／UMAPYOI_NO_SETTINGS／UMAPYOI_HUD_EDIT）嘅**確切**語意
@@ -364,6 +365,9 @@ tools/
   replay-dumps.js        # ⭐ 重播 `shots/live-debug/*.raw`（驗證「讀唔清」修正，見地雷 #25）
   raw-to-png.js          # dump 幀（.raw ＋ .json）轉 PNG，畀上面兩個工具讀
   diag-shots.js          # 列出所有截圖尺寸
+  check-renderer-syntax.js # ⭐ renderer inline script 嘅**語法閘**（抽出 `<script>` 再 `node --check`）——
+                         #    三個 HTML 入唔到 `node --test`（classic script ＋ DOM），打錯一個字
+                         #    就係「HUD 靜默唔郁」而冇錯誤訊息 → 呢個係最低成本嘅防線（見 §8 4b）
 
 data/
   skill-db-tw.json       # 1323 招技能（繁中）
@@ -836,6 +840,13 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
    - 動到實機面板條（`statbar.js`／`capture.html`）：
      `node tools/diag-statbar.js --read` → **9/9**
      ＋ `node tools/replay-dumps.js` → **退步 0**（有 `shots/live-debug/` 幀嘅話）
+4b. **如果改咗 `electron/*.html`（renderer inline script）或者 `electron/main.js`**：
+   `node tools/check-renderer-syntax.js` → 全部 `✓`。
+   ⚠️ 為何要（唔係多餘）：三個 HTML 係 classic script（`require('electron')` ＋ DOM）
+   → **入唔到 `node --test`**，打錯一個字（少個括號、`await` 喺非 async）嘅後果係
+   **renderer 一開頭 throw → 之後所有 IPC listener 都註冊唔到 → HUD／設定窗靜默唔郁**。
+   呢個閘只驗語法（唔執行、唔需要 DOM／Electron），邏輯錯要靠 `test/*.test.js` 嗰類
+   「由 HTML 抽嘢出嚟比對」嘅測試。
 5. 更新 `docs/formula.md`（公式）或者 `docs/vision-design.md`（影像）
 6. **`git commit`**（見 §0：每次改動都要 commit，驗收唔過唔准 commit）
 
