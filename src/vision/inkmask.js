@@ -142,6 +142,11 @@ export const DEFAULT_MASK_OPTIONS = Object.freeze({
 /**
  * 建立背景受控嘅墨點遮罩。
  *
+ * ⚠️ `lightFraction` 係全局嘅結構條件，**唔可以隨便放寬**（見地雷 #21／#26）：
+ * 佢係「深色字喺淺色底上面」嘅判準，放寬會令暖色插畫／選單雜訊重新入遮罩。
+ * 但**金色格**（屬性 > 1200 之後長期金色）嘅淺金高光會把窗口淺色比例推爆
+ * → 反而削走筆劃 → 所以 `statbar.js` 會**只喺金色格**用 `goldLightFraction` 重做遮罩。
+ *
  * @param {{data:Uint8ClampedArray,width:number,height:number}} image
  * @param {Partial<typeof DEFAULT_MASK_OPTIONS>} [options]
  * @returns {Uint8Array} 長度 width*height，1 = 數字墨

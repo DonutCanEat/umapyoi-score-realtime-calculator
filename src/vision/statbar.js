@@ -41,12 +41,14 @@ function countInk(mask, width, y0, y1) {
 /**
  * 墨點像素嘅**色相分位數**（用嚟分「正常橙棕」同「金色高亮」）。
  * 實測：正常幀 p90 ≈ 27.2–27.8°、金幀 p90 ≈ 37.5–38.7°。
+ *
+ * @param {number} [x0] 限定橫向範圍（用嚟逐格判斷係唔係金色格）
  */
-function inkHuePercentile(roi, mask, y0, y1, p) {
+function inkHuePercentile(roi, mask, y0, y1, p, x0 = 0, x1 = roi.width - 1) {
   const hues = [];
   for (let y = y0; y <= y1; y += 1) {
     const base = y * roi.width;
-    for (let x = 0; x < roi.width; x += 1) {
+    for (let x = x0; x <= x1; x += 1) {
       if (!mask[base + x]) continue;
       const q = (base + x) * 4;
       const hue = pixelHue(roi.data[q], roi.data[q + 1], roi.data[q + 2]);
@@ -101,6 +103,26 @@ export const DEFAULT_STATBAR_OPTIONS = Object.freeze({
    */
   goldHueThreshold: 33,
   goldMinInk: 80,
+  /**
+   * **金色數字專用嘅遮罩**（地雷 #26 嘅正解）。
+   *
+   * 用戶 2026-09-18 確認：**「只要數值超過 1200 就會變金」** —— 即係金色唔係
+   * 升屬性之後嘅短暫高亮，而係**長期狀態**。所以「偵測到金色就唔出數」等於
+   * 千二點之後**永遠冇數**，唔可行。
+   *
+   * 實測根因：金色數字係「深金邊 ＋ 極淺金高光」（高光 `rgb(255,255,214)`、亮度 0.98），
+   * 而墨點遮罩除咗顏色窗口，仲有「深色字喺淺色底上面」嘅**結構條件**
+   * （窗口內淺色比例 ≥ `lightFraction` 0.4）。金色格嘅淺金高光令窗口淺色比例
+   * **超標** → 反而削走筆劃 → 字形被侵蝕（實測墨量由 137/176/188 跌到 119/89/137）
+   * → 「9」同「3」打和、揀錯（1489 → **1483**，實測 60 幀 dump 入面 3 幀中招）。
+   *
+   * 量到嘅解法（`node tools/experiment-mask.js`，9 張真值圖）：
+   *   `lightFraction` 0.4 → **8/9**（金幀讀成 1483）；**0.35 / 0.30 / 0.25 → 9/9**；
+   *   另外 `lightMin` 180 都救得返（9/9）。但**唔可以全局放寬**：咁樣結構條件變弱，
+   *   其他畫面嘅雜訊會被當成墨（dump 重播嘅 FAIL 由 10 幀升到 20 幀）。
+   *   → 所以只喺**確認係金色**嘅格放寬，其餘照舊。
+   */
+  goldLightFraction: 0.3,
 });
 
 /**
@@ -350,30 +372,36 @@ export function collectStatBarGlyphs(image, options = {}) {
   const all = groupsToNumbers(groups, { ...o, numberGap });
   const candidates = all.map((n) => `${n.x0}-${n.x1}(${n.parts.length}字)`);
 
-  // 金色高亮 → 唔出數（見 DEFAULT_STATBAR_OPTIONS 嘅 goldHueThreshold 註釋）
+  // 金色格（屬性 > 1200，長期金色）→ 個別用放寬嘅結構條件重做一次遮罩，
+  // 否則淺金高光會令字形被侵蝕（實測 1489 → 1483，見 goldLightFraction 註釋）。
   const hueP90 = inkHuePercentile(roi, mask, values.y0, values.y1, 0.9);
-  if (hueP90 !== null && hueP90 >= o.goldHueThreshold && countInk(mask, roi.width, values.y0, values.y1) >= o.goldMinInk) {
-    return {
-      located,
-      entries: null,
-      highlighted: true,
-      candidates,
-      reason: `數值升咗（金色顯示，墨色色相 p90 ${hueP90.toFixed(0)}° ≥ ${o.goldHueThreshold}°）→ 暫時唔出數`,
-    };
-  }
+  const highlighted = hueP90 !== null && hueP90 >= o.goldHueThreshold
+    && countInk(mask, roi.width, values.y0, values.y1) >= o.goldMinInk;
+  let relaxedMask = null;
+  const maskFor = (num) => {
+    if (!highlighted) return mask;
+    const cellHue = inkHuePercentile(roi, mask, values.y0, values.y1, 0.9, num.x0, num.x1);
+    if (cellHue === null || cellHue < o.goldHueThreshold) return mask;
+    if (!relaxedMask) {
+      relaxedMask = buildInkMask(roi, { ...o, windowRadius, lightFraction: o.goldLightFraction });
+    }
+    return relaxedMask;
+  };
 
   const picked = pickFiveBySpacing(all, o);
   if (!picked) {
     return {
       located,
       entries: null,
+      highlighted,
       candidates,
       reason: `候選數字唔夠／唔等距（候選 ${all.length} 個：${candidates.join(' ')}）`,
     };
   }
   const entries = picked.numbers.map((num) => {
-    const raw = extractGlyphs(roi, mask, { x0: num.x0, x1: num.x1 }, values.y0, values.y1);
-    return { num, glyphs: dropNonDigits(raw, o), rawGlyphs: raw.length };
+    const useMask = maskFor(num);
+    const raw = extractGlyphs(roi, useMask, { x0: num.x0, x1: num.x1 }, values.y0, values.y1);
+    return { num, glyphs: dropNonDigits(raw, o), rawGlyphs: raw.length, mask: useMask };
   });
 
   // 「唔似面板條」檢查：真面板條嘅數字會填滿收窄後嘅帶（實測字高 ≈ 帶高），
@@ -388,13 +416,14 @@ export function collectStatBarGlyphs(image, options = {}) {
       located,
       entries: null,
       notBar: true,
+      highlighted,
       candidates,
       reason:
         `唔似面板條（字元高 ${medianHeight}px 遠細過預期 ${Math.round(expected)}px；` +
         `帶高 ${values.height}px）`,
     };
   }
-  return { located, entries, candidates, reason: undefined };
+  return { located, entries, candidates, highlighted, reason: undefined };
 }
 
 /**
@@ -438,6 +467,7 @@ export function readStatBar(image, templates, options = {}) {
         .join(' ');
       return {
         stats: null, texts: [...texts, read.text], confidence, row: values, candidates,
+        highlighted: Boolean(highlighted),
         reason:
           `第 ${i + 1} 個數值讀唔清（「${read.text}」，x=${entry.num.x0}-${entry.num.x1}，` +
           `切到 ${entry.glyphs.length} 個字元：${detail || '—'}）`,
@@ -450,8 +480,11 @@ export function readStatBar(image, templates, options = {}) {
   if (o.minConfidence !== undefined && confidence < o.minConfidence) {
     return {
       stats: null, texts, confidence, row: values,
+      highlighted: Boolean(highlighted),
       reason: `信心 ${confidence.toFixed(2)} < ${o.minConfidence}（寧願唔出數，唔可以出錯數）`,
     };
   }
-  return { stats, texts, confidence, row: values, notBar: false, highlighted: false };
+  // `highlighted` 只係提示（該格屬性 > 1200，遊戲用金色顯示）—— 數值照出，
+  // 因為金色係長期狀態，唔可以唔出數（見 goldLightFraction 註釋）。
+  return { stats, texts, confidence, row: values, notBar: false, highlighted: Boolean(highlighted) };
 }
