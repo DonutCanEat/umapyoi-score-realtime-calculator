@@ -18,7 +18,7 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, screen } from 'electron';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 
 import { loadTemplates, readStats, StatTracker, scoreStats } from '../src/vision/reader.js';
 import { readStatBar, DEFAULT_STATBAR_OPTIONS } from '../src/vision/statbar.js';
@@ -42,6 +42,35 @@ if (existsSync(TEMPLATE_PATH)) {
 
 const tracker = new StatTracker();
 let lastLog = 0;
+
+/**
+ * 失敗／成功幀 dump（除錯用）。
+ *
+ * 為何要：實機係**間歇性**（有時讀到、之後又讀唔清），冇當時嗰幀就係盲猜。
+ * 只 dump 頭 N 幀，唔會無限量寫落磁碟；寫成 `.raw`（RGBA）＋ `.json`（meta），
+ * 用 `node tools/raw-to-png.js shots/live-debug` 轉 PNG 之後就可以用現成工具睇。
+ */
+const DEBUG_DIR = join(ROOT, 'shots', 'live-debug');
+const MAX_DUMPS = 40;
+let dumpCount = 0;
+let okDumps = 0;
+
+function dumpFrame(image, meta) {
+  if (dumpCount >= MAX_DUMPS) return null;
+  try {
+    if (!existsSync(DEBUG_DIR)) mkdirSync(DEBUG_DIR, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const base = join(DEBUG_DIR, `${stamp}-${meta.kind}`);
+    const bytes = Buffer.from(image.data.buffer, image.data.byteOffset, image.width * image.height * 4);
+    writeFileSync(`${base}.raw`, bytes);
+    writeFileSync(`${base}.json`, `${JSON.stringify({ ...meta, width: image.width, height: image.height }, null, 2)}\n`);
+    dumpCount += 1;
+    return `${base}.raw`;
+  } catch (error) {
+    console.error('[dump] 寫檔失敗：', error?.message ?? error);
+    return null;
+  }
+}
 
 function createCaptureWindow() {
   const win = new BrowserWindow({
@@ -128,8 +157,26 @@ ipcMain.on('frame', (_event, frame) => {
     if (read.reason && now - lastLog > 5000) {
       lastLog = now;
       console.log(`[讀唔到] ${read.reason}`);
+      if (read.candidates) console.log(`         候選：${read.candidates.join(' ')}`);
+      const dumped = dumpFrame(image, { kind: 'fail', reason: read.reason, candidates: read.candidates, cropped });
+      if (dumped) console.log(`         已存幀：${dumped.replace(`${ROOT}\\`, '')}`);
     }
     return;
+  }
+
+  // 成功嘅頭幾幀都存落嚟做對照（睇下成功／失敗嘅分別）
+  if (okDumps < 3) {
+    const dumped = dumpFrame(image, {
+      kind: 'ok',
+      stats: read.stats,
+      confidence: read.confidence,
+      texts: read.texts,
+      cropped,
+    });
+    if (dumped) {
+      okDumps += 1;
+      console.log(`[dump] 成功幀已存：${dumped.replace(`${ROOT}\\`, '')}`);
+    }
   }
 
   const { stable, stats, changed } = tracker.push(read.stats);

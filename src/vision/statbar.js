@@ -247,14 +247,20 @@ export function collectStatBarGlyphs(image, options = {}) {
   const groups = columnsToGroups(mask, roi.width, values.y0, values.y1, { ...o, minGap });
   const all = groupsToNumbers(groups, { ...o, numberGap });
   const picked = pickFiveBySpacing(all, o);
+  const candidates = all.map((n) => `${n.x0}-${n.x1}(${n.parts.length}字)`);
   if (!picked) {
-    return { located, entries: null, reason: `候選數字唔夠／唔等距（候選 ${all.length} 個）` };
+    return {
+      located,
+      entries: null,
+      candidates,
+      reason: `候選數字唔夠／唔等距（候選 ${all.length} 個：${candidates.join(' ')}）`,
+    };
   }
   const entries = picked.numbers.map((num) => ({
     num,
     glyphs: extractGlyphs(roi, mask, { x0: num.x0, x1: num.x1 }, values.y0, values.y1),
   }));
-  return { located, entries, reason: undefined };
+  return { located, entries, candidates, reason: undefined };
 }
 
 /**
@@ -277,10 +283,10 @@ export function collectStatBarGlyphs(image, options = {}) {
  */
 export function readStatBar(image, templates, options = {}) {
   const o = { ...DEFAULT_STATBAR_OPTIONS, ...options };
-  const { located, entries, reason } = collectStatBarGlyphs(image, o);
+  const { located, entries, reason, candidates } = collectStatBarGlyphs(image, o);
   const values = located.values;
   if (!entries) {
-    return { stats: null, texts: null, confidence: 0, row: values ?? null, reason };
+    return { stats: null, texts: null, confidence: 0, row: values ?? null, reason, candidates };
   }
 
   const texts = [];
@@ -289,9 +295,15 @@ export function readStatBar(image, templates, options = {}) {
     const read = readNumberTrimmed(entry.glyphs, templates, o);
     confidence = Math.min(confidence, read.confidence);
     if (!/^\d+$/.test(read.text)) {
+      // 附上呢一格嘅字元分數，方便診斷（例如徽章同數字黏埋、或者筆劃被磨斷）
+      const detail = read.detail
+        .map((d, k) => `${d.match.label}${d.match.score.toFixed(2)}(w${entry.glyphs[k].width}h${entry.glyphs[k].height})`)
+        .join(' ');
       return {
-        stats: null, texts: [...texts, read.text], confidence, row: values,
-        reason: `第 ${i + 1} 個數值讀唔清（「${read.text}」）`,
+        stats: null, texts: [...texts, read.text], confidence, row: values, candidates,
+        reason:
+          `第 ${i + 1} 個數值讀唔清（「${read.text}」，x=${entry.num.x0}-${entry.num.x1}，` +
+          `切到 ${entry.glyphs.length} 個字元：${detail || '—'}）`,
       };
     }
     texts.push(read.text);

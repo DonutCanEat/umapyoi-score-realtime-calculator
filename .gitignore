@@ -5,3 +5,8 @@ out/
 *.log
 .electron-cache/
 .cache-local/
+
+# 實機除錯 dump（逐幀、體積大且係臨時證據）。
+# 搵到有代表性嘅失敗幀之後，手動複製去 shots/live/ 再入 `data/live-truth.json`，
+# 令佢變成正式回歸案例（唔好原封不動 commit 成堆 dump）。
+shots/live-debug/
