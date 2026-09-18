@@ -334,6 +334,7 @@ renderer 由 `file://` 載入，**ESM import 會被 Chromium CORS 擋**。
    - 動到墨點／色相／亮度門檻：`node tools/diag-hue.js --assert` 要通過
      ＋ `node tools/tune-detect.js --hue` 睇下有冇踩到安全邊界（見 §6.1）
 5. 更新 `docs/formula.md`（公式）或者 `docs/vision-design.md`（影像）
+6. **`git commit`**（見 §0：每次改動都要 commit，驗收唔過唔准 commit）
 
 > **唔准為咗「跑得快」而犧牲精度**。呢個專案嘅核心價值就係「顯示嘅數同遊戲一模一樣」，
 > 而唔係「估得接近」。誤差 0 係花咗好多輪先達到，唔好退返去。
