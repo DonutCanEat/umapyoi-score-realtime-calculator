@@ -37,6 +37,16 @@ export const DEFAULT_SKILLSCREEN_OPTIONS = Object.freeze({
   minRowInk: 0.01,      // 一條技能列最少要有幾多墨（÷ 圖闊）先算「有嘢」
   minRowHeight: 0.02,   // 列高下限（÷ 圖高）
   maxRowHeight: 0.12,   // 列高上限（÷ 圖高）—— 超過就係兩列黏埋，要再切
+  /** 一列裡面「字／墨塊」之間幾闊嘅空隙先算分隔（÷ 圖闊）。 */
+  clusterGap: 0.012,
+  /** 欄邊門檻：欄墨量要 ≥ 峰值 × 呢個比例先算「有字」（濾走反鋸齒尾巴）。 */
+  columnEdge: 0.25,
+  /** 左右兩欄嘅分界（÷ 圖闊）。實測兩欄之間喺 0.33–0.43 之間乜都冇。 */
+  columnSplit: 0.38,
+  /** icon 最小闊度（÷ 圖闊）：第一個夠闊嘅墨塊就當係 icon。 */
+  iconMinWidth: 0.045,
+  /** 技能名同右邊 `Lv5` 之間嘅空隙（÷ 圖闊），夠闊就當右邊嗰舊係 Lv。 */
+  lvGap: 0.03,
 });
 
 /**
@@ -106,15 +116,129 @@ export function findSkillRows(counts, width, height, options = {}) {
 }
 
 /**
- * 一條技能列入面嘅**橫向範圍**（兩欄分開）。
+ * 由一個「技能列」抽出**技能名**嘅範圍（剔走左邊 icon 同右邊 Lv）。
+ *
+ * ## 為何要分三步
+ *
+ * 一行係「[icon][技能名][…][Lv]」。要攞到「技能名」就要：
+ *   ① 攞整行嘅橫向墨跡分佈；
+ *   ② **剔走 icon**：icon 係一個**彩色方框**（橙／綠／藍），闊度約 0.05–0.08×圖闊，
+ *      緊貼行嘅左邊 → 由左邊起跳過第一個「夠闊嘅墨塊」；
+ *   ③ **剔走右邊 Lv**：`Lv5` 喺最右，同技能名之間有明顯空隙 → 由右邊起，
+ *      遇到大空隙就截。
+ *
+ * ⚠️ 唔可以用顏色剔 icon（icon 顏色跟技能類型，橙／綠／藍都有）→ 同地雷 #10 一樣道理。
+ * ⚠️ 回傳嘅係**相對座標**（÷ 圖闊），叫嘅人自己 × 圖闊。
  *
  * @param {Uint8Array} mask
  * @param {number} width
  * @param {number} y0
  * @param {number} y1
+ * @param {{x0:number,x1:number}} span 該欄嘅橫向範圍（`columnSpans()` 嘅輸出）
  * @param {object} [options]
- * @returns {Array<{x0:number,x1:number,ink:number}>} 通常 2 個（左欄／右欄）
+ * @returns {{x0:number,x1:number,iconX1:number|null,rightCut:number|null}|null}
+ *          搵唔到名就回 null（⚠️ 唔可以回一個亂咁嚟嘅框）
  */
+export function nameBoxInSpan(mask, width, y0, y1, span, options = {}) {
+  const o = { ...DEFAULT_SKILLSCREEN_OPTIONS, ...options };
+  const cols = new Int32Array(span.x1 - span.x0 + 1);
+  for (let y = y0; y <= y1; y += 1) {
+    const base = y * width;
+    for (let c = 0; c < cols.length; c += 1) cols[c] += mask[base + span.x0 + c];
+  }
+  return nameBoxFromColumns(cols, span.x0, width, y0, y1, o);
+}
+
+/**
+ * 同上，但用「該行**所有**墨跡」嘅欄分佈（唔限 span）。
+ * 用途：一行通常有兩欄（左／右），要分開處理。
+ *
+ * @param {Int32Array} cols 逐欄墨量（索引 0 = 圖最左）
+ * @param {number} width
+ * @param {object} [options]
+ */
+export function nameBoxesInRow(cols, width, options = {}) {
+  const o = { ...DEFAULT_SKILLSCREEN_OPTIONS, ...options };
+  const minCol = 1;
+  const gapMax = Math.max(2, Math.round(width * o.clusterGap));
+  const spans = [];
+  let start = -1;
+  let gap = 0;
+  for (let x = 0; x < cols.length; x += 1) {
+    if (cols[x] >= minCol) {
+      if (start < 0) start = x;
+      gap = 0;
+    } else if (start >= 0) {
+      gap += 1;
+      if (gap >= gapMax) {
+        spans.push({ x0: start, x1: x - gap });
+        start = -1;
+      }
+    }
+  }
+  if (start >= 0) spans.push({ x0: start, x1: width - 1 });
+
+  // 分兩欄：兩欄之間嘅大空隙（實測 x ≈ 0.33–0.43×圖闊 之間乜都冇）
+  const mid = width * o.columnSplit;
+  const left = spans.filter((s) => (s.x0 + s.x1) / 2 < mid);
+  const right = spans.filter((s) => (s.x0 + s.x1) / 2 >= mid);
+  const out = [];
+  for (const group of [left, right]) {
+    if (!group.length) { out.push(null); continue; }
+    const x0 = Math.min(...group.map((s) => s.x0));
+    const x1 = Math.max(...group.map((s) => s.x1));
+    const sub = new Int32Array(x1 - x0 + 1);
+    for (const s of group) for (let x = s.x0; x <= s.x1; x += 1) sub[x - x0] += cols[x];
+    out.push(nameBoxFromColumns(sub, x0, width, 0, 0, o));
+  }
+  return out;
+}
+
+function nameBoxFromColumns(cols, offset, width, y0, y1, o) {
+  const max = Math.max(...cols);
+  if (max < 2) return null;
+  // 夠墨嘅欄（相對峰值）
+  const edge = Math.max(1, Math.round(max * o.columnEdge));
+  const runs = [];
+  let start = -1;
+  for (let c = 0; c < cols.length; c += 1) {
+    if (cols[c] >= edge) {
+      if (start < 0) start = c;
+    } else if (start >= 0) {
+      runs.push({ x0: start, x1: c - 1 });
+      start = -1;
+    }
+  }
+  if (start >= 0) runs.push({ x0: start, x1: cols.length - 1 });
+  if (!runs.length) return null;
+
+  // ① 剔 icon：最左邊、闊度 ≥ iconMinWidth×圖闊 嘅墨塊
+  const iconMinW = Math.max(2, Math.round(width * o.iconMinWidth));
+  let iconX1 = null;
+  if (runs[0].x1 - runs[0].x0 + 1 >= iconMinW) {
+    iconX1 = offset + runs[0].x1;
+    runs.shift();
+  }
+  if (!runs.length) return null;
+
+  // ② 剔右邊 Lv：最後一個墨塊同前面隔得夠遠（≥ lvGap×圖闊）→ 當佢係 Lv
+  const lvGap = Math.max(2, Math.round(width * o.lvGap));
+  let rightCut = null;
+  if (runs.length >= 2) {
+    const last = runs[runs.length - 1];
+    const prev = runs[runs.length - 2];
+    if (last.x0 - prev.x1 >= lvGap) {
+      rightCut = offset + last.x0;
+      runs.pop();
+    }
+  }
+  if (!runs.length) return null;
+
+  // ③ 頭尾之間**所有**墨塊合併成「名」嘅範圍（中間嘅空隙係字距，唔可以當分隔）
+  const x0 = offset + runs[0].x0;
+  const x1 = offset + runs[runs.length - 1].x1;
+  return { x0, x1, iconX1, rightCut, colSpanCount: runs.length };
+}
 export function columnSpans(mask, width, y0, y1, options = {}) {
   const o = { ...DEFAULT_SKILLSCREEN_OPTIONS, ...options };
   const cols = new Int32Array(width);
