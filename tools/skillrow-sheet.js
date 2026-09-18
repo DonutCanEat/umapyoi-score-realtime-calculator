@@ -41,8 +41,8 @@ const cells = []; // {shot, col, box, y0, y1, image}
 for (const shot of SHOTS) {
   const img = decodePng(readFileSync(join(ROOT, 'shots', 'gt', shot)));
   const image = { data: img.data, width: img.width, height: img.height };
-  const { counts, mask } = rowInkProfile(image);
-  const rows = findSkillRows(counts, img.width, img.height);
+  const { counts, mask, scale } = rowInkProfile(image);
+  const rows = findSkillRows(counts, img.width, img.height, { unit: scale.unit });
   const row = rows[rowIndex];
   if (!row) { console.error(`⚠️ ${shot} 冇列 ${rowIndex}`); continue; }
   const cols = new Int32Array(img.width);

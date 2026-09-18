@@ -54,8 +54,8 @@ const all = [];
 for (const shot of SHOTS) {
   const img = decodePng(readFileSync(join(ROOT, 'shots', 'gt', shot)));
   const image = { data: img.data, width: img.width, height: img.height };
-  const { counts, mask } = rowInkProfile(image);
-  const rows = findSkillRows(counts, img.width, img.height);
+  const { counts, mask, scale } = rowInkProfile(image);
+  const rows = findSkillRows(counts, img.width, img.height, { unit: scale.unit });
   rows.forEach((row, ri) => {
     const cols = new Int32Array(img.width);
     for (let y = row.y0; y <= row.y1; y += 1) {
@@ -64,7 +64,7 @@ for (const shot of SHOTS) {
     }
     nameBoxesInRow(cols, img.width).forEach((box, ci) => {
       if (!box) return;
-      const f = nameBoxFeature(image, mask, box, row.y0, row.y1);
+      const f = nameBoxFeature(image, mask, box, row.y0, row.y1, scale.unit);
       if (!f) return;
       all.push({
         id: all.length, shot, row: ri, col: ci, box, y0: row.y0, y1: row.y1, image, ...f,

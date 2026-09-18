@@ -45,8 +45,8 @@ const LABELS = JSON.parse(readFileSync(join(ROOT, 'data', 'skill-name-labels.jso
 function extractNames(rel) {
   const img = decodePng(readFileSync(join(ROOT, rel)));
   const image = { data: img.data, width: img.width, height: img.height };
-  const { counts, mask } = rowInkProfile(image);
-  const rows = findSkillRows(counts, img.width, img.height);
+  const { counts, mask, scale } = rowInkProfile(image);
+  const rows = findSkillRows(counts, img.width, img.height, { unit: scale.unit });
   const out = [];
   for (const [ri, row] of rows.entries()) {
     const cols = new Int32Array(img.width);

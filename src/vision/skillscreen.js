@@ -30,11 +30,17 @@ import { buildInkMask } from './inkmask.js';
  * 窗太細就會被「窗口要夠多淺色底」呢個條件篩走。
  */
 export const DEFAULT_SKILLSCREEN_OPTIONS = Object.freeze({
-  /** 墨點遮罩窗半徑（技能畫面用大窗，見上面註解）。**呢個係「參考尺度」嘅像素值。** */
-  windowRadius: 11,
+  /**
+   * 墨點遮罩窗半徑 —— **相對「文字大細」**（0.44 × 文字高度）。
+   * 實測：1140 尺度嘅技能名高 25px → 窗半徑 11px；文字細一半 → 窗都細一半。
+   * ⚠️ 文字大細係**量返嚟**嘅（見 `measureTextHeight()`），唔係假設解析度。
+   */
+  windowRadiusRel: 0.44,
+  /** 第一趟粗切用嘅細窗半徑（像素）——刻意細，只求切得出「一條條文字」。 */
+  probeRadius: 3,
   /** 窗口淺色比例門檻（技能畫面放寬到 0.2）。 */
   lightFraction: 0.2,
-  minRowInk: 0.01,      // 一條技能列最少要有幾多墨（÷ 圖闊）先算「有嘢」
+  minRowInk: 0.006,     // 一條技能列最少要有幾多墨（÷ 圖闊）先算「有嘢」
   minRowHeight: 0.02,   // 列高下限（÷ 圖高）
   maxRowHeight: 0.12,   // 列高上限（÷ 圖高）—— 超過就係兩列黏埋，要再切
   /** 一列裡面「字／墨塊」之間幾闊嘅空隙先算分隔（÷ 圖闊）。 */
@@ -47,42 +53,38 @@ export const DEFAULT_SKILLSCREEN_OPTIONS = Object.freeze({
   iconMinWidth: 0.045,
   /** 技能名同右邊 `Lv5` 之間嘅空隙（÷ 圖闊），夠闊就當右邊嗰舊係 Lv。 */
   lvGap: 0.03,
-  /**
-   * ⭐ **參考闊度**（像素）：`windowRadius` 同「最低像素門檻」都係喺**呢個尺度**量出嚟嘅。
-   *
-   * 為何要有：遊戲**冇固定解析度**（地雷 #24），所以同一套 UI 喺細窗／大窗之下，
-   * 字高可以差一倍以上。所有寫死嘅**像素**門檻（遮罩窗半徑 11、最低列高 8px、
-   * 名框前綴 5px…）喺另一半尺度就會失效。
-   *
-   * ⚠️ **實測踩過**：用戶收返嚟嘅實拍係 1928 窗（技能名 ~10px 高、行距 ~63px），
-   * 而真值圖係 1140 尺度（字高 ~25px、行距 **124px**）→ 同一張技能清單，
-   * 用 11px 遮罩窗去讀 10px 嘅字 → 列偵測爆到 **9–12 列**（正解 7 列）。
-   * → 所有像素門檻一律 × (圖闊 ÷ referenceWidth)。
-   */
-  referenceWidth: 1140,
+  /** 尺度基準：『文字 25px 高』＝『窗半徑 11px』（實測 1140 闊真值圖嘅尺度）。 */
+  referenceUnit: 25,
 });
-
-/**
- * 由圖闊推尺度因子（1.0 = 參考尺度 1140 闊）。
- *
- * 所有**像素**門檻都要 × 呢個值，否則換個窗大細就失效（見 `referenceWidth` 註解）。
- */
-export function skillScale(width, options = {}) {
-  const o = { ...DEFAULT_SKILLSCREEN_OPTIONS, ...options };
-  return width / o.referenceWidth;
-}
 
 /**
  * 逐列墨量（用背景受控遮罩，同主線一致）。
  *
+ * ## ⭐ 尺度係「量」返嚟，唔係「假設」
+ *
+ * 遊戲**冇固定解析度**（地雷 #24），所以任何寫死嘅像素門檻換個窗就失效。
+ * 但**唔可以**用「圖闊 × 某條公式」去推 —— 試過，兩個「實測點」根本唔可比
+ * （真值圖係「淨清單」裁剪版、用戶實拍係成個桌面），擬合出嚟嘅線喺其他闊度出荒謬值。
+ *
+ * ✅ 正解：**兩趟**
+ *   ① 用一個**細**遮罩窗（3px）粗切「文字列」，攞中位列高做「文字大細」；
+ *   ② 用嗰個大細做尺度，重做正式遮罩（窗半徑 = 0.44 × 文字大細）。
+ * 咁就真正同解析度脫鈎，而且係由**真實像素**推（唔係預測）。
+ *
+ * ⚠️ **試過但否決**：① 用「逐柱最長連續暗段」量字高 —— 同一尺度 8 張真值圖量到 4..25
+ * （真相一樣大）→ 太唔穩，令窗半徑由 2 跳到 11、相似度中位 0.986 → 0.861。
+ * ② 用「圖闊」線性擬合 —— 見上面（兩點唔可比）。
+ *
  * @param {{data:Uint8ClampedArray,width:number,height:number}} image
  * @param {object} [options]
- * @returns {{counts:Int32Array, mask:Uint8Array}}
+ * @returns {{counts:Int32Array, mask:Uint8Array, windowRadius:number, scale:object}}
  */
 export function rowInkProfile(image, options = {}) {
   const o = { ...DEFAULT_SKILLSCREEN_OPTIONS, ...options };
-  // ⭐ 遮罩窗半徑要跟尺度（細窗要用細窗，大窗要用大窗）
-  const radius = Math.max(3, Math.round(o.windowRadius * skillScale(image.width, o)));
+  const measured = measureTextHeight(image, o);
+  const unit = measured.unit;
+  // ⭐ 遮罩窗半徑跟「量到嘅文字大細」（0.44 × 字高；實測 1140 尺度 = 11px）
+  const radius = Math.max(2, Math.round(o.windowRadiusRel * unit));
   const mask = buildInkMask(image, { windowRadius: radius, lightFraction: o.lightFraction });
   const counts = new Int32Array(image.height);
   for (let y = 0; y < image.height; y += 1) {
@@ -91,7 +93,42 @@ export function rowInkProfile(image, options = {}) {
     for (let x = 0; x < image.width; x += 1) c += mask[base + x];
     counts[y] = c;
   }
-  return { counts, mask, windowRadius: radius, scale: skillScale(image.width, o) };
+  return {
+    counts,
+    mask,
+    windowRadius: radius,
+    scale: { unit, factor: unit / (o.referenceUnit ?? 25), measured: measured.measured },
+  };
+}
+
+/** 尺度基準：「窗半徑 11px」同「字高 25px」係同一尺度（實測 1140 闊真值圖）。 */
+export const SCALE_REFERENCE_UNIT = 25;
+
+/**
+ * 第一趟：用細窗（3px）粗切「文字列」，攞**中位列高**做文字大細估計。
+ *
+ * @returns {{unit:number, measured:boolean, rows:number}}
+ */
+function measureTextHeight(image, o) {
+  const probe = Math.max(1, Math.round(o.probeRadius ?? 3));
+  const mask = buildInkMask(image, { windowRadius: probe, lightFraction: o.lightFraction });
+  const counts = new Int32Array(image.height);
+  for (let y = 0; y < image.height; y += 1) {
+    let c = 0;
+    const base = y * image.width;
+    for (let x = 0; x < image.width; x += 1) c += mask[base + x];
+    counts[y] = c;
+  }
+  const rows = findSkillRows(counts, image.width, image.height, { unit: SCALE_REFERENCE_UNIT });
+  const hs = rows.map((r) => r.height).filter((h) => h > 0).sort((a, b) => a - b);
+  if (hs.length < 3) {
+    // 後備：量唔到就用「圖高嘅一個比例」。實測真值圖 950px 高 → 25px（2.6%）。
+    // ⚠️ 呢個係**後備**，正常情況應該量得到（8 張真值圖都量到 25–26px）。
+    return { unit: Math.max(4, Math.round(image.height * 0.026)), measured: false, rows: rows.length };
+  }
+  // 用細嗰截嘅中位數（正文；避開標題／大橫幅）
+  const unit = hs[Math.floor(hs.length * 0.35)];
+  return { unit: Math.max(4, unit), measured: true, rows: rows.length };
 }
 
 /**
@@ -105,11 +142,12 @@ export function rowInkProfile(image, options = {}) {
  */
 export function findSkillRows(counts, width, height, options = {}) {
   const o = { ...DEFAULT_SKILLSCREEN_OPTIONS, ...options };
-  const scale = skillScale(width, o);
+  // 尺度：如果有 image 就直接量字高；冇（舊呼叫）就退回落 fallback
+  const unit = o.unit ?? o.textHeightAt1140;
   const minInk = Math.max(2, Math.round(width * o.minRowInk));
   const maxH = Math.max(4, Math.round(height * o.maxRowHeight));
-  // ⭐ 「最低幾高先算一列」係像素門檻 → 要跟尺度（實測 1140 尺度 = 8px）
-  const minH = Math.max(2, Math.round(8 * scale));
+  // ⭐ 「最低幾高先算一列」＝ 半個字高（唔係寫死 8px）
+  const minH = Math.max(2, Math.round(unit * 0.6));
   // ① 連續夠墨嘅列段
   const raw = [];
   let y = 0;

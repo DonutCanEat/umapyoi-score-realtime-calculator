@@ -67,8 +67,11 @@ export const SKILLNAME_MAYBE = 0.65;
  */
 export function trimNameSegments(cols, boxWidth, scale = 1) {
   const segs = [];
-  const gapNeed = Math.max(2, Math.round(NAME_LEVEL_GAP * scale));
-  const edgeTol = Math.max(1, Math.round(5 * scale));
+  // ⚠️ 段間隙**唔跟尺度縮**：實測同一個字內部嘅筆劃空隙都有 3–6px，
+  //    段間隙一細過 10px 就會喺字內部亂切 → 名框被切碎（相似度中位 0.986 → 0.861）。
+  //    掉轉頭，icon／名／Lv 之間嘅空隙喺任何尺度都遠大過 10px（因為嗰啲係「唔同嘅嘢」）。
+  const gapNeed = NAME_LEVEL_GAP;
+  const edgeTol = 5;
   let start = -1;
   let gap = 0;
   for (let i = 0; i < cols.length; i += 1) {
@@ -119,7 +122,7 @@ export function trimNameSegments(cols, boxWidth, scale = 1) {
  * @param {number} y1 該技能列底
  * @returns {{vec:Float32Array,bw:number,bh:number,inkL:number,inkR:number,inkT:number,inkB:number}|null}
  */
-export function nameBoxFeature(image, mask, box, y0, y1, referenceWidth = 1140) {
+export function nameBoxFeature(image, mask, box, y0, y1, unit = 25) {
   const { x0, x1 } = box;
   const boxWidth = x1 - x0 + 1;
   const cols = new Int32Array(boxWidth);
@@ -127,7 +130,7 @@ export function nameBoxFeature(image, mask, box, y0, y1, referenceWidth = 1140) 
     const base = y * image.width;
     for (let x = x0; x <= x1; x += 1) cols[x - x0] += mask[base + x];
   }
-  const span = trimNameSegments(cols, boxWidth, image.width / referenceWidth);
+  const span = trimNameSegments(cols, boxWidth, unit / 25);
   if (!span) return null;
   const inkL = span.from;
   const inkR = span.to;
@@ -202,7 +205,9 @@ export function nameSimilarity(a, b) {
  */
 export function nameBoxesOfPage(image, profile, ops) {
   const { counts, mask } = profile;
-  const rows = ops.findSkillRows(counts, image.width, image.height);
+  // ⭐ 尺度（一個字幾大像素）由 profile 帶落嚟 —— 唔可以喺呢度另外假設
+  const unit = profile.scale ? profile.scale.unit : 25;
+  const rows = ops.findSkillRows(counts, image.width, image.height, { unit });
   const out = [];
   rows.forEach((row, ri) => {
     const cols = new Int32Array(image.width);
@@ -213,7 +218,7 @@ export function nameBoxesOfPage(image, profile, ops) {
     const boxes = ops.nameBoxesInRow(cols, image.width);
     boxes.forEach((box, ci) => {
       if (!box) return;
-      const feat = nameBoxFeature(image, mask, box, row.y0, row.y1);
+      const feat = nameBoxFeature(image, mask, box, row.y0, row.y1, unit);
       if (!feat) return;
       out.push({ row: ri, col: ci, box, y0: row.y0, y1: row.y1, ...feat });
     });

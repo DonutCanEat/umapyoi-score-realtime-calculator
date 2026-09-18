@@ -235,7 +235,7 @@ function samePage(a, b) {
 function dumpSkillPage(image, meta) {
   if (skillPages >= SKILL_MAX) return null;
   try {
-    const { counts, mask } = rowInkProfile(image);
+    const { counts, mask, scale } = rowInkProfile(image);
     const sig = new Float32Array(counts.length);
     for (let i = 0; i < counts.length; i += 1) sig[i] = counts[i] / image.width;
     if (skillSignatures.some((s) => samePage(s, sig))) {
@@ -248,7 +248,7 @@ function dumpSkillPage(image, meta) {
     skillSignatures.push(sig);
     skillPages += 1;
     // 進度顯示：列數 + 首列名框墨跡闊度 —— 用戶可以憑呢行知自己有冇翻漏
-    const rows = findSkillRows(counts, image.width, image.height);
+    const rows = findSkillRows(counts, image.width, image.height, { unit: scale.unit });
     const first = rows[0];
     let widths = '—';
     if (first) {

@@ -86,7 +86,7 @@ for (const rel of files) {
   }
 
   const { counts, mask } = rowProfile(image);
-  const lines = findSkillRows(counts, img.width, img.height);
+  const lines = findSkillRows(counts, img.width, img.height, { unit: scale.unit });
   console.log(`技能列 ${lines.length} 條（相對版面）：`);
   for (const l of lines) {
     const spans = columnSpans(mask, img.width, l.y0, l.y1);

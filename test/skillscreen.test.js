@@ -60,8 +60,8 @@ function makeSkillScreen({ width = 1140, height = 916, rows = 6, charW = 26, cha
 
 test('skillscreen：搵到正確數量嘅技能列（合成圖）', () => {
   const image = makeSkillScreen({ rows: 6 });
-  const { counts } = rowInkProfile(image);
-  const rows = findSkillRows(counts, image.width, image.height);
+  const { counts, scale } = rowInkProfile(image);
+  const rows = findSkillRows(counts, image.width, image.height, { unit: scale.unit });
   assert.equal(rows.length, 6, `應該搵到 6 列，實得 ${rows.length}`);
   // 行距應該一致
   const gaps = [];
@@ -73,15 +73,15 @@ test('skillscreen：搵到正確數量嘅技能列（合成圖）', () => {
 test('skillscreen：太細嘅雜訊列會被 minRowHeight 濾走', () => {
   const image = makeSkillScreen({ rows: 3 });
   paint(image, 100, 500, 200, 1); // 一條 1px 雜訊線
-  const { counts } = rowInkProfile(image);
-  const rows = findSkillRows(counts, image.width, image.height);
+  const { counts, scale } = rowInkProfile(image);
+  const rows = findSkillRows(counts, image.width, image.height, { unit: scale.unit });
   assert.equal(rows.length, 3, `雜訊唔應該當成一列，實得 ${rows.length}`);
 });
 
 test('skillscreen：一列裡面搵到兩欄（左／右）', () => {
   const image = makeSkillScreen({ rows: 3 });
-  const { counts, mask } = rowInkProfile(image);
-  const rows = findSkillRows(counts, image.width, image.height);
+  const { counts, mask, scale } = rowInkProfile(image);
+  const rows = findSkillRows(counts, image.width, image.height, { unit: scale.unit });
   const spans = columnSpans(mask, image.width, rows[0].y0, rows[0].y1);
   assert.equal(spans.length, 2, `應該係兩欄，實得 ${spans.length}`);
   assert.ok(spans[0].x1 < spans[1].x0, '左欄要喺右欄左邊');
@@ -92,12 +92,62 @@ test('skillscreen：一列裡面搵到兩欄（左／右）', () => {
 
 test('skillscreen：空圖／全白圖 → 0 列（唔可以亂認）', () => {
   const blank = makeImage(600, 400);
-  const { counts } = rowInkProfile(blank);
+  const { counts, scale } = rowInkProfile(blank);
   assert.equal(findSkillRows(counts, 600, 400).length, 0);
 });
 
-test('skillscreen：預設參數嘅窗半徑／淺色比例同實測一致', () => {
-  // 實測：技能畫面要窗半徑 11 + 淺色比例 0.2 才收到技能名（面板條嗰套 6 / 0.4 唔得）
-  assert.equal(DEFAULT_SKILLSCREEN_OPTIONS.windowRadius, 11);
+test('skillscreen：尺度係「量返嚟」嘅，唔假設解析度', () => {
+  // ⚠️ 唔可以寫死「窗半徑 11」當做通用值 —— 嗰個係「文字 25px 高」嘅尺度。
+  // 遊戲冇固定解析度 → 窗半徑 = 0.44 × 量到嘅文字大細（`scale.unit`）。
+  assert.equal(DEFAULT_SKILLSCREEN_OPTIONS.windowRadiusRel, 0.44, '窗半徑係相對文字大細');
   assert.equal(DEFAULT_SKILLSCREEN_OPTIONS.lightFraction, 0.2);
+  assert.ok(
+    !('referenceWidth' in DEFAULT_SKILLSCREEN_OPTIONS),
+    '唔應該有「參考解析度」常數',
+  );
+  // 造一個「大窗」同「細窗」嘅同構圖：量到嘅文字大細要跟住變
+  const big = makeSkillScreen({ width: 2280, height: 1832, charW: 52, charH: 40 });
+  const small = makeSkillScreen({ width: 570, height: 458, charW: 13, charH: 10 });
+  const { scale: sBig } = rowInkProfile(big);
+  const { scale: sSmall } = rowInkProfile(small);
+  assert.ok(
+    sBig.unit > sSmall.unit * 2,
+    `大字圖應該量到明顯大啲（大 ${sBig.unit} vs 細 ${sSmall.unit}）`,
+  );
+});
+
+test('skillscreen：同一張圖放大／縮細，列數一樣（真正尺度無關）', () => {
+  // 造一張圖，然後 ×0.5 同 ×2 → 三者都要搵到同樣列數
+  const base = makeSkillScreen({ rows: 5 });
+  const shrink = (img, k) => {
+    const w = Math.max(1, Math.round(img.width * k));
+    const h = Math.max(1, Math.round(img.height * k));
+    const out = { data: new Uint8ClampedArray(w * h * 4), width: w, height: h };
+    for (let y = 0; y < h; y += 1) {
+      for (let x = 0; x < w; x += 1) {
+        const sx = Math.min(img.width - 1, Math.round(x / k));
+        const sy = Math.min(img.height - 1, Math.round(y / k));
+        const sp = (sy * img.width + sx) * 4;
+        const dp = (y * w + x) * 4;
+        out.data[dp] = img.data[sp];
+        out.data[dp + 1] = img.data[sp + 1];
+        out.data[dp + 2] = img.data[sp + 2];
+        out.data[dp + 3] = 255;
+      }
+    }
+    return out;
+  };
+  const counts = (img) => {
+    const { counts: c, scale } = rowInkProfile(img);
+    return { n: findSkillRows(c, img.width, img.height, { unit: scale.unit }).length, scale };
+  };
+  const full = counts(base);
+  const half = counts(shrink(base, 0.5));
+  const dbl = counts(shrink(base, 2));
+  assert.equal(full.n, 5, `原圖應該 5 列，實得 ${full.n}`);
+  assert.equal(half.n, full.n, `縮一半都要一樣（實得 ${half.n}）`);
+  assert.equal(dbl.n, full.n, `放大一倍都要一樣（實得 ${dbl.n}）`);
+  // 量到嘅「字大細」要跟縮放比例行（呢個就係同解析度脫鈎嘅關鍵）
+  assert.ok(half.scale.unit < full.scale.unit, '縮細之後量到嘅字要細啲');
+  assert.ok(dbl.scale.unit > full.scale.unit, '放大之後量到嘅字要大啲');
 });

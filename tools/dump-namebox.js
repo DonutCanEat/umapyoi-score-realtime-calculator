@@ -33,8 +33,8 @@ if (!shot) {
 
 const img = decodePng(readFileSync(join(ROOT, 'shots', 'gt', shot)));
 const image = { data: img.data, width: img.width, height: img.height };
-const { counts, mask } = rowInkProfile(image);
-const rows = findSkillRows(counts, img.width, img.height);
+const { counts, mask, scale } = rowInkProfile(image);
+const rows = findSkillRows(counts, img.width, img.height, { unit: scale.unit });
 console.log(`${shot}　${img.width}×${img.height}　偵測到 ${rows.length} 列`);
 
 const wanted = allRows || rowArg === undefined
