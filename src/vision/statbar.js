@@ -26,7 +26,7 @@
 
 import { buildInkMask, findTextLines, pixelHue } from './inkmask.js';
 import { denseBands, tightenBand, columnsToGroups, groupsToNumbers } from './digitrow.js';
-import { extractGlyphs, readNumberTrimmed } from './glyphs.js';
+import { extractGlyphs, readNumberBoxes } from './glyphs.js';
 import { forEachCombination5 } from './combinations.js';
 
 /** 帶入面嘅墨點數。 */
@@ -488,25 +488,30 @@ export function readStatBar(image, templates, options = {}) {
     };
   }
 
-  const texts = [];
-  let confidence = 1;
-  for (const [i, entry] of entries.entries()) {
-    const read = readNumberTrimmed(entry.glyphs, templates, o);
-    confidence = Math.min(confidence, read.confidence);
-    if (!/^\d+$/.test(read.text)) {
-      // 附上呢一格嘅字元分數，方便診斷（例如徽章同數字黏埋、或者筆劃被磨斷）
+  // 逐格讀數：交**共用**迴圈（信心取 min、一失敗即停 —— 同 `reader.readStats()`
+  // 共用 `glyphs.readNumberBoxes()`，見獨立審計 H2）。
+  // ⚠️ 呢條路嘅失敗訊息要附字元分數（診斷徽章黏埋／筆劃磨斷）——由 callback 砌，
+  //    措辭同以前逐字一樣。
+  const { texts, confidence, failed } = readNumberBoxes(
+    entries.map((entry) => ({ box: entry.num, glyphs: entry.glyphs })),
+    templates,
+    o,
+    (item, read, i) => {
       const detail = read.detail
-        .map((d, k) => `${d.match.label}${d.match.score.toFixed(2)}(w${entry.glyphs[k].width}h${entry.glyphs[k].height})`)
+        .map((d, k) => `${d.match.label}${d.match.score.toFixed(2)}(w${item.glyphs[k].width}h${item.glyphs[k].height})`)
         .join(' ');
-      return {
-        stats: null, texts: [...texts, read.text], confidence, row: values, candidates,
-        highlighted: Boolean(highlighted),
-        reason:
-          `第 ${i + 1} 個數值讀唔清（「${read.text}」，x=${entry.num.x0}-${entry.num.x1}，` +
-          `切到 ${entry.glyphs.length} 個字元：${detail || '—'}）`,
-      };
-    }
-    texts.push(read.text);
+      return (
+        `第 ${i + 1} 個數值讀唔清（「${read.text}」，x=${item.box.x0}-${item.box.x1}，` +
+        `切到 ${item.glyphs.length} 個字元：${detail || '—'}）`
+      );
+    },
+  );
+  if (failed) {
+    return {
+      stats: null, texts: [...texts, failed.read.text], confidence, row: values, candidates,
+      highlighted: Boolean(highlighted),
+      reason: failed.reason,
+    };
   }
 
   const stats = texts.map(Number);

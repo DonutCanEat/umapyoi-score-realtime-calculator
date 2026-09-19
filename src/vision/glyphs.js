@@ -219,3 +219,51 @@ export function readNumberTrimmed(glyphs, templates, options = {}) {
     detail: scored,
   };
 }
+
+/**
+ * 逐個「數字」讀數 —— **兩個 reader 共用嘅迴圈**（獨立審計 H2）。
+ *
+ * ## 為何要抽
+ *
+ * `reader.readStats()`（gt 排法）同 `statbar.readStatBar()`（實機面板條）各自寫咗
+ * 一次同一個迴圈：逐個框 → `readNumberTrimmed()` → 信心取 **min** →
+ * 一遇到唔係純數字就**即刻停**並且帶 reason 回 null。
+ * 呢三條規則（信心取最差、即刻停、一定要有 reason）就係「唔准出錯數」嘅閘門 ——
+ * 兩邊一旦走樣，就會出現「同一幀一邊肯出數、另一邊唔肯」呢種最難查嘅分歧。
+ *
+ * ⚠️ **刻意唔幫呼叫者決定門檻同出口**：失敗訊息措辭、`minConfidence`、`MIN_STAT`／`MAX_STAT`、
+ *    `notBar`、`highlighted` 一律留喺各自嘅 reader（實機量出嚟嘅安全邊界，
+ *    見 pitfalls #23／#25／#26），呢度只做「讀同停」。
+ *
+ * ⚠️ `describeFailure` 一定要**砌同以前一模一樣嘅訊息**（測試同實機診斷都靠佢）。
+ *
+ * @param {Array<{box:object, glyphs:Array}>} items 候選數字（`glyphs` 由呼叫者抽好 ——
+ *        兩條路嘅抽取方式唔同：面板條要逐格用唔同 mask）
+ * @param {Record<string, Float32Array>} templates
+ * @param {object} options 交落 `readNumberTrimmed()`（`minAccept`／`maxDigits`…）
+ * @param {(item:object, read:object, index:number, texts:string[])=>string} describeFailure
+ * @returns {{texts:string[], confidence:number,
+ *            failed:null|{index:number,item:object,read:object,reason:string}}}
+ */
+export function readNumberBoxes(items, templates, options, describeFailure) {
+  const texts = [];
+  let confidence = 1;
+  for (const [i, item] of items.entries()) {
+    const read = readNumberTrimmed(item.glyphs, templates, options);
+    confidence = Math.min(confidence, read.confidence);
+    if (!/^\d+$/.test(read.text)) {
+      return {
+        texts,
+        confidence,
+        failed: {
+          index: i,
+          item,
+          read,
+          reason: describeFailure(item, read, i, texts),
+        },
+      };
+    }
+    texts.push(read.text);
+  }
+  return { texts, confidence, failed: null };
+}

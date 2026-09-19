@@ -9,7 +9,7 @@
 
 import { buildInkMask } from './inkmask.js';
 import { detectDigitRow } from './digitrow.js';
-import { extractGlyphs, readNumberTrimmed } from './glyphs.js';
+import { extractGlyphs, readNumberBoxes } from './glyphs.js';
 import { evaluate } from '../umascore/evaluate.js';
 
 /** 五維合理範圍（屬性上限可以變，但唔會超過 2000 好多）。 */
@@ -40,16 +40,25 @@ export function readStats(image, templates, options = {}) {
   const row = detectDigitRow(image, { mask, ...options });
   if (!row) return { stats: null, confidence: 0, row: null, reason: '搵唔到五維數字列' };
 
-  const texts = [];
-  let confidence = 1;
-  for (const num of row.numbers) {
-    const glyphs = extractGlyphs(image, mask, { x0: num.x0, x1: num.x1 }, row.y0, row.y1);
-    const read = readNumberTrimmed(glyphs, templates, options);
-    confidence = Math.min(confidence, read.confidence);
-    if (!/^\d+$/.test(read.text)) {
-      return { stats: null, confidence, row, reason: `第 ${texts.length + 1} 個數字讀唔清（「${read.text}」）`, numbers: [...texts, read.text] };
-    }
-    texts.push(read.text);
+  // 逐個框抽字元 → 交**共用**迴圈讀數（信心取 min、一失敗即停：`glyphs.readNumberBoxes()`，
+  // 同實機面板條嗰條路共用同一份；見獨立審計 H2）。
+  const items = row.numbers.map((num) => ({
+    box: num,
+    glyphs: extractGlyphs(image, mask, { x0: num.x0, x1: num.x1 }, row.y0, row.y1),
+  }));
+  const { texts, confidence, failed } = readNumberBoxes(
+    items, templates, options,
+    // ⚠️ 訊息措辭同以前逐字一樣（`第 N 個數字讀唔清`）
+    (item, read, i, done) => `第 ${done.length + 1} 個數字讀唔清（「${read.text}」）`,
+  );
+  if (failed) {
+    return {
+      stats: null,
+      confidence,
+      row,
+      reason: failed.reason,
+      numbers: [...texts, failed.read.text],
+    };
   }
 
   const stats = texts.map(Number);
