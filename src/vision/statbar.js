@@ -30,6 +30,9 @@ import { extractGlyphs, readNumberBoxes } from './glyphs.js';
 import { forEachCombination5 } from './combinations.js';
 // ⚠️ `countInk` 已經改用 `projection.js` 嘅共用版（審計 M3：以前呢個檔自己寫一份）。
 import { columnCounts, countInk } from './projection.js';
+// ⚠️ 內容區推算住喺 `content-box.js`（審計 H3）；`as gameContentBox` 係避免同下面
+//    export 出去嘅 `contentBox()`（舊形狀）撞名。
+import { contentBox as gameContentBox, CONTENT_ASPECT } from './content-box.js';
 
 /**
  * 墨點像素嘅**色相分位數**（用嚟分「正常橙棕」同「金色高亮」）。
@@ -55,7 +58,9 @@ function inkHuePercentile(roi, mask, y0, y1, p, x0 = 0, x1 = roi.width - 1) {
 
 /** 預設參數（相對座標係 ÷ 內容區 16:9）。 */
 export const DEFAULT_STATBAR_OPTIONS = Object.freeze({
-  aspect: 9 / 16,      // 遊戲內容區比例
+  // ⚠️ 用共用常數（審計 H3）：唔准喺呢度再寫死 `9 / 16`（`main.js` 就係傳呢個值落
+  //    renderer 做 `roi.aspect`，所以佢係「內容區比例」嘅單一來源）
+  aspect: CONTENT_ASPECT,
   roiX: [0.15, 0.44],   // 實測面板條橫向佔 0.164–0.426（5 個解析度一致）
   roiY: [0.645, 0.735], // 實測面板列 y 0.691–0.703，上下各留邊
   targetGlyphHeight: 17, // 模板建立時嘅字高（gt 截圖實測）
@@ -153,13 +158,15 @@ export function expectedGlyphHeight(roiWidth, options = {}) {
 /**
  * 內容區（扣走 Windows 標題列）。截圖如果比 16:9 高，多出嘅部分係頂部標題列。
  *
+ * ⚠️ 規則住喺 `src/vision/content-box.js`（審計 H3：以前呢度同 `layout.contentRect()`
+ *    各寫一份）。呢個 wrapper 只挑返舊形狀 `{top,height,width}`（唔回 `x`／`y`）。
+ *
  * @returns {{top:number,height:number,width:number}}
  */
 export function contentBox(image, options = {}) {
   const aspect = options.aspect ?? DEFAULT_STATBAR_OPTIONS.aspect;
-  const expected = Math.round(image.width * aspect);
-  if (image.height <= expected) return { top: 0, height: image.height, width: image.width };
-  return { top: image.height - expected, height: expected, width: image.width };
+  const box = gameContentBox(image, aspect);
+  return { top: box.top, height: box.height, width: box.width };
 }
 
 /** 剪出一個區域（1:1 像素，零重採樣）。 */

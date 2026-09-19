@@ -20,9 +20,11 @@ import { historyView } from './history.js';
 // ⭐ 共用小工具（`describe()`／`isPlainObject()`／`clampNumber()`／`finiteOr()`）——
 //    同 `config.js` 用同一份（獨立審計 L1）。
 import { clampNumber, describe, finiteOr } from './util.js';
-
-/** 內容區（16:9）比例。 */
-export const CONTENT_ASPECT = 9 / 16;
+// ⭐ 內容區（16:9）推算嘅**唯一**實作（同 `statbar.contentBox()` 共用，見審計 H3）
+import { CONTENT_ASPECT, contentBox } from '../vision/content-box.js';
+// ⚠️ `CONTENT_ASPECT` 由上面 re-export（唔准喺呢個檔再寫死 `9 / 16`）——舊呼叫者
+//    （`import { CONTENT_ASPECT } from '../src/hud/layout.js'`）行為零改變。
+export { CONTENT_ASPECT };
 
 /**
  * HUD 喺**內容區**入面嘅相對位置（0–1）。
@@ -68,21 +70,15 @@ export function anchorHud(content, layout = DEFAULT_HUD_LAYOUT) {
 /**
  * 由「擷取到嘅幀大細」推算遊戲內容區（扣走 Windows 標題列）。
  *
- * 跟 `src/vision/statbar.js` 嘅 `contentBox()` 同一條規則：
- * 圖比 16:9 高 → 多出嘅部分係**頂部**標題列。
+ * ⚠️ 規則住喺 `src/vision/content-box.js`（審計 H3：以前呢度同 `statbar.contentBox()`
+ *    各寫一份，只係回傳形狀唔同）。呢個 wrapper 只挑返舊形狀 `{x,y,width,height}`
+ *    （**唔回 `top`**：舊呼叫者／測試都當佢係四個欄位）。
  *
  * @param {{x?:number,y?:number,width:number,height:number}} windowRect 遊戲視窗嘅螢幕範圍
  */
 export function contentRect(windowRect, aspect = CONTENT_ASPECT) {
-  const expected = Math.round(windowRect.width * aspect);
-  const height = Math.min(windowRect.height, expected);
-  const top = Math.max(0, windowRect.height - height);
-  return {
-    x: windowRect.x ?? 0,
-    y: (windowRect.y ?? 0) + top,
-    width: windowRect.width,
-    height,
-  };
+  const box = contentBox(windowRect, aspect);
+  return { x: box.x, y: box.y, width: box.width, height: box.height };
 }
 
 /** 數據幾久冇更新就當「過期」（毫秒）。5fps 之下，2.5 秒 = 12 幀冇新資料。 */
