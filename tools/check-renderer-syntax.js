@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** 要驗嘅檔（順序 = 報告順序）。 */
-const HTML_FILES = ['electron/settings.html', 'electron/hud.html', 'electron/capture.html'];
+const HTML_FILES = ['electron/settings.html', 'electron/hud.html', 'electron/whatif.html', 'electron/capture.html'];
 /** 另外淨係驗語法嘅 Node 檔（ESM）。 */
 const JS_FILES = ['electron/main.js'];
 

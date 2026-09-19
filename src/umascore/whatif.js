@@ -105,6 +105,55 @@ export function aptitudeMapFor(condition, grades = {}) {
 }
 
 /**
+ * 搜尋技能 → **IPC 用嘅條目**（`key` 係技能庫 index）。
+ *
+ * 為何要喺核心庫砌（而唔係喺 `electron/main.js` 砌）：`main.js` import 咗 `electron`
+ * → **入唔到 `node --test`**，呢段「搜尋結果 → 窗要用嘅欄位」就變成零覆蓋；
+ * 而佢有兩個真陷阱（兩邊都靜默）：
+ *   ① `key` 一定要係**技能庫 index**（窗只可以傳 key 返嚟，唔准傳 base 上嚟自己計）；
+ *   ② `skillPt` 缺席一定要 `null`，**唔可以**當 0（0 係劇本進化技能嘅真值）。
+ *
+ * @param {Array<object>} skills 技能庫
+ * @param {string} query
+ * @param {{limit?:number}} [options]
+ * @returns {Array<{key:number,name:string,condition:string,base:number,skillPt:number|null,
+ *                  groups:Array<{key:string,keyword:string}>}>}
+ */
+export function skillSearchItems(skills, query, options = {}) {
+  return searchSkills(skills, query, options).map((skill) => ({
+    key: (skills ?? []).indexOf(skill),
+    name: skill?.name ?? '',
+    condition: skill?.condition ?? '',
+    base: Number(skill?.base),
+    skillPt: Number.isFinite(Number(skill?.skillPt)) ? Number(skill.skillPt) : null,
+    groups: groupHits(skill?.condition ?? ''),
+  }));
+}
+
+/**
+ * 驗「窗傳上嚟嘅五維」（**唔可信輸入**）。
+ *
+ * 為何要驗：what-if 窗**容許用戶自己打字**（唔開遊戲一樣試算得到），
+ * 所以嗰五個數唔係嚟自擷取，而係嚟自一個可以亂打嘅輸入框。
+ * 屬性上限係 2000（`tables.js` `STAT_MAX`）→ 超出範圍／NaN 一律當唔合法（唔准靜默夾）。
+ *
+ * @param {unknown} raw
+ * @returns {number[]} 五個 0–2000 嘅數字
+ */
+export function parseStatInput(raw) {
+  if (!Array.isArray(raw) || raw.length !== 5) {
+    throw new Error(`五維要係 5 個數字，實得 ${JSON.stringify(raw)}`);
+  }
+  const stats = raw.map((v) => Number(v));
+  for (const [i, v] of stats.entries()) {
+    if (!Number.isFinite(v) || v < 0 || v > 2000) {
+      throw new Error(`五維第 ${i + 1} 個要係 0–2000 嘅數字，實得 ${JSON.stringify(raw[i])}`);
+    }
+  }
+  return stats;
+}
+
+/**
  * 一個技能（＋用戶揀嘅適性）→ 佢自己嘅評價分。
  *
  * @param {{base:number, condition?:string}} skill

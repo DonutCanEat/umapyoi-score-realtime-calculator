@@ -22,8 +22,10 @@ import {
 import {
   aptitudeMapFor,
   normalizeSkillName,
+  parseStatInput,
   searchSkills,
   skillPointsFor,
+  skillSearchItems,
   whatIfAddSkill,
 } from '../src/umascore/whatif.js';
 import { statPoints } from '../src/umascore/tables.js';
@@ -237,4 +239,62 @@ test('搜尋：limit 生效，而且唔會爆（負數／0 → 空）', () => {
   assert.deepEqual(searchSkills(DB, '的', { limit: 0 }), []);
   assert.deepEqual(searchSkills(DB, '的', { limit: -3 }), []);
   assert.deepEqual(searchSkills(null, '的'), [], '冇技能庫 → 空（唔准 throw）');
+});
+
+// ─────────── IPC 契約（窗 ↔ 主程序）嘅純函數部分 ───────────
+//
+// ⚠️ 為何要喺度測：`electron/main.js` import 咗 `electron` → 入唔到 `node --test`。
+//    所以「搜尋結果 → 窗要用嘅欄位」同「窗傳返嚟嘅五維」呢兩個契約一定要係純函數，
+//    先有自動覆蓋（見 AGENTS §9.1-5 嗰種「零覆蓋靜默位」）。
+
+test('IPC：skillSearchItems 要帶技能庫 index（窗只可以傳 key 返嚟，唔准傳 base 上嚟）', () => {
+  const items = skillSearchItems(DB, '弧線');
+  assert.equal(items.length, 1);
+  assert.deepEqual(items[0], {
+    key: 0, // ← 技能庫 index（`DB[0]` 就係弧線的教授）
+    name: '弧線的教授',
+    condition: '通用',
+    base: 508,
+    skillPt: 360,
+    groups: [],
+  });
+  // key 一定要真係指得返同一個條目（錯 index ＝ 用戶揀 A 但試算 B，完全靜默）
+  for (const item of skillSearchItems(DB, '的', { limit: 20 })) {
+    assert.equal(DB[item.key].name, item.name);
+  }
+});
+
+test('IPC：skillSearchItems 冇 skillPt 要出 null（唔可以當 0＝進化技能）', () => {
+  const lib = [{ name: '冇 Pt 資料', condition: '通用', base: 100 }];
+  assert.equal(skillSearchItems(lib, '冇 Pt')[0].skillPt, null);
+  const zero = [{ name: '進化技', condition: '通用', base: -174, skillPt: 0 }];
+  assert.equal(skillSearchItems(zero, '進化技')[0].skillPt, 0, '⭐ 0 係真值');
+});
+
+test('IPC：skillSearchItems 要順便回 groups（窗靠佢畫適性下拉，唔使再問主程序）', () => {
+  const lib = [{ name: '前列直線', condition: '前列, 中距離', base: 217, skillPt: 130 }];
+  assert.deepEqual(skillSearchItems(lib, '前列')[0].groups, [
+    { key: '脚質', keyword: '前列' },
+    { key: '距離', keyword: '中距離' },
+  ]);
+});
+
+test('IPC：parseStatInput 要驗五維（窗容許用戶亂打字，唔准靜默夾）', () => {
+  assert.deepEqual(parseStatInput([1200, 600, 600, 600, 600]), [1200, 600, 600, 600, 600]);
+  assert.deepEqual(parseStatInput(['1200', 600, 600, 600, 600]), [1200, 600, 600, 600, 600], '字串數字要收');
+  const bad = [
+    [[1, 2, 3, 4], /5 個數字/],
+    [[1, 2, 3, 4, 5, 6], /5 個數字/],
+    ['1200,600,600,600,600', /5 個數字/],
+    [undefined, /5 個數字/],
+    [[1200, 600, 600, 600, 2001], /第 5 個/],
+    [[1200, 600, 600, 600, -1], /第 5 個/],
+    [[1200, 600, 600, 600, NaN], /第 5 個/],
+    [[1200, 600, 600, 600, 'abc'], /第 5 個/],
+  ];
+  for (const [input, re] of bad) {
+    assert.throws(() => parseStatInput(input), re, `應該 throw：${JSON.stringify(input)}`);
+  }
+  // 邊界一定要收（0 同 2000 都係合法屬性值）
+  assert.deepEqual(parseStatInput([0, 0, 0, 0, 2000]), [0, 0, 0, 0, 2000]);
 });

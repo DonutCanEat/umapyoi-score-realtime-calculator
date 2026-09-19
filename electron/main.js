@@ -26,6 +26,7 @@ import { readStatBar, DEFAULT_STATBAR_OPTIONS } from '../src/vision/statbar.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
 import { encodePng } from '../src/vision/pngwrite.js';
 import { STAT_LABELS, STAT_KEYS } from '../src/umascore/evaluate.js';
+import { parseStatInput, skillSearchItems, whatIfAddSkill } from '../src/umascore/whatif.js';
 import { anchorHud, contentRect, hudState, clampLayout, layoutFromBounds, relativeFromBounds, HUD_ENV_KEYS } from '../src/hud/layout.js';
 import { loadConfig, saveConfig, resolveHudConfig, validateConfig, assertFullDisplay } from '../src/hud/config.js';
 import { configPathFor } from '../src/hud/config-path.js';
@@ -96,6 +97,18 @@ let hudConfigLoadError = null;
 let hudEnvOverridden = [];
 /** HUD 設定窗（普通視窗：有邊框、可縮放、可打字；同 HUD overlay 完全兩件事）。 */
 let settingsWindow = null;
+/** C1 what-if 模擬窗（同上：普通視窗；**完全唔碰** HUD 嘅滑鼠穿透狀態）。 */
+let whatifWindow = null;
+/**
+ * 技能庫（`data/skill-db-tw.json`）。
+ *
+ * ⚠️ 延遲載入（第一次有人問先讀）：唔開 what-if 窗嘅話，唔應該為咗佢多讀 2MB JSON。
+ * ⚠️ IPC 只傳「技能庫 index」（`key`）而唔係成個技能物件 ——
+ *    用戶揀完之後主程序用 key 攞返條目，就唔會出現「renderer 傳上嚟嘅 base 同技能庫唔同」
+ *    呢種（用戶改唔到、但 audit 睇唔出）嘅不一致。`key` 一律當**唔可信輸入**驗。
+ */
+let whatifDb = null;
+let whatifDbError = null;
 /**
  * `placeHud()` 計出嚟嘅**遊戲內容區**（螢幕像素）。
  *
@@ -108,8 +121,8 @@ let hudContent = null;
 let lastOffContentKey = '';
 
 /**
- * 環境變數「開關旗標」（`UMAPYOI_NO_HUD`／`UMAPYOI_NO_SETTINGS`／`UMAPYOI_HUD_EDIT`）
- * 一律經 `envFlag()` 讀（**唔准**再用 `Boolean(process.env.X)` 嗰種 truthiness）。
+ * 環境變數「開關旗標」（`UMAPYOI_NO_HUD`／`UMAPYOI_NO_SETTINGS`／`UMAPYOI_NO_WHATIF`／
+ * `UMAPYOI_HUD_EDIT`）一律經 `envFlag()` 讀（**唔准**再用 `Boolean(process.env.X)` 嗰種 truthiness）。
  *
  * ⚠️ 實作喺 `src/hud/env-flag.js`（純函數、零 Electron；規則同 `onWarn` 用法見嗰個檔）：
  * 原本住喺呢個檔，而 `main.js` import 咗 `electron` → **入唔到 `node --test`**
@@ -122,6 +135,8 @@ const HUD_EDIT = envFlag('UMAPYOI_HUD_EDIT');
 const NO_HUD = envFlag('UMAPYOI_NO_HUD');
 /** `UMAPYOI_NO_SETTINGS=1`：唔開設定窗（HUD 照開）。 */
 const NO_SETTINGS = envFlag('UMAPYOI_NO_SETTINGS');
+/** `UMAPYOI_NO_WHATIF=1`：唔開 what-if 模擬窗（HUD／設定窗照開；C1）。 */
+const NO_WHATIF = envFlag('UMAPYOI_NO_WHATIF');
 /**
  * HUD 而家係唔係「可互動」（＝唔穿透）。
  *
@@ -749,6 +764,97 @@ function createSettingsWindow() {
   return win;
 }
 
+/**
+ * C1 what-if 模擬窗（**普通視窗**，同設定窗同一個模式）。
+ *
+ * 為何要獨立一個窗（而唔係塞入 HUD／設定窗）：見 `settings.html` 嗰段註解 ——
+ * HUD 一定要透明 ＋ 穿透，一加輸入框就要開滑鼠事件（擋住用戶點遊戲，本專案底線）；
+ * 而設定窗係「開程式時決定」嘅窗，加一個搜尋＋試算嘅工作區會令佢又長又雜。
+ * ⚠️ 呢個窗**完全唔碰** HUD 嘅 `setIgnoreMouseEvents` 狀態（穿透底線見 §6.4）。
+ */
+function createWhatifWindow() {
+  const win = new BrowserWindow({
+    width: 640,
+    height: 820,
+    minWidth: 520,
+    minHeight: 520,
+    // ⚠️ 標題**唔准**含遊戲關鍵字（`src/capture/source.js` 嘅 `GAME_TITLE_HINTS`），
+    //    同 `whatif.html` 嘅 <title> 一定要一致（Electron 跟文件標題，見地雷 #27）。
+    title: 'Umapyoi what-if 模擬',
+    frame: true,
+    transparent: false,
+    resizable: true,
+    focusable: true, // 要打字／揀選項（⚠️ HUD overlay 剛剛相反：focusable:false）
+    show: false,
+    backgroundColor: '#1b1f24',
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
+  win.setContentProtection(true); // 同其他窗一致：唔會入到自己嘅擷取畫面
+  win.loadFile(join(__dirname, 'whatif.html'));
+  win.once('ready-to-show', () => win.show());
+  win.on('closed', () => {
+    whatifWindow = null;
+  });
+  return win;
+}
+
+/**
+ * 技能庫載入（延遲、只做一次）。
+ *
+ * ⚠️ 一定要包 try/catch 而且**唔准 throw 出去**：呢個函數係喺 IPC handler 入面叫，
+ * 而 IPC handler 拋出嘅例外喺 Electron 主程序係 **uncaught**（彈錯誤對話／搞死主程序）。
+ * 載入失敗 → 記落 `whatifDbError`，窗會出紅色橫額（唔准靜默）。
+ */
+function loadWhatifDb() {
+  if (whatifDb || whatifDbError) return;
+  const path = join(ROOT, 'data', 'skill-db-tw.json');
+  try {
+    if (!existsSync(path)) throw new Error(`搵唔到 ${path}（先跑 node tools/fetch-skill-db.js）`);
+    const parsed = JSON.parse(readFileSync(path, 'utf8'));
+    const skills = Array.isArray(parsed?.skills) ? parsed.skills : null;
+    if (!skills) throw new Error(`${path} 冇 skills 陣列`);
+    whatifDb = skills;
+    console.log(`[what-if] 技能庫載入：${skills.length} 招`);
+  } catch (error) {
+    whatifDbError = error?.message ?? String(error);
+    whatifDb = null;
+    console.error(`[what-if] ⚠️ 技能庫載入失敗：${whatifDbError}`);
+  }
+}
+
+/** 主程序而家知嘅「實機狀態」＋技能庫狀態（what-if 窗每次問都經呢度砌）。 */
+function whatifLivePayload(now = Date.now()) {
+  return {
+    // 實機五維（未讀到 = null → 窗會叫用戶自己入數）
+    stats: Array.isArray(lastStats) ? [...lastStats] : null,
+    live: lastScore
+      ? {
+        statScore: lastScore.statScore,
+        total: lastScore.total,
+        rank: lastScore.rank,
+        nextRank: lastScore.nextRank ?? null,
+        ageMs: Math.max(0, now - lastScoreAt),
+      }
+      : null,
+    dbCount: whatifDb?.length ?? 0,
+    dbError: whatifDbError,
+  };
+}
+
+/**
+ * 由 key 攞返技能庫條目（key = 技能庫 index；越界／唔係整數一律當唔合法）。
+ *
+ * ⚠️ 窗只可以傳 key 返嚟 —— **唔准**接受窗傳上嚟嘅 `base`／`condition`
+ * （咁樣先保證試算用嘅一定係技能庫嗰份，唔會出現「窗改咗個數但 audit 睇唔出」）。
+ */
+function whatifSkillAt(key) {
+  if (!whatifDb || !Number.isInteger(key) || key < 0 || key >= whatifDb.length) return null;
+  return whatifDb[key];
+}
+
 /** 推 HUD 顯示狀態（主程序計好，renderer 只畫）。 */
 function pushHud(now = Date.now()) {
   if (!hudWindow || hudWindow.isDestroyed()) return;
@@ -1093,6 +1199,12 @@ app.whenReady().then(async () => {
       settingsWindow = createSettingsWindow();
       console.log('[設定窗] 已開（唔想要就 UMAPYOI_NO_SETTINGS=1；UMAPYOI_NO_HUD=1 一樣兩個都唔開）');
     }
+    // C1 what-if 模擬窗（唔想要就 UMAPYOI_NO_WHATIF=1）。
+    // ⚠️ 一定要同設定窗一樣係「普通窗」：HUD 嘅滑鼠穿透狀態完全唔受影響（底線）。
+    if (!NO_WHATIF) {
+      whatifWindow = createWhatifWindow();
+      console.log('[what-if] 模擬窗已開（試算「加呢招幾多分／Pt」；唔想要就 UMAPYOI_NO_WHATIF=1）');
+    }
   }
 
   win.webContents.once('did-finish-load', async () => {
@@ -1373,6 +1485,58 @@ ipcMain.on('hud-config-reset', (event) => {
     const message = error?.message ?? String(error);
     console.error(`[設定] ⚠️ 還原預設失敗（設定窗今次唔會變）：${message}`);
     replyHudConfigSafely(event.sender, { error: `還原預設失敗（HUD 冇改變）：${message}` });
+  }
+});
+
+// ─────────────────── C1 what-if 模擬窗 ↔ 主程序（`electron/whatif.html`）───────────────────
+// 同設定窗一套規矩：全部 `send`／`on`（冇 invoke／handle、冇 preload）、
+// 每個 handler 都包 try/catch（IPC handler 拋出嘅例外係 uncaught → 會搞死主程序），
+// 錯誤一律經返同一條 channel 回報（`error` 欄位 → 窗出紅色橫額），唔准靜默。
+//
+// ⚠️ renderer 傳上嚟嘅所有嘢（技能 key、五維、適性）一律當**唔可信輸入**驗：
+//    算式喺主程序（`src/umascore/whatif.js`），窗只係一個笨介面。
+
+/** 窗開窗即問／每 2 秒問一次：實機五維 ＋ 技能庫狀態。 */
+ipcMain.on('whatif-get', (event) => {
+  try {
+    loadWhatifDb();
+    event.sender.send('whatif-live', whatifLivePayload());
+  } catch (error) {
+    console.error(`[what-if] ⚠️ 讀實機狀態失敗：${error?.message ?? error}`);
+  }
+});
+
+/** 搜尋技能（標點無關，見 `src/umascore/whatif.js` `searchSkills()`）。 */
+ipcMain.on('whatif-search', (event, query) => {
+  try {
+    loadWhatifDb();
+    if (whatifDbError) {
+      event.sender.send('whatif-results', { query: String(query ?? ''), items: [], error: `技能庫未載入：${whatifDbError}` });
+      return;
+    }
+    const items = skillSearchItems(whatifDb, query, { limit: 20 });
+    event.sender.send('whatif-results', { query: String(query ?? ''), items, error: null });
+  } catch (error) {
+    const message = error?.message ?? String(error);
+    console.error(`[what-if] ⚠️ 搜尋失敗：${message}`);
+    event.sender.send('whatif-results', { query: String(query ?? ''), items: [], error: message });
+  }
+});
+
+/** 試算：「加呢招會加幾多分／要幾多 Pt／會唔會升級」。 */
+ipcMain.on('whatif-eval', (event, payload) => {
+  try {
+    loadWhatifDb();
+    if (whatifDbError) throw new Error(`技能庫未載入：${whatifDbError}`);
+    const skill = whatifSkillAt(payload?.key);
+    if (!skill) throw new Error(`技能 key 唔合法：${JSON.stringify(payload?.key)}`);
+    const stats = parseStatInput(payload?.stats);
+    const grades = payload?.grades && typeof payload.grades === 'object' ? payload.grades : {};
+    event.sender.send('whatif-result', { result: whatIfAddSkill({ stats }, skill, grades), error: null });
+  } catch (error) {
+    const message = error?.message ?? String(error);
+    console.error(`[what-if] ⚠️ 試算失敗：${message}`);
+    event.sender.send('whatif-result', { result: null, error: message });
   }
 });
 

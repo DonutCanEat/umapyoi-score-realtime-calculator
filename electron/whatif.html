@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <!-- ⚠️ 標題**唔准**含遊戲關鍵字（`src/capture/source.js` 嘅 `GAME_TITLE_HINTS`）：
+         呢個 <title> 會蓋過 BrowserWindow 嘅 `title` 選項（Electron 跟文件標題），
+         一旦含「賽馬娘」就會同本程式自己嘅窗搶「擷取來源」（見 AGENTS 地雷 #27）。
+         main.js 嗰邊嘅 title 要同呢度一致，唔准只改一邊。 -->
+    <title>Umapyoi what-if 模擬</title>
+    <!--
+      ⚠️ classic script + require('electron')（唔可以 type="module"）：
+      `file://` 之下 Chromium 會用 CORS 擋 ESM import（見 AGENTS §6.3）。
+      呢個係**普通視窗**（frame / resizable / focusable / 唔透明）——
+      同 HUD overlay 完全兩件事（HUD 一定要透明 + 穿透點擊，底線）。
+    -->
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        font: 13px/1.5 "Segoe UI", "Microsoft JhengHei", sans-serif;
+        background: #1b1f24; color: #e6e9ec;
+        padding: 14px 16px 18px;
+      }
+      h1 { font-size: 16px; margin: 0 0 6px; }
+      h2 { font-size: 13px; margin: 18px 0 6px; color: #9fd0ff; }
+      .path { font-size: 11px; color: #9aa4ad; word-break: break-all; }
+      .hint { font-size: 11px; color: #8b949c; margin: 2px 0 8px; }
+      .banner {
+        margin: 8px 0 0; padding: 7px 9px; border-radius: 6px; font-size: 12px;
+        background: #3a2320; border: 1px solid #a35a4a; color: #ffc9bd;
+      }
+      .banner.warn { background: #3a3320; border-color: #a3914a; color: #ffe6b0; }
+      .banner.ok { background: #1f3324; border-color: #4a8a5c; color: #bdf0c8; }
+      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .statField { display: flex; gap: 6px; align-items: center; }
+      .statField label { font-size: 12px; color: #cfd8dc; }
+      input[type="number"], input[type="text"] {
+        padding: 3px 6px; border-radius: 4px; border: 1px solid #3d454d;
+        background: #12161a; color: #e6e9ec; font-variant-numeric: tabular-nums;
+      }
+      input[type="number"] { width: 66px; }
+      #q { flex: 1 1 260px; }
+      button {
+        padding: 5px 12px; border-radius: 6px; border: 1px solid #3d454d;
+        background: #262d34; color: #e6e9ec; font-size: 13px; cursor: pointer;
+      }
+      button:hover { filter: brightness(1.15); }
+      button.pick { display: block; width: 100%; text-align: left; margin-bottom: 4px; font-size: 12px; }
+      button.pick[aria-pressed="true"] { background: #1d4e7a; border-color: #2f6fa5; }
+      .mono { font-variant-numeric: tabular-nums; }
+      .big { font-size: 15px; font-weight: 600; }
+      .delta { color: #b9f6c0; font-weight: 600; }
+      .delta.neg { color: #ffc9bd; }
+      .up { color: #ffd479; font-weight: 600; }
+      .muted { color: #8b949c; }
+      .grades { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
+      .grades label { font-size: 12px; display: flex; gap: 4px; align-items: center; color: #cfd8dc; }
+      select {
+        padding: 2px 4px; border-radius: 4px; border: 1px solid #3d454d;
+        background: #12161a; color: #e6e9ec;
+      }
+      #current, #picked { font-size: 13px; }
+      table { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 4px; }
+      td { padding: 2px 6px 2px 0; vertical-align: top; }
+      td.k { color: #9aa4ad; width: 84px; }
+    </style>
+  </head>
+  <body>
+    <h1>what-if 模擬</h1>
+    <div class="path" id="db">技能庫：（讀取中…）</div>
+    <div id="banners"></div>
+
+    <h2>現時五維</h2>
+    <p class="hint">
+      預設**跟實機擷取**（每 2 秒更新）；你自己改任何一格就當「手動輸入」，
+      唔會再俾實機覆蓋（要跟返實機就撳「跟實機」）。
+      ⚠️ 評價分只計五維 —— 技能分而家**未讀得到**（Phase 2 暫停），
+      所以下面嘅「現時」係**下限**（真實總分 ≥ 呢個數）。
+    </p>
+    <div class="row" id="statsFields"></div>
+    <div class="row" style="margin-top: 8px">
+      <button id="follow">跟實機</button>
+      <span id="source" class="muted"></span>
+    </div>
+    <div id="current" class="mono" style="margin-top: 8px"></div>
+
+    <h2>想加邊招？</h2>
+    <div class="row">
+      <input id="q" type="text" placeholder="打技能名（例：弧線／直線／精髓・體能 —— 標點唔緊要）" />
+      <button id="go">搜尋</button>
+    </div>
+    <div class="hint" id="searchHint">（技能庫有 1300+ 招，打兩個字都夠）</div>
+    <div id="results"></div>
+
+    <h2>試算</h2>
+    <div id="picked">（未揀技能）</div>
+
+    <script>
+      const { ipcRenderer } = require('electron');
+
+      /** 五維標籤（跟遊戲ステータス面板由左至右；同 `src/hud/layout.js` 一致）。 */
+      const STAT_LABELS = ['速度', '持久', '力量', '毅力', '智力'];
+      const GRADES = ['S', 'A', 'B', 'C', 'D', 'E', 'F', 'G'];
+
+      const dbEl = document.getElementById('db');
+      const bannersEl = document.getElementById('banners');
+      const statsBox = document.getElementById('statsFields');
+      const sourceEl = document.getElementById('source');
+      const currentEl = document.getElementById('current');
+      const qEl = document.getElementById('q');
+      const resultsEl = document.getElementById('results');
+      const pickedEl = document.getElementById('picked');
+      const searchHintEl = document.getElementById('searchHint');
+
+      // ── 狀態 ────────────────────────────────────────────────
+      let live = null;        // 主程序報返嚟嘅實機狀態（可能係 null：未讀到）
+      let followLive = true;  // 五維係唔係跟實機（用戶一改就變 false）
+      let manualStats = null; // 用戶自己打嘅五維
+      let picked = null;      // { key, skill } —— 技能庫嘅 index ＋ 原始條目
+      let grades = {};        // { 脚質:'A', 距離:'A' }
+      let dbCount = 0;
+      let dbError = null;
+
+      // ── 五維輸入框 ──────────────────────────────────────────
+      const statInputs = [];
+      for (const [i, label] of STAT_LABELS.entries()) {
+        const wrap = document.createElement('div');
+        wrap.className = 'statField';
+        const el = document.createElement('label');
+        el.textContent = label;
+        el.htmlFor = `s-${i}`;
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.id = `s-${i}`;
+        input.min = '0';
+        input.max = '2000';
+        input.step = '1';
+        input.addEventListener('input', () => {
+          followLive = false;
+          manualStats = statInputs.map((x) => Number(x.value));
+          sourceEl.textContent = '手動輸入（唔會俾實機覆蓋）';
+          evaluated();
+        });
+        wrap.append(el, input);
+        statsBox.append(wrap);
+        statInputs.push(input);
+      }
+
+      function shownStats() {
+        // ⚠️ 用返輸入框入面嗰五個數（用戶可能改過）—— 唔准自己另存一份「以為係咁」
+        return statInputs.map((x) => Number(x.value));
+      }
+
+      function setStats(values) {
+        for (const [i, input] of statInputs.entries()) {
+          const v = values?.[i];
+          input.value = Number.isFinite(v) ? String(v) : '';
+        }
+      }
+
+      document.getElementById('follow').addEventListener('click', () => {
+        followLive = true;
+        manualStats = null;
+        if (live?.stats) setStats(live.stats);
+        sourceEl.textContent = '跟實機擷取';
+        evaluated();
+      });
+
+      // ── 顯示：現時評價分 ────────────────────────────────────
+      function renderCurrent(info) {
+        if (!info || !Number.isFinite(info.total)) {
+          currentEl.innerHTML = '<span class="muted">（五維未讀到 —— 可以自己入數，一樣試算得到）</span>';
+          return;
+        }
+        const gap = info.nextRank
+          ? `　仲差 <b>${info.nextRank.gap}</b> 分到 ${info.nextRank.rank}`
+          : '　<span class="muted">（已到最高ランク UA）</span>';
+        const age = info.ageMs === null ? '' : `　<span class="muted">（${Math.round(info.ageMs / 1000)} 秒前讀到）</span>`;
+        currentEl.innerHTML =
+          `五維分 <b>${info.statScore}</b>　評價点 <b>${info.total}</b>（<b>${info.rank}</b>）${gap}${age}`
+          + '<div class="muted">技能分：未讀到（Phase 2 暫停）→ 呢個係下限</div>';
+      }
+
+      // ── 顯示：搜尋結果 ──────────────────────────────────────
+      function renderResults(items) {
+        resultsEl.textContent = '';
+        if (!items.length) return;
+        for (const item of items) {
+          const btn = document.createElement('button');
+          btn.className = 'pick';
+          btn.type = 'button';
+          btn.setAttribute('aria-pressed', String(picked?.key === item.key));
+          const pt = Number.isFinite(item.skillPt) ? `${item.skillPt} Pt` : 'Pt：冇資料';
+          btn.textContent =
+            `${item.name}（${item.condition || '通用'}｜基礎 ${item.base}｜${pt}）`;
+          btn.addEventListener('click', () => {
+            picked = { key: item.key, skill: item };
+            // 每類適性預設 A（＝遊戲最常見），而且 UI 一定會顯示出嚟
+            grades = {};
+            for (const g of item.groups) grades[g.key] = 'A';
+            renderResults(items);
+            evaluated();
+          });
+          resultsEl.append(btn);
+        }
+      }
+
+      // ── 顯示：試算結果 ＋ 適性選擇 ──────────────────────────
+      function renderPicked(result) {
+        if (!picked) {
+          pickedEl.textContent = '（未揀技能）';
+          return;
+        }
+        pickedEl.textContent = '';
+        const title = document.createElement('div');
+        title.className = 'big';
+        title.textContent = picked.skill.name;
+        pickedEl.append(title);
+
+        if (picked.skill.groups.length) {
+          const box = document.createElement('div');
+          box.className = 'grades';
+          for (const g of picked.skill.groups) {
+            const label = document.createElement('label');
+            label.textContent = `${g.key}：${g.keyword}`;
+            const sel = document.createElement('select');
+            for (const grade of GRADES) {
+              const opt = document.createElement('option');
+              opt.value = grade;
+              opt.textContent = grade;
+              sel.append(opt);
+            }
+            sel.value = grades[g.key] ?? 'A';
+            sel.addEventListener('change', () => {
+              grades[g.key] = sel.value;
+              evaluated();
+            });
+            label.append(sel);
+            box.append(label);
+          }
+          pickedEl.append(box);
+        } else {
+          const p = document.createElement('div');
+          p.className = 'muted';
+          p.textContent = '通用技能（冇適性條件）→ ×1.0';
+          pickedEl.append(p);
+        }
+
+        if (!result) return;
+        const table = document.createElement('table');
+        const rows = [
+          ['條件', result.condition || '（冇）'],
+          ['基礎評價分', String(result.base)],
+          ['適性倍率', `×${result.multiplier.toFixed(2)}（${result.aptitudes.join('、') || '—'}）`],
+          ['Pt', result.pt === null ? '（技能庫冇資料）' : String(result.pt)],
+        ];
+        for (const [k, v] of rows) {
+          const tr = document.createElement('tr');
+          const td1 = document.createElement('td');
+          td1.className = 'k';
+          td1.textContent = k;
+          const td2 = document.createElement('td');
+          td2.textContent = v;
+          tr.append(td1, td2);
+          table.append(tr);
+        }
+        pickedEl.append(table);
+
+        const delta = document.createElement('div');
+        delta.className = 'big';
+        const sign = result.points >= 0 ? '+' : '';
+        delta.innerHTML = `加 <span class="delta${result.points < 0 ? ' neg' : ''}">${sign}${result.points}</span> 分`;
+        pickedEl.append(delta);
+
+        const after = document.createElement('div');
+        after.className = 'mono';
+        const gapTxt = result.gapAfter === null
+          ? '已到最高ランク（UA）'
+          : `仲差 <b>${result.gapAfter}</b> 分到 ${result.after.nextRank.rank}`;
+        after.innerHTML =
+          `評價点 ${result.before.total}（${result.before.rank}） → <b>${result.after.total}</b>（<b>${result.after.rank}</b>）`
+          + `${result.rankUp ? ' <span class="up">⭐ 升級！</span>' : ''}`
+          + `<div>${gapTxt}</div>`;
+        pickedEl.append(after);
+      }
+
+      function banner(text, kind = '') {
+        const div = document.createElement('div');
+        div.className = `banner ${kind}`.trim();
+        div.textContent = text;
+        bannersEl.append(div);
+      }
+
+      // ── 每次有任何改變（五維／適性）都重新試算 ──────────────
+      function evaluated() {
+        const stats = shownStats();
+        if (!picked || stats.some((n) => !Number.isFinite(n))) {
+          renderPicked(null);
+          return;
+        }
+        ipcRenderer.send('whatif-eval', { key: picked.key, stats, grades });
+      }
+
+      document.getElementById('go').addEventListener('click', () => {
+        ipcRenderer.send('whatif-search', qEl.value);
+      });
+      qEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') ipcRenderer.send('whatif-search', qEl.value);
+      });
+
+      // ── IPC：主程序 → 呢度 ─────────────────────────────────
+      ipcRenderer.on('whatif-live', (_event, payload) => {
+        live = payload;
+        dbCount = payload.dbCount ?? dbCount;
+        dbError = payload.dbError ?? null;
+        dbEl.textContent = dbError
+          ? `技能庫：⛔ ${dbError}`
+          : `技能庫：${dbCount} 招（data/skill-db-tw.json）`;
+        if (followLive && payload.stats) {
+          setStats(payload.stats);
+          sourceEl.textContent = '跟實機擷取';
+        } else if (followLive) {
+          sourceEl.textContent = '跟實機擷取（暫時未讀到面板條）';
+        }
+        renderCurrent(payload.live);
+      });
+
+      ipcRenderer.on('whatif-results', (_event, payload) => {
+        if (payload.error) {
+          banner(payload.error);
+          return;
+        }
+        searchHintEl.textContent = payload.query
+          ? `「${payload.query}」命中 ${payload.items.length} 招（最多列 20 招；打多幾個字收窄）`
+          : '（打技能名先）';
+        renderResults(payload.items);
+      });
+
+      ipcRenderer.on('whatif-result', (_event, payload) => {
+        if (payload.error) {
+          banner(`試算失敗：${payload.error}`);
+          renderPicked(null);
+          return;
+        }
+        renderPicked(payload.result);
+      });
+
+      // 開窗即問一次（唔想等 2 秒）
+      ipcRenderer.send('whatif-get');
+      // 之後每 2 秒問一次實機狀態（讀唔到就保持手動輸入）
+      setInterval(() => ipcRenderer.send('whatif-get'), 2000);
+    </script>
+  </body>
+</html>
