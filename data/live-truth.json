@@ -14,6 +14,7 @@
     "roi-regress-gold.png",
     "roi-live-264.png",
     "roi-live-387.png",
+    "roi-live-220.png",
     "roi-live-1133.png"
   ],
   "perShot": {
@@ -23,6 +24,7 @@
     "roi-regress-gold.png": [1489, 543, 655, 624, 628],
     "roi-live-264.png": [264, 156, 168, 155, 157],
     "roi-live-387.png": [387, 172, 192, 183, 205],
+    "roi-live-220.png": [220, 80, 120, 89, 97],
     "roi-live-1133.png": [1133, 259, 462, 358, 420]
   },
   "expectHighlighted": ["roi-regress-gold.png"],  "notes": {
