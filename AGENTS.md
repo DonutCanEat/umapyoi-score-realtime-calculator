@@ -7,7 +7,7 @@
 >
 > ⚠️ 為咗令呢份文件**讀得完**（agent 嘅工作區指令預算 65,536 bytes），
 > 三份大表已經搬去 `docs/`（D4，2026-09-19）—— **同你嘅改動有關就要開嚟睇**：
-> - `docs/pitfalls.md`：**30 條地雷**（改影像／計分／HUD 之前必讀）
+> - `docs/pitfalls.md`：**31 條地雷**（改影像／計分／HUD 之前必讀）
 > - `docs/known-issues.md`：已知待辦 ＋ **未修**嘅技術債（§9.1）
 > - `docs/backlog.md`：總 Backlog（A／B／C／D，邊項做咗／做緊）
 >
@@ -69,7 +69,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 | Phase 0 | 評價分運算核心 | ✅ **誤差 = 0**（**5 條**實機樣本全部吻合；第 5 條 `05-東海帝皇-超越地平線-UD1.json` 係**第一次用遊戲自己顯示嘅評價点**做真值 —— 35,050 ＝ 五維 26,702 ＋ 技能 8,348）|
 | Phase 0 | 技能資料庫（1323 招）＋ 進化技能 override | ✅ |
 | Phase 1 | 畫面擷取（`npm start` 跑得通）| ✅ |
-| Phase 1 | **五維數字辨識（零校準）** | ✅ 兩條路都通：**畫面 A 面板條**（`statbar.js`）**14/14 全中**（1356→2560 五個解析度 ＋ 1929×1085 新樣本 ＋ 4 個實機失敗／金色格回歸 ＋ 4 個實機狀態樣本）＋ **負樣本 6/6 唔出數**（其他畫面唔准出數，見地雷 #30 —— 包括**培育結束確認**嘅「能力值」／「技能」tab 同**賽馬娘詳情**面板）；ステータス面板排法 **30/30**。✅ 已實機跑過（`npm start`，1920 窗），修好間歇性「讀唔清」（地雷 #25）同**金色格靜默讀錯**（地雷 #26）|
+| Phase 1 | **五維數字辨識（零校準）** | ✅ 兩條路都通：**畫面 A 面板條**（`statbar.js`）**15/15 全中**（1356→2560 五個解析度 ＋ 1929×1085 新樣本 ＋ 4 個實機失敗／金色格回歸 ＋ 4 個實機狀態樣本 ＋ ⭐ `roi-theme-divider.png` 格線入墨窗口回歸）＋ **負樣本 6/6 唔出數**（其他畫面唔准出數，見地雷 #30 —— 包括**培育結束確認**嘅「能力值」／「技能」tab 同**賽馬娘詳情**面板）；ステータス面板排法 **30/30**。✅ 已實機跑過（`npm start`，1920 窗），修好間歇性「讀唔清」（地雷 #25）、**金色格靜默讀錯**（地雷 #26）同**格線入墨窗口搞到成個畫面唔出數**（地雷 #31）|
 | Phase 1 | HUD overlay ＋ 設定面板 | ✅ **可用**（透明置頂穿透；顯示評價点 + 五維逐格 + 技能分 `？／總分 ≥ X` ＋ 金色格提示 ＋ **ランク目標（仲差幾多分升級，C5）** ＋ **成長曲線（C3，SVG 折線）**）。**已做**：`hud-position.json` 存檔（env > 檔案 > 預設）、獨立**設定窗**（8 個數值 slider ＋ **9 個顯示選項**，改動即時生效）、**對位模式（`UMAPYOI_HUD_EDIT=1`）可以直接拖 HUD**（放手即反推 + 存檔）＋ 設定窗跟住更新（唔會「拖完撳儲存就彈返」）。✅ **2026-09-19 用戶實機驗過（原話：「而家 hud 冇問題」）**。⏸️ **唔做**：跟住遊戲視窗移動（**用戶 2026-09-19 決定** —— 可以用拖位擺去自己想擺嘅位，跟窗冇必要；見 §9 ①）。對位模式期間切換仍然要重開程式（✅ **2026-09-19 用戶實機驗過**：新嗰行「升級 … 差 …」正常顯示；原話「呢兩樣都ok」）|
 | Phase 2 | 技能 icon 識別（自動知學咗邊啲技能）| ⏸️ **暫停（用戶 2026-09-19 指示：暫時唔處理技能呢一 part）** —— 已經做好嘅部分見下面，隨時可以接返。原狀態：🚧 **兩步做好**：① 技能畫面欄／行偵測器（`skillscreen.js`，8 張實機圖全部搵到 7 行）；② **名稱框抽取**（112 個全部抽到）＋ **影像比對可行性已量化**（互相最佳配對中位數 **0.986**、撞分上限 **0.604** —— 見 `docs/skill-screen.md` §5）。⏳ 未做：接上**候選名單**（見 §9）|
 | Phase 3 | what-if 模擬（加一招加幾多分／Pt）、成長曲線 | ✅ **C1 已做 ＋ 2026-09-19 用戶實機驗過（原話「呢兩樣都ok」）**：`src/umascore/whatif.js`（純函數）＋ `tools/whatif.js` CLI ＋ **獨立 what-if 窗**（`electron/whatif.html`，`UMAPYOI_NO_WHATIF=1` 唔開）＋ `src/umascore/aptitude.js`（適性規則**單一來源**）。✅ **C3 成長曲線亦已做（未實機驗）**：`src/hud/history.js`（樣本記錄／去重／上限／折線座標，純函數）＋ HUD 用 SVG polyline 畫（顯示選項 `history`，第 9 個）|
@@ -133,7 +133,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（333 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（334 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ electron/main.js
                                      #    ＋ src/**（31 檔）＋ tools/**（34 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
@@ -246,7 +246,7 @@ node tools/read-stats.js shots/gt/uma1-p1.png --gt=data/ground-truth/01-小栗�
 node tools/build-glyph-templates.js        # 建字形模板（面板截圖 ＋ 實機面板條；**雙閘**）
 node tools/build-glyph-templates.js --verify
 node tools/diag-statbar.js                 # ⭐ 實機面板條定位（ROI／切行／相對比例）
-node tools/diag-statbar.js --read          # ⭐ 對 `data/live-truth.json` 真值（應該 14/14）
+node tools/diag-statbar.js --read          # ⭐ 對 `data/live-truth.json` 真值（應該 15/15）
                                            #    ＋ 自動跑 `shots/negatives/`（其他畫面唔准出數，6/6）
                                            #    ⚠️ 有真值對唔上／負樣本讀到數 → exit 1（真閘）
 node tools/diag-statbar.js --read --cropped --trace            # 模擬 renderer 剪 ROI（執行時路徑）
@@ -297,14 +297,14 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **333 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **334 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
-   → **面板截圖 30/30**（三閘：**實機面板條 14/14**、**負樣本 6/6 唔出數**），全部都要中
+   → **面板截圖 30/30**（三閘：**實機面板條 15/15**、**負樣本 6/6 唔出數**），全部都要中
    ⚠️ 負樣本（`shots/negatives/`）有任何一幀讀到數 → **唔會寫檔**（同其他失敗一樣）
 4. 動到墨點／色相／亮度門檻嘅話：`node tools/diag-hue.js --assert` 要通過
 5. 動到實機面板條（`statbar.js`／`capture.html`）嘅話：
-   `node tools/diag-statbar.js --read` → **14/14**（自動對 `data/live-truth.json`）
+   `node tools/diag-statbar.js --read` → **15/15**（自動對 `data/live-truth.json`）
    ＋ **負樣本 6/6 唔出數**；＋ `node tools/replay-dumps.js` → **退步 0**
    ⚠️ `replay-dumps` 仲會報「修正假陽性」同「冇當時結果記錄（every 幀）」——
       後者係 `UMAPYOI_DUMP_FRAMES` 影嘅任意幀（冇 reason 亦冇 stats）→ **唔准當佢係 OK**
@@ -328,14 +328,14 @@ src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔�
                 #   env-flag.js（環境變數唯一讀法）／history.js（C3 成長曲線核心）
 electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／ipc-channels.cjs（channel 名唯一來源）／
                 #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 333 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+test/           # 334 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
 tools/          # 32 個 CLI：診斷／建模板／對答案／what-if／advice／診斷包／renderer 實載閘…（見 §2）
 data/           # skill-db-tw.json（1323 招）／glyph-templates.json／live-truth.json／ground-truth/
                 #   ⚠️ runtime 只讀頭兩個 → **打包白名單要有佢哋**（見 `docs/packaging.md` §5）
 shots/          # ⭐ 證據庫 —— **每個目錄係咩睇 `shots/README.md`**（邊啲入 git／加檔入邊個閘）
                 #   gt/（面板排法）／live/（實機 ＋ 失敗幀回歸）／negatives/（唔准出數）／
                 #   debug-crops/（人手剪放大圖）／live-debug/、skill-dump/（唔入 git）
-docs/           # formula.md／vision-design.md／skill-screen.md／pitfalls.md（30 條地雷）／
+docs/           # formula.md／vision-design.md／skill-screen.md／pitfalls.md（31 條地雷）／
                 #   known-issues.md／backlog.md／file-map.md／design.md／packaging.md（A9）
 ```
 
@@ -394,7 +394,7 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ---
 
-## 5. 地雷清單（30 條）—— ⭐ **詳情喺 `docs/pitfalls.md`**
+## 5. 地雷清單（31 條）—— ⭐ **詳情喺 `docs/pitfalls.md`**
 
 > ⚠️ **動到相關範圍之前，一定要開 `docs/pitfalls.md` 睇全條**（呢度只係索引；
 > 每一條都係實際踩過嘅坑，寫明「⛔ 舊寫法／錯假設」同「✅ 正解」，通常連住一個閘）。
@@ -432,6 +432,7 @@ oval > 0 → 再加 oval 部分；最後 floor
 | 28 | 以為「拖位只改 `offset`」同「slider `max=1`」冇問題 |
 | 29 | 以為「拖完 HUD 就完」—— 唔記得通知設定窗 |
 | 30 | 以為「只有面板條先砌得出 5 個等距數字」 |
+| 31 | ⭐ 以為「格與格之間嘅分隔線唔會入墨色窗口」同「同字元一樣高就一定係字元」 |
 
 ---
 
@@ -466,14 +467,15 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **333 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **334 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
    （歷史：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js` 要求 repo 根
-   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹係 **333／0**
+   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹係 **334／0**
    （2026-09-19 兩次核對：H1 之後乾淨 HEAD **327／0** vs 工作樹 **328／0**；
-   A9 再加 5 條 `write-root` 測試 → 333，查法一樣：`git archive` 出乾淨樹跑一次）。
+   A9 再加 5 條 `write-root` 測試 → 333；地雷 #31 加 1 條 `dropNonDigits` 闊度測試 → **334**，
+   查法一樣：`git archive` 出乾淨樹跑一次）。
    ⚠️ **唔准**用 `skip`／`if (!existsSync(...)) return;` 迴避 —— 咁樣只係把「驗唔到」
    變成「靜默通過」。要用嘅話就**自己控制環境**（例如 `os.tmpdir()` ＋ `process.chdir()`）。
    ⚠️ 涉及 cwd 嘅測試一定要**同步** ＋ `finally` 還原（`--test-isolation=none` 之下
@@ -482,13 +484,13 @@ oval > 0 → 再加 oval 部分；最後 floor
 3. 如果改咗五維／技能／ランク相關嘅嘢，`node tools/breakdown.js` 逐招核對一次
 4. **如果改咗影像相關嘅嘢**：
    - `node tools/build-glyph-templates.js --exclude=uma2 --verify` → **30/30（面板截圖）
-     ＋ 14/14（實機面板條）＋ 負樣本 6/6 唔出數**
+     ＋ 15/15（實機面板條）＋ 負樣本 6/6 唔出數**
    - `node tools/read-stats.js shots/gt/uma1-p1.png --gt=data/ground-truth/01-小栗帽-星光躍動-UD3.json` → 5/5
    - 上唔到 30/30 就**唔好**寫模板檔（工具自己會擋，唔好繞過）
    - 動到墨點／色相／亮度門檻：`node tools/diag-hue.js --assert` 要通過
      ＋ `node tools/tune-detect.js --hue` 睇下有冇踩到安全邊界（見 `docs/design.md` §6.1）
    - 動到實機面板條（`statbar.js`／`capture.html`）：
-     `node tools/diag-statbar.js --read` → **14/14**（自動對 `data/live-truth.json`）
+     `node tools/diag-statbar.js --read` → **15/15**（自動對 `data/live-truth.json`）
      ＋ **負樣本 6/6 唔出數** ＋ `node tools/replay-dumps.js` → **退步 0**
 4b. **語法閘（唔理改咗咩，最好都跑）：`node tools/check-renderer-syntax.js` → 全部 `✓`。**
    ⚠️ 為何要：四個 HTML 係 classic script（`require('electron')` ＋ DOM）
