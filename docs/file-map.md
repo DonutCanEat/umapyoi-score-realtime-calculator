@@ -66,6 +66,10 @@ src/hud/
                   #    打包／asar = app.getPath('userData')。⚠️ 為何要：打包後 ROOT 係唯讀
                   #    asar，原本文寫死 join(ROOT,'shots',…) → mkdirSync throw（ENOTDIR／EROFS），
                   #    而且係喺「讀唔清」出錯嗰陣才爆。underWriteRoot() 順手集中 join
+  log-file.js     # ⭐ 執行時 log 檔（`<writeRoot>/umapyoi.log`，2 MB 輪替成 `.1`）：
+                  #    formatLogLine()／shouldRotate()／openLogFile()。⚠️ 為何要：打包版係
+                  #    GUI 程式 → `console.log` 冇地方去（實測 redirect stdout 都係空）→
+                  #    「HUD 突然唔見」之類嘅事故完全冇現場。寫唔到唔准令程式爆
   history.js      # ⭐ C3 成長曲線核心（純函數，可 node --test）：pushSample()（**只記真變化**、
                   #    有上限 MAX_HISTORY=240、NaN 唔准入）／sparklinePoints()（100×22 折線座標；
                   #    `max === min` 畫中間橫線，**唔准除 0 出 NaN**）／historySummary()／historyView()
@@ -117,6 +121,9 @@ test/
                       #    `ROOT` 落喺 .asar 就算 isPackaged=false 都用 userData／
                       #    缺 rootDir 或 userDataDir 一律 throw（唔准靜默 fallback）／
                       #    underWriteRoot 砌得出 `shots/live-debug`、`shots/skill-dump`
+  log-file.test.js    # ⭐ 執行時 log 檔（5 條）：一行格式（ISO ＋ [level]）／路徑決策／
+                      #    輪替門檻（到上限先輪替、唔合法數值唔輪替）／真檔 append ＋ 輪替成 `.1`／
+                      #    寫唔到唔准爆
   hud-settings-html.test.js # ⭐ 「設定窗 ↔ config.js 欄位對齊」：**真係由 `electron/settings.html` 抽**
                       #    `DISPLAY_FIELDS`／`NUM_FIELDS` 再同 `HUD_DISPLAY_KEYS`／layout 欄位比對
                       #    （之前呢兩份清單係人手抄嘅，加一格／少一格冇人知）

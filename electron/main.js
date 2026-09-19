@@ -39,6 +39,9 @@ import { MAX_HISTORY, pushSample } from '../src/hud/history.js';
 // ⭐ 「dump／連拍要寫邊」嘅決策（A9 打包）：打包之後 `ROOT` 係唯讀 asar，
 //    寫入會 throw ENOTDIR/EROFS → 同「設定檔位置」一樣要集中一個決策（`src/hud/write-root.js`）。
 import { underWriteRoot, writeRootFor } from '../src/hud/write-root.js';
+// ⭐ 執行時 log 檔（A6 最小版）：打包版係 GUI 程式 → `console.log` 冇地方去，
+//    出事（例如「HUD 突然唔見」）之後用戶部機乜痕跡都冇 → 一定要寫檔。
+import { logFilePathFor, openLogFile } from '../src/hud/log-file.js';
 // ⭐ IPC channel 名嘅**唯一來源**：`electron/ipc-channels.cjs`（CommonJS —— 因為 4 個
 //    renderer 係 classic script，只可以 `require()`；見嗰個檔嘅檔頭）。
 //    ESM import CJS 用 default import 再解構（唔靠 cjs-module-lexer 嘅具名匯出偵測）。
@@ -79,6 +82,45 @@ function debugDir() {
 function skillDumpDir() {
   return underWriteRoot(writeRoot().root, 'shots', 'skill-dump');
 }
+
+/**
+ * ⭐ 執行時 log 檔（`<writeRoot>/umapyoi.log`）＋ 把 `console.*` 順便寫入去。
+ *
+ * 為何要（用戶 2026-09-19 報「HUD 出現咗一陣跟住就唔見咗」）：打包版係 GUI 程式，
+ * `console.log` 冇 console 可以睇（實測 redirect stdout 一樣係空）→ 出事嗰陣
+ * **現場完全消失**。寫檔之後，任何一次實機 session 都有完整證據。
+ *
+ * ⚠️ 呢個係**輔助**功能：開唔到／寫唔到都唔准令程式爆（但一定要大聲講）。
+ * ⚠️ 只 mirror `console.*`，唔會 mirror 自己（`write()` 直接落 `writeFileSync`）→ 冇遞迴。
+ */
+let logFile = null;
+function initLogFile() {
+  try {
+    logFile = openLogFile(logFilePathFor(writeRoot().root));
+  } catch (error) {
+    console.error(`[記錄] ⚠️ 開唔到 log 檔：${error?.message ?? error}（其餘功能照常）`);
+    return;
+  }
+  const describe = (value) => {
+    if (typeof value === 'string') return value;
+    if (value instanceof Error) return `${value.name}: ${value.message}`;
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  };
+  for (const level of ['log', 'warn', 'error']) {
+    const original = console[level].bind(console);
+    console[level] = (...args) => {
+      original(...args);
+      logFile.write(level, args.map(describe).join(' '));
+    };
+  }
+  console.log(`[記錄] 寫入 ${logFile.path}${logFile.rotated ? '（舊檔已輪替成 .1）' : ''}`);
+}
+
+initLogFile();
 
 /**
  * ⚠️ 遊戲視窗標題關鍵字同「點揀來源」而家喺 `src/capture/source.js`（純函數、有測試）。
@@ -312,7 +354,54 @@ function createHudWindow() {
   win.on('closed', () => {
     hudWindow = null; // 唔好留住已銷毀嘅視窗（`window-all-closed` 會跟住收工）
   });
+  startHudWatchdog(win);
   return win;
+}
+
+/**
+ * ⭐ HUD 窗自我監察（2026-09-19 加，用戶報「HUD 出現咗一陣跟住就唔見咗」）。
+ *
+ * 為何要：HUD 係**透明**窗 —— 一旦佢被 Windows 收埋、移出畫面、或者 renderer 死咗
+ * 冇人重載，用戶見到嘅就係「HUD 唔見咗」，而主程序完全唔會報錯（其他窗照在）。
+ * 呢個 watchdog 每 2 秒比一次狀態，**只喺變咗嗰陣**先 log（唔會洗版），
+ * 而且「明明應該顯示但係 hidden」就即刻 `showInactive()` 拉返出嚟。
+ *
+ * ⚠️ 唔准喺呢度做任何「重設位置」嘅事：位置係用戶嘅（見 §6.4 承諾）。
+ */
+let hudWatchState = '';
+function startHudWatchdog(win) {
+  const timer = setInterval(() => {
+    if (!win || win.isDestroyed()) {
+      console.warn('[HUD/狀態] ⚠️ HUD 窗已經唔存在（isDestroyed）—— 之後唔會再有 HUD');
+      clearInterval(timer);
+      return;
+    }
+    const b = win.getBounds();
+    const key = `visible=${win.isVisible()} crashed=${win.webContents.isCrashed()}`
+      + ` onTop=${win.isAlwaysOnTop()} bounds=${b.x},${b.y},${b.width},${b.height}`;
+    if (key === hudWatchState) return;
+    hudWatchState = key;
+    console.warn(`[HUD/狀態] 變咗 → ${key}`);
+    if (!win.isVisible()) {
+      console.warn('[HUD/狀態] 　→ HUD 明明應該顯示但係 hidden（可能被收埋／移出畫面）→ 即刻重新顯示');
+      try {
+        win.showInactive();
+      } catch (error) {
+        console.error(`[HUD/狀態] ⚠️ 重新顯示失敗：${error?.message ?? error}`);
+      }
+    }
+    // 置頂係 HUD 嘅**不變式**（見 AGENTS §6.4）：一失去就要即刻補返，
+    // 否則遊戲一搶前景（尤其係全螢幕）就會蓋住 HUD → 用戶見到「HUD 唔見咗」。
+    if (!win.isAlwaysOnTop()) {
+      console.warn('[HUD/狀態] 　→ 失去置頂 → 即刻補返 setAlwaysOnTop(true, "screen-saver")');
+      try {
+        win.setAlwaysOnTop(true, 'screen-saver');
+      } catch (error) {
+        console.error(`[HUD/狀態] ⚠️ 補置頂失敗：${error?.message ?? error}`);
+      }
+    }
+  }, 2000);
+  if (typeof timer.unref === 'function') timer.unref();
 }
 
 /**
@@ -1129,7 +1218,10 @@ function createCaptureWindow() {
   // ⚠️ 加咗 HUD／設定窗之後，「閂擷取窗 = 收工」嘅語意要留住：
   //    如果只靠 `window-all-closed`，閂咗擷取窗而設定窗仲開住 → 程式會繼續跑但已經冇擷取，
   //    用戶見到嘅係「閂咗都仲喺度」（以前唔會）。所以喺呢度明確收工。
-  win.on('closed', () => app.quit());
+  win.on('closed', () => {
+    console.log('[收工] 擷取窗被閂 → app.quit()（⚠️ 呢個係刻意設計：閂擷取窗就等於收工）');
+    app.quit();
+  });
   return win;
 }
 

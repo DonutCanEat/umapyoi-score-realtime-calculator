@@ -133,7 +133,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（334 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（339 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ electron/main.js
                                      #    ＋ src/**（31 檔）＋ tools/**（34 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
@@ -218,6 +218,14 @@ npm.cmd run pack:win                # ⭐ A9 打包：electron-builder → porta
 #      唔係嘅話「還原預設 → 拖 → 存」會把 `0.21200000000000008` 寫入用戶個檔
 #   ⚠️ `hud-position.json` 唔入 git（runtime 用戶狀態，人人唔同）
 
+# ⭐ 執行時 log 檔（`<writeRoot>/umapyoi.log`；到 2 MB 輪替成 `.1`）
+#   開發 = <專案根>/umapyoi.log；打包 = <userData>/umapyoi.log
+#     （＝ `%APPDATA%\umapyoi-score-realtime-calculator\umapyoi.log`）
+#   ⚠️ 為何要：打包版係 GUI 程式 → `console.log` **冇地方去**（實測 redirect stdout 都係空）
+#      → 出事（例如「HUD 突然唔見」）之後，用戶部機乜痕跡都冇。呢個檔就係唯一現場。
+#   ⚠️ 佢會 mirror 所有 `console.log/warn/error`（連 `[HUD/狀態]` watchdog 嘅變化紀錄）。
+#   ⚠️ 寫唔到唔准令程式爆（輔助功能）；`*.log` 唔入 git。
+
 node src/cli.js 600 600 600 600 600        # 手動試算 → 5715 / C+
 
 # ── Phase 3：C1 what-if ＋ C4 升級建議 ──
@@ -297,7 +305,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **334 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **339 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 15/15**、**負樣本 6/6 唔出數**），全部都要中
@@ -325,10 +333,11 @@ src/vision/     # 影像：inkmask.js（墨點遮罩，關鍵）／digitrow.js�
 src/capture/    # source.js ⭐ 揀擷取來源（排除自己嘅窗；純函數、有測試）
 src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔層）／config-path.js（設定檔擺邊）／
                 #   write-root.js（⭐ A9：dump／連拍要寫邊 —— 打包後 ROOT 係唯讀 asar）／
+                #   log-file.js（⭐ 執行時 log 檔：打包版 console 冇地方去 → 寫 `<writeRoot>/umapyoi.log`）／
                 #   env-flag.js（環境變數唯一讀法）／history.js（C3 成長曲線核心）
 electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／ipc-channels.cjs（channel 名唯一來源）／
                 #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 334 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+test/           # 339 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
 tools/          # 32 個 CLI：診斷／建模板／對答案／what-if／advice／診斷包／renderer 實載閘…（見 §2）
 data/           # skill-db-tw.json（1323 招）／glyph-templates.json／live-truth.json／ground-truth/
                 #   ⚠️ runtime 只讀頭兩個 → **打包白名單要有佢哋**（見 `docs/packaging.md` §5）
@@ -467,15 +476,15 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **334 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **339 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
    （歷史：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js` 要求 repo 根
-   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹係 **334／0**
-   （2026-09-19 兩次核對：H1 之後乾淨 HEAD **327／0** vs 工作樹 **328／0**；
-   A9 再加 5 條 `write-root` 測試 → 333；地雷 #31 加 1 條 `dropNonDigits` 闊度測試 → **334**，
-   查法一樣：`git archive` 出乾淨樹跑一次）。
+   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹係 **339／0**
+   （2026-09-19 幾次核對：H1 之後乾淨 HEAD **327／0** vs 工作樹 **328／0**；
+   A9 加 5 條 `write-root` 測試 → 333；地雷 #31 加 1 條 → 334；
+   日誌檔加 5 條 `log-file` 測試 → **339**，查法一樣：`git archive` 出乾淨樹跑一次）。
    ⚠️ **唔准**用 `skip`／`if (!existsSync(...)) return;` 迴避 —— 咁樣只係把「驗唔到」
    變成「靜默通過」。要用嘅話就**自己控制環境**（例如 `os.tmpdir()` ＋ `process.chdir()`）。
    ⚠️ 涉及 cwd 嘅測試一定要**同步** ＋ `finally` 還原（`--test-isolation=none` 之下
