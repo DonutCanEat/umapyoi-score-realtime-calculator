@@ -81,6 +81,44 @@ git push origin main --tags          # ⭐ 就係呢一步觸發自動打包發�
 
 ---
 
+## 3.1 ⚠️ 第一次發佈失敗紀錄（2026-09-19）—— 一定要睇
+
+推咗 `v0.1.0` 之後，workflow **跑咗但失敗**，所以 Release **冇出過**（只有 tag）。
+根因**唔係**我哋程式，係 **CI 嘅 Node 版本唔啱**：
+
+```
+node: bad option: --test-isolation=none
+```
+
+- `npm test` 用咗 `node --test --test-isolation=none` —— 呢個 flag 係 **Node 24** 先有
+- workflow 原本寫 `node-version: 22` → 一開頭就爆，後面所有 step **skipped**
+- ⚠️ 而 `--test-isolation=none` **唔可以拔**：本機實測（v24.9.0）冇咗呢個 flag，
+  **每個測試檔都會爆**（各檔共用一個 process 有衝突，例如 `process.chdir`)
+- ✅ 修法：workflow `node-version: 24`（同本機 v24.9.0 一致）
+
+**教訓**：CI 嘅 Node 版本要**同本機一致**，唔可以「是但揀個 LTS」。
+呢個失敗模式好陰險 —— 本地全過（346/346），CI 一開頭就死，而且**只出 tag 唔出 release**，
+睇落好似「workflow 冇跑」。
+
+**點查（唔使開瀏覽器）**：
+```powershell
+# 由 Windows 憑證管理員攞 GitHub token（classic PAT，40 字元）
+$cred = "protocol=https`nhost=github.com`n`n" | git credential-manager get
+$tok = ($cred | Where-Object { $_ -like 'password=*' }) -replace '^password=',''
+$H = @{ Authorization = "Bearer $tok"; Accept = 'application/vnd.github+json'; 'User-Agent'='x' }
+$repo = "DonutCanEat/umapyoi-score-realtime-calculator"
+(Invoke-RestMethod "https://api.github.com/repos/$repo/actions/runs?per_page=1" -Headers $H).workflow_runs[0] |
+  Select-Object run_number, status, conclusion
+(Invoke-RestMethod "https://api.github.com/repos/$repo/releases" -Headers $H) |
+  ForEach-Object { "$($_.tag_name)  assets=$($_.assets.Count)" }
+```
+⚠️ 喺 agent shell 入面要 `danger-full-access`（沙盒攞唔到憑證）。
+
+**重跑方法**：失敗嘅 tag **唔會**自動重試（workflow 已經有 run 紀錄，而且 tag 已存在）
+→ 最乾淨係**升版號出一個新 tag**（`0.1.0` → `0.1.1` → tag `v0.1.1`）。
+
+---
+
 ## 4. 每次改動都要 commit（用戶要求，同 `AGENTS.md` §0 一致）
 
 ```powershell

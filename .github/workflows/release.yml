@@ -27,9 +27,14 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
+      # ⚠️ **一定要 Node 24**：`npm test` 用咗 `--test-isolation=none`，
+      #    呢個 flag 係 Node 24 先有 → 用 Node 22 會 `node: bad option` 直接爆
+      #    （2026-09-19 第一次跑 Release 就係咁樣失敗，見 docs/github.md §3）。
+      #    本機實測 v24.9.0；冇呢個 flag 嘅話全部測試都會爆（各檔共用 process 有衝突）。
+      #
       # ⚠️ 一定要 npm ci（唔係 npm install）：要完全照 package-lock.json 裝，
       #    否則打包出嚟嘅 exe 同本地驗收過嘅唔係同一份依賴。
       - name: 安裝依賴
