@@ -6,12 +6,12 @@
  * 每個候選字形嘅幾何 + 顏色特徵，令判斷可以基於數字而唔係肉眼。
  *
  * 用法：
- *   node tools/diag-row.js shots/reference.png                  # 跑偵測，印結果
- *   node tools/diag-row.js shots/reference.png --lines          # 列出文字行
- *   node tools/diag-row.js shots/reference.png --line=770,783   # 某行嘅字群細節
- *   node tools/diag-row.js shots/reference.png --gray=300,420,730,792   # 灰度圖（睇字形）
- *   node tools/diag-row.js shots/reference.png --map=300,360,765,815    # 分類圖
- *   node tools/diag-row.js shots/reference.png --overview=12,12         # 版面概覽
+ *   node tools/diag-row.js shots/debug-crops/reference.png                  # 跑偵測，印結果
+ *   node tools/diag-row.js shots/debug-crops/reference.png --lines          # 列出文字行
+ *   node tools/diag-row.js shots/debug-crops/reference.png --line=770,783   # 某行嘅字群細節
+ *   node tools/diag-row.js shots/debug-crops/reference.png --gray=300,420,730,792   # 灰度圖（睇字形）
+ *   node tools/diag-row.js shots/debug-crops/reference.png --map=300,360,765,815    # 分類圖
+ *   node tools/diag-row.js shots/debug-crops/reference.png --overview=12,12         # 版面概覽
  */
 
 import { readFileSync, existsSync } from 'node:fs';

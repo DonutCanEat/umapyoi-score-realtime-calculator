@@ -166,7 +166,7 @@ node tools/build-glyph-templates.js            # 重建字形模板（驗證唔�
 
 ## 下一步需要嘅嘢
 
-- [x] 一張「育成中ステータス畫面」截圖 → 已收到，存喺 `shots/reference.png`（1902 × 1101）
+- [x] 一張「育成中ステータス畫面」截圖 → 已收到，存喺 `shots/debug-crops/reference.png`（1902 × 1101）
 - [x] `／NNNN` 係咩 → **屬性上限**，可以改，唔理
 - [x] 邊度顯示総合評價点 → **培育完成先有**（育成途中冇 ground truth）
 - [x] 介面範圍 → 全部官方 UI，左邊工具列可以忽略

@@ -7,7 +7,7 @@
  * 唔會用真值去「偷雞」切字元。
  *
  * 用法：
- *   node tools/read-stats.js shots/reference.png
+ *   node tools/read-stats.js shots/debug-crops/reference.png
  *   node tools/read-stats.js shots/gt/uma1-p1.png --gt=data/ground-truth/01-小栗帽-星光躍動-UD3.json
  *   node tools/read-stats.js shots/gt/uma2-p1.png --gt=... --trace   # 逐個字元睇分數
  */
