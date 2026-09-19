@@ -1,0 +1,26 @@
+# 換行正規化 —— 為何要：本專案喺 Windows 開發，但 GitHub 上可能有人用 Linux/macOS clone。
+# 唔設定嘅話，`core.autocrlf` 一唔同就會出現「成個檔都改咗」嘅假 diff（睇唔到真正改動）。
+# ⚠️ 呢個唔會改變工作樹嘅換行（工作樹仍然係你部機嘅 CRLF），只影響 repo 入面存嘅版本。
+* text=auto eol=lf
+
+# 二進位（唔准當文字處理，否則 diff／merge 會搞爛）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.exe binary
+*.dll binary
+*.asar binary
+*.raw binary
+
+# 大型證據檔（字形模板、技能庫、live-truth）用 diff 冇意義 → 唔顯示
+data/glyph-templates.json -diff
+data/skill-db-tw.json -diff
+data/live-truth.json -diff
+
+# GitHub 語言統計：呢個專案係 JS，但 tools/ 同 shots/ 佔好多行
+# （唔設定都得，只係令語言條好睇啲）
+docs/** linguist-documentation
+shots/** linguist-documentation
