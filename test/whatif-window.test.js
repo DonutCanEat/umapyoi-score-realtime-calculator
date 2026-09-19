@@ -55,15 +55,24 @@ test('what-if 窗：主程序推嘅 channel 一定要有 renderer listener（推
   }
 });
 
-test('what-if 窗：三個 channel 一個都唔可以少（get／search／eval 各有 listeners 兩邊）', () => {
-  for (const ch of ['whatif-get', 'whatif-search', 'whatif-eval']) {
+test('what-if 窗：channel 一個都唔可以少（get／search／eval／advice 各有 listeners 兩邊）', () => {
+  for (const ch of ['whatif-get', 'whatif-search', 'whatif-eval', 'whatif-advice']) {
     assert.ok(SENT.includes(ch), `whatif.html 要送 '${ch}'`);
     assert.ok(HANDLED.includes(ch), `main.js 要收 '${ch}'`);
   }
-  for (const ch of ['whatif-live', 'whatif-results', 'whatif-result']) {
+  for (const ch of ['whatif-live', 'whatif-results', 'whatif-result', 'whatif-advice-result']) {
     assert.ok(LISTENED.includes(ch), `whatif.html 要聽 '${ch}'`);
     assert.ok(PUSHED.includes(ch), `main.js 要推 '${ch}'`);
   }
+});
+
+test('C4：升級建議要喺主程序計（renderer 唔准自己計邊際效率）', () => {
+  // ⚠️ 同「窗唔准自己計分」一條道理：`advice.js` 有 `node --test` 覆蓋，
+  //    窗自己砌一份就係繞過測試（而且冇人會發現）。
+  assert.match(MAIN, /import \{ trainingAdvice \} from '\.\.\/src\/umascore\/advice\.js'/);
+  assert.match(MAIN, /event\.sender\.send\('whatif-advice-result', \{ advice: trainingAdvice\(stats\)/);
+  assert.match(WHATIF, /renderAdvice\(payload\.advice\)/, '窗只可以排版主程序傳落嚟嘅建議');
+  assert.ok(!/statPoints\(/.test(WHATIF), '窗唔准叫核心庫自己計');
 });
 
 test('⭐ 標題唔准含遊戲關鍵字（地雷 #27：會令擷取揀到自己個窗，全黑畫面）', () => {

@@ -125,7 +125,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（257 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（267 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ renderer inline script 語法閘（四個 HTML ＋ main.js；見 §8 4b）
 
 # HUD 相關開關（環境變數）
@@ -182,7 +182,12 @@ node tools/check-renderer-syntax.js  # ⭐ renderer inline script 語法閘（�
 
 node src/cli.js 600 600 600 600 600        # 手動試算 → 5715 / C+
 
-# ── Phase 3：C1 what-if（加一招會加幾多分／要幾多 Pt）──
+# ── Phase 3：C1 what-if ＋ C4 升級建議 ──
+node tools/advice.js --stats=1200,600,600,600,600
+                                           # ⭐ C4：屬性邊際效率（每加 1 點值幾多分）＋
+                                           #    「仲差 N 分大約要加幾多點」（--json 有全部數據）
+                                           #    ⚠️ 唔係「邊個訓練最好」（要訓練增益表，本專案未有）
+
 node tools/whatif.js --stats=1200,600,600,600,600 --skill=弧線的教授
                                            # ⭐ 唔開 Electron 都試算得到（同 what-if 窗共用
                                            #    `src/umascore/whatif.js`，唔可能算出唔同答案）
@@ -245,7 +250,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **257 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **267 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 4/4　完全命中 4/4　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 13/13**、**負樣本 3/3 唔出數**），全部都要中
@@ -278,6 +283,9 @@ src/umascore/
                   #    aptitudeMapFor()／skillPointsFor()／parseStatInput()／
                   #    whatIfAddSkill()（加一招 → Δ分／Pt／ランク變化；`after` 照樣經 evaluate() 計，
                   #    令「Δ ＝ 該招自己嘅分」變成一個測得到嘅不變式）
+  advice.js       # ⭐ C4 升級建議（純函數）：marginalPoints()（= statPoints(v+1) − statPoints(v)，
+                  #    **差分**而唔係微分 → 同核心庫一致）／statEfficiency()（邊際排序）／
+                  #    trainingAdvice()（差 N 分 → 每屬性約要幾多點；封頂屬性**唔准入建議**）
   calibrate.js    # 對答案邏輯
   index.js        # re-export
 
@@ -382,6 +390,8 @@ test/
                       #    `view.history`**（唔加＝條線永遠唔郁，而且靜默）、要真餵 pushSample()、
                       #    renderer 只畫唔計、設定窗要有 `history` 一格
   hud-skillprogress.test.js # ⭐ D5 技能分「已讀 N 招」：出「≥ P（已讀 N 招）」／唔傳就唔准變
+  advice.test.js      # ⭐ C4 建議核心（9 條）：邊際 = 差分／望遠鏡和／封頂唔准入建議／
+                      #    「跟建議加真係升到級」（用 evaluate() 反證，唔係自己加）
   whatif-window.test.js # ⭐ C1 **接線閘**（main.js ↔ whatif.html 兩個檔都入唔到 node --test）：
                       #    renderer 送嘅 channel 一定要有 main handler（反之亦然）、標題唔准含遊戲
                       #    關鍵字（地雷 #27）＋ main/HTML 標題要一致、五維標籤同 HUD 一致、
@@ -392,6 +402,7 @@ tools/
   fill-ground-truth.js   # 技能名 → base／條件／適性；override 機制
   fit-score.js           # 對答案報表
   breakdown.js           # 逐招明細表
+  advice.js              # ⭐ C4 升級建議 CLI（邊際效率 ＋ 差 N 分要加幾多點）
   whatif.js              # ⭐ C1 what-if CLI（加一招幾多分／Pt／升唔升級）—— 同 what-if 窗共用
                          #    `src/umascore/whatif.js`，所以 CLI 同窗一定同一個答案（headless 可驗）
   read-stats.js          # ⭐ 截圖 → 五維（可 --gt 對答案、--trace 睇字元分數）
@@ -857,6 +868,10 @@ src/umascore/whatif.js   純函數（零 I/O、零 Electron）：searchSkills()�
                          whatIfAddSkill()（加一招 → Δ分／Pt／rankUp／gapAfter）
 src/umascore/aptitude.js 適性規則**唯一一份**（見 §3；同類取最大、跨類別相乘、場地唔乘）
 tools/whatif.js          CLI（headless 可驗；同窗共用上面嘅核心）
+src/umascore/advice.js   ⭐ C4 升級建議：屬性邊際效率（差分）＋「差 N 分約要加幾多點」
+tools/advice.js          ⭐ C4 建議 CLI（`node tools/advice.js --stats=…`）
+                         ⚠️ **唔係**「邊個訓練最好」—— 要每種訓練嘅屬性增益表，本專案冇嗰份資料。
+                         所以只做可以由 `tables.js` **精確**計出嚟嗰部分，而且講明點數係估算。
 electron/whatif.html     窗（普通窗，唔碰 HUD 穿透）＋ `main.js` 三個 IPC：
                          whatif-get（實機五維＋技能庫狀態）／whatif-search（query → 20 條）／
                          whatif-eval（{key, stats, grades} → 試算結果）
@@ -1083,7 +1098,7 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 | C1 | **what-if 模擬**（Phase 3 主菜）| ✅ **已做（2026-09-19；✅ 同日用戶實機驗過：窗開得到、搜尋／適性／試算正常）** | 「加呢招會加幾多分／要幾多 Pt」—— 技能名搜尋（標點無關）＋ 每類適性下拉 ＋ 即時試算。<br>　 ① 核心：`src/umascore/whatif.js`（`searchSkills()`／`whatIfAddSkill()`，純函數）＋ `src/umascore/aptitude.js`（適性規則**單一來源**，順手去重獨立審計 H1）；<br>　 ② CLI（headless 可驗）：`node tools/whatif.js --stats=1200,600,600,600,600 --skill=弧線的教授` → `+508 分 / 360 Pt / 8413 B+ → 8921 B+`（`--grades=距離:S` 可以改適性、`--json`、`--all`）；<br>　 ③ 窗：`electron/whatif.html`（普通窗；五維預設每 2 秒跟實機，一改就變手動輸入；`UMAPYOI_NO_WHATIF=1` 唔開）；<br>　 ④ 測試 36 條（`test/whatif.test.js` 29 ＋ `test/whatif-window.test.js` 7 接線閘）。<br>　 ⏳ 未做：技能分仍然讀唔到 → what-if 只可以逐招加，唔可以累加「已學晒嘅技能」 | 中大 |
 | C2 | **Pt／技能點畫面（畫面 C）** | 讀點技能畫面嘅 Pt 價格同「已獲得」（⚠️ 技能庫已經有 `skillPt`，所以 C1 出得到 Pt；C2 係「由畫面自動認得」） | 中 |
 | C3 | ~~**成長曲線**~~ ✅ **已做（2026-09-19；未實機驗）** | `src/hud/history.js`（純函數：只記真變化／上限 240／折線座標／`max===min` 唔准 NaN）＋ HUD SVG polyline（顯示選項 `history`）＋ `main.js` 每幀餵 `pushSample()`。⚠️ 未實機睇過條線；⚠️ 換咗顯示項目**一定要**入 `pushHud()` dedupe key（接線閘守住） | 中 |
-| C4 | **訓練建議** | 邊個訓練加最多分（用 fans／屬性成長率） | 大 |
+| C4 | **訓練建議** | 🚧 **部分做（2026-09-19；未實機驗）**：`src/umascore/advice.js` ＋ `tools/advice.js` CLI ＋ what-if 窗「升級建議」一節 —— 做嘅係**屬性邊際效率**（`statPoints(v+1) − statPoints(v)`，差分唔係微分）＋「差 N 分約要加幾多點」（封頂屬性唔准入建議；跟建議加真係升到級有測試反證）。⏳ **未做**：真「邊個訓練最好」要**每種訓練嘅屬性增益／成長率表**（遊戲冇公開，要實測收集）→ 有嗰份資料先接得上 | 大 |
 | C5 | **ランク目標** | ✅ **已做（2026-09-19，`1309c78`）** | 「仲差幾多分到 UG」—— HUD summary 出「升級 UG3 差 66」（`evaluate()` 本身已經有 `nextRank`，只係一直冇人用）。新增顯示選項 `rankTarget`（8 個之一，預設開）；⚠️ 舊 `hud-position.json`（7 個 key）照讀得入（`validateDisplay()` 補預設，有回歸測試）。✅ **2026-09-19 用戶實機驗過**（HUD 新一行正常）| 細 |
 | C6 | **多語介面** | 繁中／日文／英文（技能庫已有簡體名欄位） | 中 |
 | C7 | **事件選項助手**（Phase 4，已 mark 暫緩） | 認事件 → 建議揀邊個選項（見 `docs/vision-design.md` §5.5） | 大 |

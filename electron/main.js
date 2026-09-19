@@ -27,6 +27,7 @@ import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skil
 import { encodePng } from '../src/vision/pngwrite.js';
 import { STAT_LABELS, STAT_KEYS } from '../src/umascore/evaluate.js';
 import { parseStatInput, skillSearchItems, whatIfAddSkill } from '../src/umascore/whatif.js';
+import { trainingAdvice } from '../src/umascore/advice.js';
 import { anchorHud, contentRect, hudState, clampLayout, layoutFromBounds, relativeFromBounds, HUD_ENV_KEYS } from '../src/hud/layout.js';
 import { loadConfig, saveConfig, resolveHudConfig, validateConfig, assertFullDisplay } from '../src/hud/config.js';
 import { configPathFor } from '../src/hud/config-path.js';
@@ -1541,6 +1542,24 @@ ipcMain.on('whatif-search', (event, query) => {
     const message = error?.message ?? String(error);
     console.error(`[what-if] ⚠️ 搜尋失敗：${message}`);
     event.sender.send('whatif-results', { query: String(query ?? ''), items: [], error: message });
+  }
+});
+
+/**
+ * ⭐ C4：升級建議（屬性邊際效率 ＋「差 N 分大約要加幾多點」）。
+ *
+ * ⚠️ 呢個**唔係**「邊個訓練最好」（要每種訓練嘅屬性增益表，本專案冇嗰份資料）——
+ *    係可以由 `tables.js` 精確計出嚟嗰部分，見 `src/umascore/advice.js` 檔頭。
+ * ⚠️ 窗容許用戶自己改五維 → 一樣要當**唔可信輸入**驗（用同一個 `parseStatInput()`）。
+ */
+ipcMain.on('whatif-advice', (event, payload) => {
+  try {
+    const stats = parseStatInput(payload?.stats);
+    event.sender.send('whatif-advice-result', { advice: trainingAdvice(stats), error: null });
+  } catch (error) {
+    const message = error?.message ?? String(error);
+    console.error(`[what-if] ⚠️ 升級建議失敗：${message}`);
+    event.sender.send('whatif-advice-result', { advice: null, error: message });
   }
 });
 

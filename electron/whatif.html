@@ -92,6 +92,14 @@
     <div class="hint" id="searchHint">（技能庫有 1300+ 招，打兩個字都夠）</div>
     <div id="results"></div>
 
+    <h2>升級建議</h2>
+    <p class="hint">
+      ⚠️ 呢個**唔係**「邊個訓練最好」（要每個訓練嘅屬性增益表，本專案未有嗰份資料）——
+      係由評分公式**精確**計出嚟嘅「屬性邊際效率」：再加 1 點呢個屬性，評價分多幾多。
+      點數係**估算**（邊際會隨屬性值變），加咗之後要再睇實際數字。
+    </p>
+    <div id="advice" class="mono"></div>
+
     <h2>試算</h2>
     <div id="picked">（未揀技能）</div>
 
@@ -110,6 +118,7 @@
       const qEl = document.getElementById('q');
       const resultsEl = document.getElementById('results');
       const pickedEl = document.getElementById('picked');
+      const adviceEl = document.getElementById('advice');
       const searchHintEl = document.getElementById('searchHint');
 
       // ── 狀態 ────────────────────────────────────────────────
@@ -294,11 +303,49 @@
       // ── 每次有任何改變（五維／適性）都重新試算 ──────────────
       function evaluated() {
         const stats = shownStats();
+        refreshAdvice(stats);
         if (!picked || stats.some((n) => !Number.isFinite(n))) {
           renderPicked(null);
           return;
         }
         ipcRenderer.send('whatif-eval', { key: picked.key, stats, grades });
+      }
+
+      /** ⭐ C4：升級建議（主程序計，呢邊只排版）。 */
+      function refreshAdvice(stats) {
+        if (stats.some((n) => !Number.isFinite(n))) return;
+        ipcRenderer.send('whatif-advice', { stats });
+      }
+
+      /** C4 建議嘅排版（`advice` 由 `src/umascore/advice.js` 嚟，唔喺呢度計）。 */
+      function renderAdvice(advice) {
+        adviceEl.textContent = '';
+        if (!advice) return;
+        const head = document.createElement('div');
+        head.className = 'big';
+        head.textContent = advice.nextRank
+          ? `仲差 ${advice.gap} 分到 ${advice.nextRank}`
+          : '已到最高ランク';
+        adviceEl.append(head);
+
+        if (advice.options.length) {
+          const table = document.createElement('table');
+          for (const opt of advice.options) {
+            const tr = document.createElement('tr');
+            const td1 = document.createElement('td');
+            td1.className = 'k';
+            td1.textContent = opt.label;
+            const td2 = document.createElement('td');
+            td2.textContent = `每點 +${opt.marginal.toFixed(2)} 分　→ 約 ${opt.points} 點`;
+            tr.append(td1, td2);
+            table.append(tr);
+          }
+          adviceEl.append(table);
+        }
+        const note = document.createElement('div');
+        note.className = 'muted';
+        note.textContent = advice.note;
+        adviceEl.append(note);
       }
 
       document.getElementById('go').addEventListener('click', () => {
@@ -343,6 +390,15 @@
           return;
         }
         renderPicked(payload.result);
+      });
+
+      // ⭐ C4：升級建議（主程序砌好，呢邊只排版）
+      ipcRenderer.on('whatif-advice-result', (_event, payload) => {
+        if (payload.error) {
+          banner(`升級建議失敗：${payload.error}`);
+          return;
+        }
+        renderAdvice(payload.advice);
       });
 
       // 開窗即問一次（唔想等 2 秒）
