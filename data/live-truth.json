@@ -8,6 +8,7 @@
     "live-2032x1174.png",
     "live-2367x1362.png",
     "live-2560x1440.png",
+    "live-1929x1085.png",
     "roi-regress-frag.png",
     "roi-regress-marginal.png",
     "roi-regress-frag2.png",
@@ -18,6 +19,7 @@
     "roi-live-1133.png"
   ],
   "perShot": {
+    "live-1929x1085.png": [168, 131, 143, 123, 130],
     "roi-regress-frag.png": [727, 198, 361, 261, 272],
     "roi-regress-marginal.png": [727, 198, 361, 261, 272],
     "roi-regress-frag2.png": [737, 198, 361, 261, 300],
