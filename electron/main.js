@@ -1005,6 +1005,21 @@ function samePage(a, b) {
   return true;
 }
 
+// ─────────────────── dump 兩個函數共用嘅兩件小事（獨立審計 L3）───────────────────
+// `dumpSkillPage()`（連拍收圖，寫 PNG）同 `dumpFrame()`（失敗幀 dump，寫 .raw ＋ .json）
+// 各自寫咗一次「建目錄」同（後者）時間戳。呢兩舊抽走之後，**檔案格式同 log 一律唔變**
+// （兩個函數嘅格式刻意唔同：一頁 4–6MB 所以收圖寫 PNG、dump 幀要 raw 方便重播）。
+
+/** 確保 dump 目錄存在（以前兩處都係 `if (!existsSync(d)) mkdirSync(d, { recursive: true })`）。 */
+function ensureDir(dir) {
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+}
+
+/** dump 檔名用嘅時間戳（`:`／`.` 換成 `-`：Windows 檔名唔可以有 `:`）。 */
+function dumpStamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
 function dumpSkillPage(image, meta) {
   if (skillPages >= SKILL_MAX) return null;
   try {
@@ -1015,7 +1030,7 @@ function dumpSkillPage(image, meta) {
       skillSkipped += 1;
       return null;
     }
-    if (!existsSync(SKILL_DIR)) mkdirSync(SKILL_DIR, { recursive: true });
+    ensureDir(SKILL_DIR); // ⚠️ 共用（審計 L3）
     const name = `page-${String(skillPages).padStart(4, '0')}.png`;
     writeFileSync(join(SKILL_DIR, name), encodePng(image));
     skillSignatures.push(sig);
@@ -1046,8 +1061,8 @@ function dumpSkillPage(image, meta) {
 function dumpFrame(image, meta) {
   if (dumpCount >= MAX_DUMPS) return null;
   try {
-    if (!existsSync(DEBUG_DIR)) mkdirSync(DEBUG_DIR, { recursive: true });
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    ensureDir(DEBUG_DIR); // ⚠️ 共用（審計 L3）
+    const stamp = dumpStamp();
     const base = join(DEBUG_DIR, `${stamp}-${meta.kind}`);
     const bytes = Buffer.from(image.data.buffer, image.data.byteOffset, image.width * image.height * 4);
     writeFileSync(`${base}.raw`, bytes);
