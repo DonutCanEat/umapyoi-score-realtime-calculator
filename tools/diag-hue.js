@@ -22,7 +22,7 @@ import { join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { decodePng } from '../src/vision/png.js';
-import { buildInkMask, isDigitInk, DEFAULT_INK_OPTIONS } from '../src/vision/inkmask.js';
+import { buildInkMask, isDigitInk, pixelHue, pixelLum, DEFAULT_INK_OPTIONS } from '../src/vision/inkmask.js';
 import { detectDigitRow } from '../src/vision/digitrow.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -35,21 +35,27 @@ const LIST = files.length
   : ['uma1-p1', 'uma1-p2', 'uma2-p1', 'uma2-p2', 'uma3-p1', 'uma3-p2', 'uma4-p1', 'uma4-p2']
       .map((n) => `shots/gt/${n}.png`);
 
-/** 色相（0..360）＋飽和度 delta ＋亮度。 */
+/**
+ * 色相（0..360）＋飽和度 delta ＋亮度。
+ *
+ * ⚠️ 色相同亮度公式已經搬去 `inkmask.js`（`pixelHue()`／`pixelLum()`）——
+ *    同**正式判準**共用同一條（獨立審計 M7：以前呢度自己抄一份，包括色相公式）。
+ * ⚠️ 呢度**刻意**保留「灰／黑 → hue = 0」（`pixelHue()` 係回 `null`）：
+ *    下面嘅統計會另外按 `delta` 篩走灰像素，改咗語意就會令輸出嘅分佈數唔同。
+ */
 function hsv(r, g, b) {
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const delta = max - min;
-  let hue = 0;
-  if (delta >= 1) {
-    if (max === r) hue = 60 * (((g - b) / delta) % 6);
-    else if (max === g) hue = 60 * ((b - r) / delta + 2);
-    else hue = 60 * ((r - g) / delta + 4);
-    if (hue < 0) hue += 360;
-  }
-  return { hue, delta, lum: (0.299 * r + 0.587 * g + 0.114 * b) / 255 };
+  const delta = Math.max(r, g, b) - Math.min(r, g, b);
+  return { hue: pixelHue(r, g, b) ?? 0, delta, lum: pixelLum(r, g, b) };
 }
 
+/**
+ * 最近位分位數（**診斷**用）。
+ *
+ * ⚠️ 同 `statbar.inkHuePercentile()` 嘅「下界分位數」**刻意唔同**
+ *    （`Math.round((n-1)·p)` vs `Math.floor(n·p)`）：嗰條係**判準門檻**
+ *    （金色格 p90 ≥ 33，pitfalls #26），改一個索引就會令邊緣個案翻邊 →
+ *    呢兩條唔合併（審計 M7 只合併色相／亮度公式）。
+ */
 function pct(sorted, p) {
   if (!sorted.length) return NaN;
   const i = Math.min(sorted.length - 1, Math.max(0, Math.round((sorted.length - 1) * p)));

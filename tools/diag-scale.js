@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { decodePng } from '../src/vision/png.js';
-import { buildInkMask, isDigitInk } from '../src/vision/inkmask.js';
+import { buildInkMask, isDigitInk, pixelHue, pixelLum } from '../src/vision/inkmask.js';
 import { readStats, loadTemplates } from '../src/vision/reader.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -150,7 +150,8 @@ if (probeArg) {
           const p = (y * img.width + x) * 4;
           const r = img.data[p]; const g = img.data[p + 1]; const b = img.data[p + 2];
           total += 1;
-          lumSum += (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+          // ⚠️ 色相／亮度公式改用 `inkmask.js` 嗰條（同正式判準同一份，審計 M7）
+          lumSum += pixelLum(r, g, b);
           deltaSum += Math.max(r, g, b) - Math.min(r, g, b);
           if (isDigitInk(r, g, b)) cand += 1;
           if (mask[y * img.width + x]) masked += 1;
@@ -215,14 +216,13 @@ for (const s of sources.slice(0, 2)) {
       const p = (y * img.width + x) * 4;
       const r = img.data[p]; const g = img.data[p + 1]; const b = img.data[p + 2];
       if (!isDigitInk(r, g, b)) continue;
-      const max = Math.max(r, g, b); const min = Math.min(r, g, b); const d = max - min;
-      let h;
-      if (max === r) h = 60 * (((g - b) / d) % 6);
-      else if (max === g) h = 60 * ((b - r) / d + 2);
-      else h = 60 * ((r - g) / d + 4);
-      if (h < 0) h += 360;
+      // ⚠️ 色相／亮度公式用共用實作（審計 M7：以前呢度抄多一份 inline）。
+      //    `isDigitInk()` 已經保證 delta ≥ deltaMin（≥30）→ 色相一定唔會係 null，
+      //    但都照樣擋一擋，免得將來有人改窄判準就靜默 push 咗 null 落個陣列。
+      const h = pixelHue(r, g, b);
+      if (h === null) continue;
       hue.push(h);
-      lum.push((0.299 * r + 0.587 * g + 0.114 * b) / 255);
+      lum.push(pixelLum(r, g, b));
     }
   }
   const stat = (a) => {

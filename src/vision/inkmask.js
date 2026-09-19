@@ -75,6 +75,18 @@ export function pixelHue(r, g, b) {
   return hue;
 }
 
+/**
+ * 一格像素嘅**相對亮度**（0–1）。
+ *
+ * ⚠️ 呢條係全專案**唯一**嘅亮度公式（審計 M7）：`tools/diag-hue.js` 同
+ *    `tools/diag-scale.js` 以前各自抄一份 inline（連色相公式都抄），
+ *    而畫面上嘅墨色窗口（`lumMax` 0.62）就係用呢個數比較 →
+ *    兩邊一旦走樣，「診斷出嚟嘅分佈」同「實際判準」就會講唔同嘅事。
+ */
+export function pixelLum(r, g, b) {
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
 /** 用預設補齊局部門檻（唔完整嘅 options 唔可以直接用，否則 undefined 會令比較全部 false）。 */
 export function resolveInkOptions(options) {
   if (!options) return DEFAULT_INK_OPTIONS;
@@ -111,7 +123,7 @@ export function isDigitInk(r, g, b, options) {
 
   const hue = pixelHue(r, g, b);
 
-  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  const lum = pixelLum(r, g, b);
 
   // 窗口 1：橙棕
   // ランク徽章本身有金／粉／綠／藍／紫，但**實測金徽章 hue 17–44°**
