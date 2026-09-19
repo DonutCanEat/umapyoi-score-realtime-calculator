@@ -870,6 +870,11 @@ function pushHud(now = Date.now()) {
     layout: hudConfig?.layout ?? null,
     display: hudConfig?.display ?? null,
     gold: lastGold,
+    // ⭐ D5 接駁位：技能識別（Phase 2，**而家暫停**）接通之後，喺度傳返進度：
+    //    `skillRead: { count: 已認到幾多招, points: 已知技能分 }`
+    //    → HUD 就會由「技能分 ？／總分 ≥ X」變成「技能分 ≥ P（已讀 N 招）」（`hudState()` 已測）。
+    //    而家一定係 `null`（＝同加呢個功能之前一模一樣，唔會出錯數）。
+    skillRead: null,
   });
   // ⚠️ dedupe key 一定要包含**所有**會顯示嘅欄位：漏一個 = 嗰個欄位永遠唔會更新
   //    （加咗新顯示項目但唔加落 key，就係「HUD 唔郁」嘅經典死法）。

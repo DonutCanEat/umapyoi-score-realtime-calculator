@@ -377,6 +377,33 @@ function shown(display, key) {
 }
 
 /**
+ * ⭐ D5：技能分「已讀進度」（`{count, points}`）。
+ *
+ * ## 為何要（而家技能分只有「？／總分 ≥ X」一句，睇唔出進度）
+ *
+ * 技能識別（Phase 2）而家**暫停**，所以 `score.skillScore` 一定係 `null`。
+ * 但 Phase 2 接通之後，畫面 B 係**逐招認到**嘅 —— 用戶會想知「認到幾多招」，
+ * 而唔係一個永遠一樣嘅「？」。呢個函數就係嗰條線嘅**接收端**：
+ * Phase 2 一路認，主程序一路傳 `{count, points}` 落嚟，HUD 就出
+ * 「技能分 ≥ 已知分（已讀 N 招）」。
+ *
+ * ⚠️ `points` 係**下限**（未認到嘅招可能仲有），所以 HUD 一定用 `≥` 顯示 ——
+ *    唔可以當佢係實際技能分（本專案底線：唔可以出錯數）。
+ * ⚠️ `count <= 0`／唔係物件／欄位唔合法 → 回 `null`（＝同以前一模一樣，一句「？」）。
+ *    呢個保證**舊呼叫（唔傳 `skillRead`）行為 100% 唔變**。
+ *
+ * @param {unknown} skillRead `{count:number, points?:number}`
+ * @returns {{count:number, points:number}|null}
+ */
+function normalizeSkillRead(skillRead) {
+  if (!skillRead || typeof skillRead !== 'object') return null;
+  const count = Number(skillRead.count);
+  if (!Number.isInteger(count) || count <= 0) return null;
+  const points = Number(skillRead.points);
+  return { count, points: Number.isFinite(points) ? points : 0 };
+}
+
+/**
  * HUD 而家應該顯示咩（純函數）。
  *
  * 四種狀態：
@@ -420,6 +447,7 @@ function shown(display, key) {
  *   layout?: {x:number[],y:number[],offset:{dx:number,dy:number},size:{w:number,h:number}},
  *   display?: Record<string,boolean>|null,
  *   gold?: boolean,
+ *   skillRead?: {count:number, points?:number}|null,
  * }} input
  * @returns {{state:string, total:number|null, rank:string|null, ageMs:number|null,
  *            lines:Array<{key:string,label:string,value:string}>, note:string,
@@ -435,6 +463,7 @@ export function hudState({
   layout = null,
   display = null,
   gold = false,
+  skillRead = null,
 } = {}) {
   const editLine = edit && layout && shown(display, 'edit')
     ? `x ${layout.x[0].toFixed(3)}–${layout.x[1].toFixed(3)}　y ${layout.y[0].toFixed(3)}–${layout.y[1].toFixed(3)}` +
@@ -470,9 +499,20 @@ export function hudState({
     summary.push({ key: 'stat', label: '五維分', value: String(score.statScore ?? '—') });
   }
   if (shown(display, 'skillScore')) {
-    summary.push(skills === null
-      ? { key: 'skill', label: '技能分', value: `？／總分 ≥ ${score.total}` }
-      : { key: 'skill', label: '技能分', value: String(skills) });
+    const read = normalizeSkillRead(skillRead);
+    if (skills !== null) {
+      summary.push({ key: 'skill', label: '技能分', value: String(skills) });
+    } else if (read) {
+      // ⭐ D5：技能分未讀齊，但已經認到 N 招 → 出「下限 ＋ 進度」，唔係一句「？」算數。
+      // 值係**下限**（`≥`）：認到嘅招只會令已知分上升，未認到嘅可能仲有。
+      summary.push({
+        key: 'skill',
+        label: '技能分',
+        value: `≥ ${read.points}（已讀 ${read.count} 招）`,
+      });
+    } else {
+      summary.push({ key: 'skill', label: '技能分', value: `？／總分 ≥ ${score.total}` });
+    }
   }
 
   // ⭐ C5「ランク目標」：仲差幾多分升級（`evaluate()` 已經回 `nextRank`，唔使自己再查表）。
