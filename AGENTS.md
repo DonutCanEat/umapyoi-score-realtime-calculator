@@ -35,6 +35,11 @@ git -C "D:\File\Program Project\Umapyoi Score Realtime Calculator" log --oneline
 - ⭐ **exe 一律擺 Release，唔入 repo**（`dist/` 已喺 `.gitignore`）：推 `v*` tag
   → `.github/workflows/release.yml` 自動跑（測試閘 → 語法閘 → fit-score → `pack:win` → 掛上 Release）。
   完整流程同公開前注意事項：`docs/github.md`。
+- ✅ **已驗證成功（2026-09-19，run #3）**：Release 上面有
+  `UmapyoiScoreRealtimeCalculator-0.1.1-portable.exe` **95.7 MB**
+  （<https://github.com/DonutCanEat/umapyoi-score-realtime-calculator/releases>）。
+  ⚠️ 過程中修咗兩個**只喺 CI 出現**嘅問題（Node 版本、`electronDist` 寫死）——
+  詳情 `docs/github.md` §3.1 同 `docs/packaging.md` §3.3。
 - ⚠️ **喺 agent shell 入面 push 一定要 `danger-full-access`**：沙盒會令 Windows schannel
   攞唔到憑證（`SEC_E_NO_CREDENTIALS`）／Git 內建 ssh 建唔到 signal pipe（`Win32 error 5`）
   → 唔升級就一定 `Permission denied` 或者 `unable to access`。憑證本身存喺

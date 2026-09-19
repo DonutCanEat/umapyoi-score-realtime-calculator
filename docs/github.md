@@ -114,6 +114,26 @@ $repo = "DonutCanEat/umapyoi-score-realtime-calculator"
 ```
 ⚠️ 喺 agent shell 入面要 `danger-full-access`（沙盒攞唔到憑證）。
 
+⭐ **已修好並驗證（2026-09-19，run #3）**：
+
+| 步驟 | 結果 |
+|---|---|
+| 跑單元測試（346 條） | ✅ success |
+| 語法閘 | ✅ success |
+| 對答案（計分核心必須誤差 0） | ✅ success |
+| 打包 portable exe | ✅ success |
+| 上傳做 Release 資產 | ✅ success |
+
+→ Release：<https://github.com/DonutCanEat/umapyoi-score-realtime-calculator/releases/tag/v0.1.1>
+→ 資產：`UmapyoiScoreRealtimeCalculator-0.1.1-portable.exe` **95.7 MB**（同本機打包一模一樣大細）
+
+⚠️ 過程中總共修**兩個** CI-only 問題（本地全部正常）：
+1. **Node 版本**：workflow 用 22，但 `npm test` 要 Node 24 嘅 `--test-isolation=none`（run #1）
+2. **`electronDist` 寫死**：本機沙盒專用嘅 `node_modules/electron/dist`，CI 上面唔存在（run #2）
+   → 詳情 `docs/packaging.md` §3.3
+
+**教訓**：CI 同本機嘅差異（Node 版本、快取路徑）唔會喺本地測試暴露 —— 一定要睇實際 run 嘅日誌。
+
 **重跑方法**：失敗嘅 tag **唔會**自動重試（workflow 已經有 run 紀錄，而且 tag 已存在）
 → 最乾淨係**升版號出一個新 tag**（`0.1.0` → `0.1.1` → tag `v0.1.1`）。
 
