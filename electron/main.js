@@ -31,6 +31,7 @@ import { anchorHud, contentRect, hudState, clampLayout, layoutFromBounds, relati
 import { loadConfig, saveConfig, resolveHudConfig, validateConfig, assertFullDisplay } from '../src/hud/config.js';
 import { configPathFor } from '../src/hud/config-path.js';
 import { envFlag } from '../src/hud/env-flag.js';
+import { MAX_HISTORY, pushSample } from '../src/hud/history.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -151,6 +152,16 @@ let hudDrag = null;
 const DRAG_IDLE_MS = 1200;
 /** 最近一次顯示嘅五維數值（HUD 要逐格顯示）。 */
 let lastStats = null;
+/**
+ * ⭐ C3 成長曲線：五維／評價点嘅歷史樣本（`{at, total, stats}`）。
+ *
+ * ⚠️ 三個規矩全部由 `src/hud/history.js` 嘅 `pushSample()` 負責（純函數、有測試）：
+ *    ① 只有**真變化**先入記錄（唔係每幀記，否則 5fps 之下時間軸會被壓扁）；
+ *    ② 有上限 `MAX_HISTORY`（滑動視窗，掉最舊嗰筆）；
+ *    ③ 唔合法樣本（NaN）唔准入。
+ *    呢度只負責「幾時餵」——**唯一**餵入點係 `ipcMain.on('frame')` 收到穩定值嗰度。
+ */
+let statHistory = [];
 /**
  * 最近一次讀到嘅「金色格」旗標（屬性 > 1200，遊戲長期用金色畫）。
  *
@@ -875,11 +886,14 @@ function pushHud(now = Date.now()) {
     //    → HUD 就會由「技能分 ？／總分 ≥ X」變成「技能分 ≥ P（已讀 N 招）」（`hudState()` 已測）。
     //    而家一定係 `null`（＝同加呢個功能之前一模一樣，唔會出錯數）。
     skillRead: null,
+    // ⭐ C3 成長曲線：`statHistory` 係樣本陣列，`hudState()` 會經 `history.js` 砌折線 view。
+    history: statHistory,
   });
   // ⚠️ dedupe key 一定要包含**所有**會顯示嘅欄位：漏一個 = 嗰個欄位永遠唔會更新
-  //    （加咗新顯示項目但唔加落 key，就係「HUD 唔郁」嘅經典死法）。
+  //    （加咗新顯示項目但唔加落 key，就係「HUD 唔郁」嘅經典死法）——
+  //    ⭐ C3 成長曲線就係靠呢個 key 入面有 `view.history` 先會逐筆更新。
   const key = JSON.stringify([
-    view.state, view.lines, view.summary, view.note, view.edit, view.gold,
+    view.state, view.lines, view.summary, view.note, view.edit, view.gold, view.history,
   ]);
   if (key === lastHudKey) return; // 冇變就唔好每幀 send
   lastHudKey = key;
@@ -1399,6 +1413,8 @@ ipcMain.on('frame', (_event, frame) => {
   lastScore = score;
   lastStats = stats;
   lastScoreAt = Date.now();
+  // ⭐ C3：成長曲線記一筆（重複值／NaN 由 `pushSample()` 自己擋；冇變時回同一個參照）
+  statHistory = pushSample(statHistory, { at: lastScoreAt, total: score.total, stats }, { max: MAX_HISTORY });
   // 金色格旗標跟「已採用嘅穩定值」一齊更新（讀唔到嗰陣保留上一個，同五維一樣唔閃走）。
   lastGold = Boolean(read.highlighted);
 

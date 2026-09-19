@@ -31,10 +31,17 @@
       .row .value { font-variant-numeric: tabular-nums; }
       #summary { font-size: 11px; font-weight: 400; color: #b9f6c0; white-space: nowrap; }
       #note { font-size: 11px; font-weight: 400; color: #9ef0a8; white-space: nowrap; }
+      /* ⭐ C3 成長曲線：主程序推落嚟嘅折線座標（`view.history.points`），呢邊只畫唔計。 */
+      #history { display: block; }
+      #history svg { display: block; width: 100%; height: 22px; overflow: visible; }
+      #history polyline { fill: none; stroke: #8fd6ff; stroke-width: 1.4; stroke-linejoin: round; }
+      #history .hist { font-size: 10px; font-weight: 400; color: #9aa4ad; white-space: nowrap; }
       /* 金色格提示（屬性 > 1200）。⚠️ 主程序只知「有一格」，唔知係邊一格 → 唔可以標某一格。 */
       #gold { font-size: 11px; font-weight: 400; color: #ffd479; white-space: nowrap; }
       /* 顯示選項閂咗 = 主程序唔推嗰一項 → 呢度收到空字串就唔畫（連個框都唔要）。 */
       #total:empty, #stats:empty, #summary:empty, #note:empty, #edit:empty, #gold:empty { display: none; }
+      /* ⭐ C3：`#history` 唔用 `:empty` —— 佢內部一定有 SVG／文字節點，靠主程序推唔推落嚟控制。 */
+      #history[hidden] { display: none; }
       /* 對位模式：顯示範圍／偏移（`UMAPYOI_HUD_EDIT=1`） */
       #edit { font-size: 10px; font-weight: 400; color: #ffd479; white-space: nowrap; }
       /* 對位模式先出「可以拖」提示（同埋換鼠標）。⚠️ 正常模式呢個窗係穿透嘅，
@@ -60,6 +67,7 @@
       <div id="total">評價点 —</div>
       <div id="stats"></div>
       <div id="summary"></div>
+      <div id="history" hidden></div>
       <div id="gold"></div>
       <div id="note">等待面板條（開育成主畫面）</div>
       <div id="edit"></div>
@@ -73,6 +81,46 @@
       const noteEl = document.getElementById('note');
       const editEl = document.getElementById('edit');
       const goldEl = document.getElementById('gold');
+      const historyEl = document.getElementById('history');
+
+      /** ⭐ C3 成長曲線：上一次畫嘅座標字串（唔變就唔重畫 SVG，免得每幀重建 DOM）。 */
+      let historyKey = '';
+
+      /**
+       * 畫成長曲線（**只畫** —— 座標同摘要全部由主程序經 `src/hud/history.js` 計好）。
+       *
+       * ⚠️ 呢度**唔准**自己計斜率／縮放：renderer 冇測試覆蓋（見 AGENTS §9.1），
+       *    畫錯線係靜默嘅。主程序傳 `viewBox` 座標（100×22），呢邊只負責塞入 `<polyline>`。
+       */
+      function renderHistory(view) {
+        if (!view || !view.points || view.points.length < 2) {
+          // 唔夠兩個點 → 畫唔到線；有記錄嘅話老實講「等緊變化」，冇就索性唔出。
+          const fallback = view && view.count === 1 ? '成長曲線：等緊下一次變化' : '';
+          if (historyEl.dataset.fallback === fallback) return;
+          historyEl.dataset.fallback = fallback;
+          historyKey = '';
+          historyEl.hidden = !fallback;
+          historyEl.textContent = fallback;
+          return;
+        }
+        const key = `${view.width}x${view.height}|${view.points.map((p) => `${p.x},${p.y}`).join(' ')}|${view.delta}|${view.capped}`;
+        if (key === historyKey) return;
+        historyKey = key;
+        const minutes = Math.round(view.spanMs / 60000);
+        const sign = view.delta >= 0 ? '+' : '';
+        const svgNs = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNs, 'svg');
+        svg.setAttribute('viewBox', `0 0 ${view.width} ${view.height}`);
+        svg.setAttribute('preserveAspectRatio', 'none');
+        const line = document.createElementNS(svgNs, 'polyline');
+        line.setAttribute('points', view.points.map((p) => `${p.x},${p.y}`).join(' '));
+        svg.append(line);
+        const label = document.createElement('div');
+        label.className = 'hist';
+        label.textContent = `成長 ${sign}${view.delta}（${minutes} 分鐘${view.capped ? '，只顯示最近一段' : ''}）`;
+        historyEl.hidden = false;
+        historyEl.replaceChildren(svg, label);
+      }
 
       /** 五維逐格（主程序已經按「速度／持久／力量／毅力／智力」排好）。 */
       let statKeys = '';
@@ -111,6 +159,8 @@
         // 金色格：⚠️ 主程序嘅 `highlighted` 係「整條數值列」一個 boolean
         //（唔係逐格）→ 只可以老實講「有」，唔可以標某一格（見 layout.js hudState 註解）。
         goldEl.textContent = view.gold ? '⭐ 金色格（≥1200）' : '';
+        // ⭐ C3 成長曲線（座標／摘要由主程序計；顯示選項 `history` 閂咗就係 null）
+        renderHistory(view.history);
       });
 
       // ───────────────── 對位模式：手動拖位（只有 edit 態可以做）─────────────────

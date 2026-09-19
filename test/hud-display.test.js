@@ -193,7 +193,28 @@ test('顯示選項 key 清單要同 config.js 嘅 HUD_DISPLAY_KEYS 對齊（兩�
   assert.deepEqual([...HUD_DISPLAY_KEY_NAMES], [...HUD_DISPLAY_KEYS]);
   assert.deepEqual(Object.keys(DEFAULT_HUD_DISPLAY).sort(), [...HUD_DISPLAY_KEY_NAMES].sort());
   // ⚠️ 呢個數字係故意寫死嘅：加／減顯示選項一定要**同時**改設定窗（`DISPLAY_FIELDS`）
-  //    同 `HUD_DISPLAY_KEYS`，測試會即刻提你（8 = C5 加咗 `rankTarget`）。
-  assert.equal(HUD_DISPLAY_KEY_NAMES.length, 8);
+  //    同 `HUD_DISPLAY_KEYS`，測試會即刻提你（9 = C5 加咗 `rankTarget`、C3 加咗 `history`）。
+  assert.equal(HUD_DISPLAY_KEY_NAMES.length, 9);
   assert.equal(DEFAULT_HUD_DISPLAY.rankTarget, true, '新選項預設要開（＝同今日 HUD 一樣）');
+  assert.equal(DEFAULT_HUD_DISPLAY.history, true, '成長曲線預設要開（C3）');
+});
+
+test('⭐ C3 成長曲線：閂 `history` → 唔會出 view；開返就有（其餘欄位唔受影響）', () => {
+  const history = [
+    { at: 0, total: 1000, stats: STATS },
+    { at: 60000, total: 1200, stats: STATS },
+  ];
+  const on = hudState({ score: SCORE, stats: STATS, history });
+  assert.ok(on.history, '有兩筆樣本 → 一定要出 view');
+  assert.equal(on.history.delta, 200);
+  assert.ok(on.history.points.length >= 2);
+
+  const off = hudState({ score: SCORE, stats: STATS, history, display: allOff({ history: false }) });
+  assert.equal(off.history, null, '閂咗就唔出（renderer 見到 null 就唔畫）');
+  assert.deepEqual(off.summary, on.summary, '閂曲線唔可以連累其他嘢');
+  assert.deepEqual(off.lines, on.lines);
+
+  // 冇樣本（未育成／啱啱開程式）→ null，唔可以出半截 view
+  assert.equal(hudState({ score: SCORE, stats: STATS, history: [] }).history, null);
+  assert.equal(hudState({ score: SCORE, stats: STATS }).history, null, '舊呼叫唔傳 → null（行為不變）');
 });

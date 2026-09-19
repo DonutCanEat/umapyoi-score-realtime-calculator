@@ -83,6 +83,7 @@ export const HUD_CONFIG_FILENAME = 'hud-position.json';
  * | `statScore`  | `summary[].key === 'stat'`           | 五維分 |
  * | `skillScore` | `summary[].key === 'skill'`          | 技能分（未讀到 = `？／總分 ≥ X`）|
  * | `rankTarget` | `summary[].key === 'nextRank'`       | ランク目標（仲差幾多分升級；C5）|
+ * | `history`    | `history`（折線座標 ＋ 摘要）          | 成長曲線（C3：最近一段嘅評價点變化）|
  * | `goldMark`   | `statbar.readStatBar()` 回嘅 `highlighted` | 金色格標示（屬性 > 1200）|
  * | `note`       | `note`（ランク／過期提示）            | 狀態一行 |
  * | `edit`       | `edit`（對位模式 `UMAPYOI_HUD_EDIT=1`）| 範圍／偏移一行 |
@@ -93,6 +94,7 @@ export const HUD_DISPLAY_KEYS = Object.freeze([
   'statScore',
   'skillScore',
   'rankTarget',
+  'history',
   'goldMark',
   'note',
   'edit',

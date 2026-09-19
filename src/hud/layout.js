@@ -14,6 +14,10 @@
  * → 用**相對座標**（÷ 內容區大細）就一定跟得上任何視窗大細。
  */
 
+// ⭐ C3 成長曲線嘅 view（樣本 → 折線座標）。同一個資料夾、同樣係純函數，
+//    所以呢個 import 唔會引入 Electron 依賴（維持「layout.js 可 node --test」）。
+import { historyView } from './history.js';
+
 /** 內容區（16:9）比例。 */
 export const CONTENT_ASPECT = 9 / 16;
 
@@ -350,6 +354,7 @@ export function layoutFromEnv(env = {}) {
  * | `statScore`  | `summary[].key === 'stat'` |
  * | `skillScore` | `summary[].key === 'skill'` |
  * | `rankTarget` | `summary[].key === 'nextRank'`（C5：仲差幾多分升級）|
+ * | `history`    | `history`（C3：成長曲線嘅 view）|
  * | `goldMark`   | `gold`（金色格提示，屬性 > 1200）|
  * | `note`       | `note` |
  * | `edit`       | `edit` |
@@ -360,6 +365,7 @@ export const HUD_DISPLAY_KEY_NAMES = Object.freeze([
   'statScore',
   'skillScore',
   'rankTarget',
+  'history',
   'goldMark',
   'note',
   'edit',
@@ -464,6 +470,7 @@ export function hudState({
   display = null,
   gold = false,
   skillRead = null,
+  history = null,
 } = {}) {
   const editLine = edit && layout && shown(display, 'edit')
     ? `x ${layout.x[0].toFixed(3)}–${layout.x[1].toFixed(3)}　y ${layout.y[0].toFixed(3)}–${layout.y[1].toFixed(3)}` +
@@ -471,6 +478,9 @@ export function hudState({
       `　大細 ${layout.size.w.toFixed(3)}×${layout.size.h.toFixed(3)}`
     : null;
   const goldMark = shown(display, 'goldMark') && Boolean(gold);
+  // ⭐ C3 成長曲線：`history` 係**樣本陣列**（`main.js` 每幀餵），view 喺 `history.js` 計 ——
+  // 唔喺 renderer 計（renderer 入唔到 `node --test`，畫錯線係靜默嘅）。
+  const historyViewOut = shown(display, 'history') ? historyView(history) : null;
 
   if (!score) {
     return {
@@ -483,6 +493,7 @@ export function hudState({
       summary: [],
       edit: editLine,
       gold: goldMark,
+      history: historyViewOut,
     };
   }
 
@@ -551,5 +562,6 @@ export function hudState({
     summary,
     edit: editLine,
     gold: goldMark,
+    history: historyViewOut,
   };
 }
