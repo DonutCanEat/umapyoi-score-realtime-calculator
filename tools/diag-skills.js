@@ -85,7 +85,10 @@ for (const rel of files) {
     continue;
   }
 
-  const { counts, mask } = rowProfile(image);
+  // ⚠️ `scale` 一定要攞埋（`findSkillRows()` 要「量到嘅文字大細」計相對門檻）——
+  //    之前淨係解構 `counts`／`mask`，所以任何唔係 `--gray` 嘅用法都會
+  //    `ReferenceError: scale is not defined`（HEAD 已經係咁；今次一齊修）。
+  const { counts, mask, scale } = rowProfile(image);
   const lines = findSkillRows(counts, img.width, img.height, { unit: scale.unit });
   console.log(`技能列 ${lines.length} 條（相對版面）：`);
   for (const l of lines) {
