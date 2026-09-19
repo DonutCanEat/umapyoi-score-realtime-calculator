@@ -132,15 +132,32 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（318 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（328 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ electron/main.js
-                                     #    ＋ src/**（29 檔）＋ tools/**（33 檔）—— 見 §8 4b
+                                     #    ＋ src/**（30 檔）＋ tools/**（34 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
                                      #    喺 HEAD 已經爆 SyntaxError 都冇人知（見 §8 4b）
 node tools/collect-diagnostics.js    # ⭐ D2 一鍵診斷包 → diagnostics/diag-<時間>/report.md
 node tools/collect-diagnostics.js --run-gates   # 順手跑齊 5 個閘並把尾部輸出寫落報告（慢）
 node tools/collect-diagnostics.js --with-dumps  # 連最近 5 個 dump 幀一齊複製落 files/
                                     # ⚠️ `diagnostics/` 唔入 git（一次性支援資料）
+node_modules\.bin\electron.cmd tools\verify-renderer-load.js
+                                    # ⭐ **renderer 實載閘**（H1 第二步嘅必要驗證）：真係開 Electron
+                                    #    載入 4 個 HTML（`show:false`，**唔需要開遊戲**），斷言
+                                    #    ① page 冇 throw ② main→renderer 通（送真 payload 讀 DOM）
+                                    #    ③ renderer→main 通（等「開窗即問」嗰條 channel 到）
+                                    #    ⚠️ 一定要用 **Electron** 跑（`node` 跑冇意義）；
+                                    #    ⚠️ 如果環境漏咗 `ELECTRON_RUN_AS_NODE=1`（DSH agent shell
+                                    #       會漏）→ 先 `Remove-Item Env:\ELECTRON_RUN_AS_NODE`，
+                                    #       唔然 electron.exe 會用 Node 模式跑（`import … from
+                                    #       'electron'` 即刻爆／攞到 npm shim）
+# IPC channel 名嘅唯一來源 = electron/ipc-channels.cjs（**CommonJS**：renderer 係 classic script）
+#   `main.js`（29 處）＋ **4 個 renderer** 都已經改用 `IPC_CHANNELS.<key>`
+#   （renderer 係 `const { IPC_CHANNELS } = require('./ipc-channels.cjs');`）。
+#   `test/ipc-wiring.test.js` 會逐個對照 map（打錯字／改咗 map 冇改 HTML → 即刻 fail），
+#   仲釘死「renderer 唔准再出現 channel 字面值」同「解構一定要早過第一次用」。
+#   ⚠️ 改呢個 require（路徑／`.cjs` 副檔名／搬檔）之後**一定要跑實載閘**（見上）；
+#      失敗模式係「page 一開頭 throw → 全部 IPC listener 靜默唔註冊」（靜態閘捉唔到）。
 
 # HUD 相關開關（環境變數）
 #   ⚠️ **四個**旗標（UMAPYOI_NO_HUD／UMAPYOI_NO_SETTINGS／UMAPYOI_NO_WHATIF／UMAPYOI_HUD_EDIT）
@@ -273,7 +290,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **318 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **328 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 14/14**、**負樣本 6/6 唔出數**），全部都要中
@@ -303,7 +320,7 @@ src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔�
                 #   env-flag.js（環境變數唯一讀法）／history.js（C3 成長曲線核心）
 electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／capture.html／hud.html／
                 #   settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 318 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+test/           # 328 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
 tools/          # 32 個 CLI：診斷／建模板／對答案／what-if／advice／診斷包…（見 §2）
 data/           # skill-db-tw.json（1323 招）／glyph-templates.json／live-truth.json／ground-truth/
 shots/          # ⭐ 證據庫 —— **每個目錄係咩睇 `shots/README.md`**（邊啲入 git／加檔入邊個閘）
@@ -440,12 +457,13 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **318 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **328 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
    （歷史：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js` 要求 repo 根
-   有 `hud-position.json`），修好之後兩邊一樣；而家兩邊都係 **318／0**）。
+   有 `hud-position.json`），修好之後兩邊一樣；而家兩邊都係 **328／0**
+   （2026-09-19 H1 第二次核對：乾淨 HEAD 樹 **327／0**、工作樹 **328／0**）。
    ⚠️ **唔准**用 `skip`／`if (!existsSync(...)) return;` 迴避 —— 咁樣只係把「驗唔到」
    變成「靜默通過」。要用嘅話就**自己控制環境**（例如 `os.tmpdir()` ＋ `process.chdir()`）。
    ⚠️ 涉及 cwd 嘅測試一定要**同步** ＋ `finally` 還原（`--test-isolation=none` 之下
@@ -474,6 +492,12 @@ oval > 0 → 再加 oval 部分；最後 floor
    呢個閘只驗語法（`node --check`，唔執行、唔 resolve import → 唔需要 electron／任何依賴），
    邏輯錯同「export 名打錯」要靠 `npm.cmd test`。
    ⚠️ 想驗「閘真係捉得到」：`node tools/check-renderer-syntax.js <一個裝咗壞檔嘅目錄>` → 應該 exit 1。
+4c. **改到 renderer 嘅 `require`／channel 用法（或者改 `electron/ipc-channels.cjs`）**：
+   `node_modules\.bin\electron.cmd tools\verify-renderer-load.js` → **4 個窗全過**（14 項 ✓）。
+   ⚠️ 為何：`require('./ipc-channels.cjs')` 喺 renderer 一解唔到，page 就**開頭 throw**
+   → 之後所有 `ipcRenderer.on()` 靜默唔註冊（窗開得到但永遠唔郁）——
+   `npm.cmd test` 同語法閘**只睇文字，捉唔到**。呢個閘真係開 Electron、真係來回送 IPC。
+   ✅ **唔需要開遊戲**（`show:false`）；⚠️ 要真 Electron（見 §2 嗰行嘅 `ELECTRON_RUN_AS_NODE` 註記）。
 5. 更新 `docs/formula.md`（公式）或者 `docs/vision-design.md`（影像）
 6. **`git commit`**（見 §0：每次改動都要 commit，驗收唔過唔准 commit）
 

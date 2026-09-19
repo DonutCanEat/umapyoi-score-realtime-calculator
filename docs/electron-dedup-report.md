@@ -25,9 +25,9 @@
 
 | # | 簇 | 狀態 |
 |---|---|---|
-| H1 | IPC channel 字串散落 5 個檔（24 條，冇 channel map、冇閘） | ✅ **靜態閘已加**（`test/ipc-wiring.test.js`）｜⏳ channel map 未換（可選） |
+| H1 | IPC channel 字串散落 5 個檔（24 條，冇 channel map、冇閘） | ✅ **已修**（`electron/ipc-channels.cjs` 單一來源：`main.js` 29 處 ＋ **4 個 renderer** 全部改用；`test/ipc-wiring.test.js` 靜態閘 ＋ `tools/verify-renderer-load.js` **實載閘**） |
 | H2 | 「切字元 → 讀數 → 信心閘」主迴圈兩套 | ✅ **已修**（`glyphs.readNumberBoxes()`） |
-| H3 | 16:9 內容框推算三處 ＋ `roi.aspect` 傳咗冇人讀 | ✅ **已接線**（renderer 跟主程序）｜⏳ 抽 `contentBox()` 未做 |
+| H3 | 16:9 內容框推算三處 ＋ `roi.aspect` 傳咗冇人讀 | ✅ **已修**（`content-box.js` 單一來源）｜✅ **已接線**（renderer 跟主程序） |
 | M1 | 環境變數讀法三個半實作 | ✅ **已修**（`envNumber()`／`envIsSet()`）＋ `UMAPYOI_SKILL_DUMP` 一齊修 |
 | M2 | 四個 `BrowserWindow` 工廠重複 `webPreferences` | ✅ **已修**（`electron/web-preferences.js` ＋防漂移閘） |
 | M3 | 逐列／逐欄墨量投影同「連續段掃描」9 處變體 | ✅ **已修**（`src/vision/projection.js`：投影 ＋ `runSpans()`／`densestRun()`） |
@@ -66,13 +66,20 @@
 | `2ca3644` | 額外 | 語法閘擴充：`src/**`（29）＋ `tools/**`（33）＋ 原本 4 HTML ＋ main.js；加可選 CLI 參數令閘可以自測 | 全 ✓（exit 0）；餵壞檔目錄 → exit 1 |
 | `646fac9` | L2 | `test/helpers/image.js`（`solidImage()`）——4 個測試檔收斂；⚠️ 只抽 buffer 嗰步（`paint()`／`fill()` 語意有微差，留返） | 318/318（測試語意零改動） |
 | `e2eed96` | L3 | `ensureDir()`／`dumpStamp()`（檔內小工具）；diff 只有 4 行 | 語法閘 ✓、318/318、`git diff` 逐行核對 |
+| （H1 尾） | H1 | **4 個 renderer 改用 `require('./ipc-channels.cjs')`**（26 處字面值清零）＋ 閘加「renderer 唔准再寫字面值／解構要早過第一次用」＋ 新工具 `tools/verify-renderer-load.js`（真開 Electron 載入 4 個窗、雙向送 IPC 讀 DOM） | 實載閘 **14/14 ✓**、328/328（乾淨 HEAD 327/327）、語法閘 ✓、`fit-score` 5/5 誤差 0、`diag-statbar --read` 14/14＋負樣本 6/6、`replay-dumps` 退步 0、`diag-hue --assert` ✓ |
 
 ## 剩餘（**可選**，唔做都可以）
 
-- H1 第二步：`electron/ipc-channels.cjs` ＋ main／4 個 HTML 換成常數 —— 因為 renderer 係 classic script（ESM 入唔到 `file://`），要先確認 `.cjs` 喺 `require()` 之下讀得到。**現時嘅靜態閘已經擋住打錯 channel 名呢個最痛嘅情況**。
-- H3 第二步：抽 `src/vision/content-box.js`（`contentRect()`／`contentBox()`／`capture.html` 三者用同一支）—— 現時三處仍然各自寫一次（但 renderer 已經跟主程序，唔會再靜默唔同步）。
+- ✅ H1 第二步：**已完成**（`electron/ipc-channels.cjs` ＋ `main.js` ＋ 4 個 HTML 全部換成常數；
+  驗證方式 = 新嘅 `tools/verify-renderer-load.js`，佢正正係為咗「實機驗」而寫）。
+- ✅ H3 第二步：**已完成**（`src/vision/content-box.js`：`contentRect()`／`contentBox()`／
+  `capture.html` 三者用同一支）。
 - ⚠️ **唔應該做**：`tools/diag-skillnames.js` 自己一套特徵抽取（見新發現 1）—— 佢讀嘅標註已知有錯位。
-- ⚠️ 三件事仍然要實機驗（本報告嘅所有改動都**冇開 Electron**）：`npm.cmd start` 睇 HUD 穿透／四個窗、`UMAPYOI_HUD_EDIT=1` 拖位、`UMAPYOI_DUMP_FRAMES=5` 睇 dump 檔名時間戳。
+- ⚠️ 仲要實機驗嘅嘢（本報告嘅改動**冇開過遊戲**）：`npm.cmd start` 睇 HUD 穿透／四個窗、
+  `UMAPYOI_HUD_EDIT=1` 拖位、`UMAPYOI_DUMP_FRAMES=5` 睇 dump 檔名時間戳。
+  ⚠️ **DSH agent shell 開唔到 Electron**（沙盒擋 mojo named pipe／cache 授權 → `platform_channel.cc`
+  FATAL；另外環境會漏 `ELECTRON_RUN_AS_NODE=1` → electron.exe 會用 Node 模式跑）——
+  呢類驗證要喺用戶自己嘅終端做。
 
 ## 過程中新發現（v2 未有記錄）
 
@@ -125,7 +132,7 @@
 1. ~~**M6**（tools CLI 參數，逐字保留 CLI 介面）~~ ✅ `e855f15`
 2. ~~**L2**（test fixture builder，只抽砌 buffer 嗰步）~~ ✅ `646fac9`
 3. ~~**L3**（dump 小工具，檔內重構）~~ ✅ `e2eed96`
-4. 可選（未做）：H1 第二步（`.cjs` channel map）、H3 第二步（`content-box.js`）
+4. ~~可選（未做）：H1 第二步（`.cjs` channel map）、H3 第二步（`content-box.js`）~~ ✅ **兩樣都做完**
    ⚠️ **唔應該做**：`tools/diag-skillnames.js` 自己一套特徵抽取（見新發現 1）——
    佢讀嘅標註已知有錯位，為佢改共用模組唔值得。
 
