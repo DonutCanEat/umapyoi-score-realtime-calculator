@@ -30,6 +30,16 @@ git -C "D:\File\Program Project\Umapyoi Score Realtime Calculator" log --oneline
 用嚟放 `TimeMate/`、舊嘅 `Umapyoi/` 等，**追蹤唔到本專案**；而且喺 workspace 之外，
 沙盒會擋 `.git/index.lock` → commit 一定失敗）。本專案獨立成庫，兩者互不干擾。
 
+⭐ **遠端（2026-09-19 設定）**：`origin` = `https://github.com/DonutCanEat/umapyoi-score-realtime-calculator.git`
+（**private**；用戶名 `DonutCanEat`）。主分支 `main`。
+- ⭐ **exe 一律擺 Release，唔入 repo**（`dist/` 已喺 `.gitignore`）：推 `v*` tag
+  → `.github/workflows/release.yml` 自動跑（測試閘 → 語法閘 → fit-score → `pack:win` → 掛上 Release）。
+  完整流程同公開前注意事項：`docs/github.md`。
+- ⚠️ **喺 agent shell 入面 push 一定要 `danger-full-access`**：沙盒會令 Windows schannel
+  攞唔到憑證（`SEC_E_NO_CREDENTIALS`）／Git 內建 ssh 建唔到 signal pipe（`Win32 error 5`）
+  → 唔升級就一定 `Permission denied` 或者 `unable to access`。憑證本身存喺
+  Windows 憑證管理員（Git Credential Manager，用戶 `DonutCanEat`）—— **唔使 token**。
+
 **每次改動嘅流程（順序唔可以掉亂）**：
 
 1. 改嘢
