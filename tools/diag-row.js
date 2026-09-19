@@ -21,10 +21,11 @@ import { fileURLToPath } from 'node:url';
 import { decodePng } from '../src/vision/png.js';
 import { buildInkMask, findTextLines, isDigitInk } from '../src/vision/inkmask.js';
 import { detectDigitRow, columnsToGroups, groupsToNumbers, pickBestFive, scoreNumberRow, denseBands } from '../src/vision/digitrow.js';
+import { flagValue, hasFlag, positionalArgs, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const args = process.argv.slice(2);
-const file = args.find((a) => !a.startsWith('--'));
+const args = toolArgs();
+const file = positionalArgs(args)[0];
 if (!file) {
   console.error('用法：node tools/diag-row.js <png> [--lines|--line=y0,y1|--gray=..|--map=..|--overview=..]');
   process.exit(1);
@@ -32,12 +33,13 @@ if (!file) {
 
 const img = decodePng(readFileSync(join(ROOT, file)));
 const image = { data: img.data, width: img.width, height: img.height };
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）——以前嗰個 `prefix.length + 3` 手寫算式已消失
 const opt = (prefix, fallback) => {
-  const hit = args.find((a) => a.startsWith(`--${prefix}=`));
-  if (!hit) return fallback;
-  return hit.slice(prefix.length + 3).split(',').map(Number);
+  const raw = flagValue(args, prefix);
+  if (raw === undefined) return fallback;
+  return raw.split(',').map(Number);
 };
-const has = (name) => args.includes(`--${name}`);
+const has = (name) => hasFlag(args, name);
 
 console.log(`檔案：${file}  ${img.width}×${img.height}`);
 

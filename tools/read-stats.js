@@ -20,16 +20,18 @@ import { decodePng } from '../src/vision/png.js';
 import { buildInkMask } from '../src/vision/inkmask.js';
 import { detectDigitRow } from '../src/vision/digitrow.js';
 import { extractGlyphs, readNumberTrimmed } from '../src/vision/glyphs.js';
+import { flagValue, hasFlag, positionalArgs, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const args = process.argv.slice(2);
-const file = args.find((a) => !a.startsWith('--'));
+const args = toolArgs();
+const file = positionalArgs(args)[0];
 if (!file) {
   console.error('用法：node tools/read-stats.js <png> [--truth=a,b,c,d,e] [--gt=path] [--trace]');
   process.exit(1);
 }
-const flag = (name) => args.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
-const has = (name) => args.includes(`--${name}`);
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）；下面保留舊名，行為逐字一樣
+const flag = (name) => flagValue(args, name);
+const has = (name) => hasFlag(args, name);
 
 /** 真值來源。 */
 let truth = flag('truth')?.split(',').map(Number) ?? null;

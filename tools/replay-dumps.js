@@ -21,12 +21,14 @@ import { fileURLToPath } from 'node:url';
 import { readStatBar } from '../src/vision/statbar.js';
 import { loadTemplates } from '../src/vision/reader.js';
 import { decodePng } from '../src/vision/png.js';
+import { flagValue, hasFlag, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const args = process.argv.slice(2);
-const verbose = args.includes('--verbose');
-const dirArg = args.find((a) => a.startsWith('--dir='));
-const DIR = join(ROOT, dirArg ? dirArg.slice('--dir='.length) : 'shots/live-debug');
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）
+const args = toolArgs();
+const verbose = hasFlag(args, 'verbose');
+const dirRaw = flagValue(args, 'dir');
+const DIR = join(ROOT, dirRaw ?? 'shots/live-debug');
 /** 負樣本目錄（`shots/negatives/`）：入面每一幀**本來就唔應該出數**（見 AGENTS 地雷 #30）。 */
 const NEG_DIR = join(ROOT, 'shots', 'negatives');
 

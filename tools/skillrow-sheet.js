@@ -20,14 +20,17 @@ import { fileURLToPath } from 'node:url';
 import { decodePng } from '../src/vision/png.js';
 import { encodePng } from '../src/vision/pngwrite.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
+import { flagValue, positionalArgs, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const argv = process.argv.slice(2).filter((a) => !a.startsWith('--'));
-const flags = process.argv.slice(2).filter((a) => a.startsWith('--'));
-const scaleArg = flags.find((f) => f.startsWith('--scale='));
-const scale = scaleArg ? Number(scaleArg.slice(8)) : 3;
-const colArg = flags.find((f) => f.startsWith('--col='));
-const onlyCol = colArg ? Number(colArg.slice(6)) : null;
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）：以前自己砌 `argv`／`flags` 兩個陣列 ＋
+//    `scaleArg.slice(8)`／`colArg.slice(6)` 兩個手寫長度
+const args = toolArgs();
+const argv = positionalArgs(args);
+const scaleRaw = flagValue(args, 'scale');
+const scale = scaleRaw === undefined ? 3 : Number(scaleRaw);
+const colRaw = flagValue(args, 'col');
+const onlyCol = colRaw === undefined ? null : Number(colRaw);
 const rowIndex = Number(argv[0] ?? 3);
 
 const SHOTS = [

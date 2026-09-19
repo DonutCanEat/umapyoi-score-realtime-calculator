@@ -40,22 +40,23 @@ import { loadTemplates } from '../src/vision/reader.js';
 import { buildInkMask } from '../src/vision/inkmask.js';
 import { columnsToGroups, groupsToNumbers } from '../src/vision/digitrow.js';
 import { extractGlyphs, readNumberTrimmed } from '../src/vision/glyphs.js';
+import { flagValue, hasFlag, positionalArgs, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const args = process.argv.slice(2);
-const showBands = args.includes('--bands');
-const doRead = args.includes('--read');
-const trace = args.includes('--trace');
-const expectArg = args.find((a) => a.startsWith('--expect='));
-const expect = expectArg ? expectArg.slice('--expect='.length).split(',').map(Number) : null;
-const maskArg = args.find((a) => a.startsWith('--mask='));
-const maskOverride = maskArg
-  ? (([r, f]) => ({ stripWindowRadius: Number(r), lightFraction: Number(f) }))(
-      maskArg.slice('--mask='.length).split(','),
-    )
-  : {};
-const files = args.filter((a) => !a.startsWith('--'));
-const cropped = args.includes('--cropped');
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）：以前三個 `slice('--xxx='.length)`
+//    同兩處 `includes('--x')` 都係手寫嘅，而家集中一份
+const args = toolArgs();
+const showBands = hasFlag(args, 'bands');
+const doRead = hasFlag(args, 'read');
+const trace = hasFlag(args, 'trace');
+const expectRaw = flagValue(args, 'expect');
+const expect = expectRaw === undefined ? null : expectRaw.split(',').map(Number);
+const maskRaw = flagValue(args, 'mask');
+const maskOverride = maskRaw === undefined
+  ? {}
+  : (([r, f]) => ({ stripWindowRadius: Number(r), lightFraction: Number(f) }))(maskRaw.split(','));
+const files = positionalArgs(args);
+const cropped = hasFlag(args, 'cropped');
 
 /** 真值：CLI `--expect` 優先，否則讀 `data/live-truth.json`（per-shot 例外行先）。 */
 const LIVE_TRUTH_PATH = join(ROOT, 'data', 'live-truth.json');

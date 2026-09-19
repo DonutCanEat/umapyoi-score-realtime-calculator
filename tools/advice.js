@@ -12,12 +12,12 @@
  */
 
 import { statEfficiency, trainingAdvice } from '../src/umascore/advice.js';
+import { flagValue, hasFlag, toolArgs } from './lib/args.js';
 
-function argValue(name) {
-  const prefix = `--${name}=`;
-  const hit = process.argv.find((a) => a.startsWith(prefix));
-  return hit ? hit.slice(prefix.length) : null;
-}
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）。⚠️ 回 `null`（唔係 `undefined`）——
+//    下面用 `if (!rawStats)` 判，空字串一樣當冇（同以前一樣）。
+const args = toolArgs();
+const argValue = (name) => flagValue(args, name) ?? null;
 
 const rawStats = argValue('stats');
 if (!rawStats) {
@@ -34,7 +34,7 @@ if (stats.length !== 5 || stats.some((n) => !Number.isFinite(n) || n < 0 || n > 
 const efficiency = statEfficiency(stats);
 const advice = trainingAdvice(stats);
 
-if (process.argv.includes('--json')) {
+if (hasFlag(args, 'json')) {
   console.log(JSON.stringify({ stats, efficiency, advice }, null, 2));
   process.exit(0);
 }

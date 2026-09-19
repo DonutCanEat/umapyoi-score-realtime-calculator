@@ -13,9 +13,11 @@ import { join, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { encodePng } from '../src/vision/pngwrite.js';
+import { toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const target = process.argv[2];
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）——`target` 係第一個參數（唔變語意）
+const target = toolArgs()[0];
 if (!target) {
   console.error('用法：node tools/raw-to-png.js <file.raw | 資料夾>');
   process.exit(1);

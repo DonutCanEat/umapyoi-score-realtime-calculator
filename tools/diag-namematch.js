@@ -32,10 +32,12 @@ import { decodePng } from '../src/vision/png.js';
 import { encodePng } from '../src/vision/pngwrite.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
 import { nameBoxFeature, nameSimilarity } from '../src/vision/skillname.js';
+import { hasFlag, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const flags = process.argv.slice(2).filter((a) => a.startsWith('--'));
-const doDump = flags.includes('--dump');
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）
+const args = toolArgs();
+const doDump = hasFlag(args, 'dump');
 
 const GRID_H = 40;
 const GW = 240;

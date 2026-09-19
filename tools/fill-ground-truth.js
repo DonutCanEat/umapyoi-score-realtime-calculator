@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 //    （獨立審計 H1）。C1 what-if 係第一個要喺核心庫揀適性嘅功能，所以規則收埋一份，
 //    兩邊共用；呢個 tool 嘅 4/4 誤差 0 就係嗰份規則嘅回歸閘。
 import { aptitudesFor } from '../src/umascore/aptitude.js';
+import { hasFlag, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GT_DIR = join(ROOT, 'data', 'ground-truth');
@@ -33,7 +34,8 @@ const GT_DIR = join(ROOT, 'data', 'ground-truth');
  * 用「同類取最大」之後**四條全部誤差 = 0**（`node tools/fit-score.js`）。
  */
 
-const dryRun = process.argv.includes('--dry-run');
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）
+const dryRun = hasFlag(toolArgs(), 'dry-run');
 const dbPath = join(ROOT, 'data', 'skill-db-tw.json');
 if (!existsSync(dbPath)) {
   console.error('搵唔到 data/skill-db-tw.json，先跑：node tools/fetch-skill-db.js');

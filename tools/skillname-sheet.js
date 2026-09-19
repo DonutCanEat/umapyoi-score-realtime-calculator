@@ -20,13 +20,14 @@ import { fileURLToPath } from 'node:url';
 import { decodePng } from '../src/vision/png.js';
 import { encodePng } from '../src/vision/pngwrite.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
+import { flagValue, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
-const arg = (name, dflt) => {
-  const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`));
-  return hit ? hit.slice(name.length + 3) : dflt;
-};
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）；`args` 只讀一次，唔好每次 `.find()` 都由
+//    `process.argv` 重新掃（以前嗰個版本每次都 `process.argv.slice(2)`）。
+const args = toolArgs();
+const arg = (name, dflt) => flagValue(args, name) ?? dflt;
 const scale = Number(arg('scale', '3'));
 const outRel = arg('out', 'shots/live-debug/name-sheet.png');
 const only = arg('only', '');

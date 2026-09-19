@@ -21,10 +21,13 @@ import { decodePng } from '../src/vision/png.js';
 import { buildInkMask, DEFAULT_INK_OPTIONS } from '../src/vision/inkmask.js';
 import { detectDigitRow } from '../src/vision/digitrow.js';
 import { extractGlyphs, standardize, readNumberTrimmed, GLYPH_W, GLYPH_H } from '../src/vision/glyphs.js';
+import { hasFlag, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const quick = process.argv.includes('--quick');
-const hueMode = process.argv.includes('--hue');
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）
+const args = toolArgs();
+const quick = hasFlag(args, 'quick');
+const hueMode = hasFlag(args, 'hue');
 
 /** 收集來源（ground truth ↔ 面板截圖）。 */
 const sources = [];

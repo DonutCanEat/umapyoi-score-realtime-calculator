@@ -24,12 +24,14 @@ import { fileURLToPath } from 'node:url';
 import { decodePng } from '../src/vision/png.js';
 import { buildInkMask, isDigitInk, pixelHue, pixelLum, DEFAULT_INK_OPTIONS } from '../src/vision/inkmask.js';
 import { detectDigitRow } from '../src/vision/digitrow.js';
+import { hasFlag, positionalArgs, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const args = process.argv.slice(2);
-const ASSERT = args.includes('--assert');
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）
+const args = toolArgs();
+const ASSERT = hasFlag(args, 'assert');
 const failures = [];
-const files = args.filter((a) => !a.startsWith('--'));
+const files = positionalArgs(args);
 const LIST = files.length
   ? files
   : ['uma1-p1', 'uma1-p2', 'uma2-p1', 'uma2-p2', 'uma3-p1', 'uma3-p2', 'uma4-p1', 'uma4-p2']

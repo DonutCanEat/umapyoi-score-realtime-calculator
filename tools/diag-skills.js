@@ -27,12 +27,14 @@ import { fileURLToPath } from 'node:url';
 import { decodePng } from '../src/vision/png.js';
 import { buildInkMask } from '../src/vision/inkmask.js';
 import { findSkillRows, rowInkProfile, columnSpans } from '../src/vision/skillscreen.js';
+import { flagValue, hasFlag, positionalArgs, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const args = process.argv.slice(2);
-const files = args.filter((a) => !a.startsWith('--'));
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）
+const args = toolArgs();
+const files = positionalArgs(args);
 
-if (args.includes('--all')) {
+if (hasFlag(args, 'all')) {
   for (const f of readdirSync(join(ROOT, 'shots', 'gt')).filter((n) => n.includes('-skills'))) {
     files.push(join('shots', 'gt', f));
   }
@@ -49,8 +51,8 @@ function rowProfile(image, options = {}) {
   return rowInkProfile(image, options);
 }
 
-const grayArg = args.find((a) => a.startsWith('--gray='));
-const showLines = args.includes('--lines');
+const grayArg = flagValue(args, 'gray');
+const showLines = hasFlag(args, 'lines');
 
 for (const rel of files) {
   let img;
@@ -64,7 +66,8 @@ for (const rel of files) {
   console.log(`\n=== ${basename(rel)}　${img.width}×${img.height}　比例 ${(img.height / img.width).toFixed(4)}　(16:9 = 0.5625) ===`);
 
   if (grayArg) {
-    const parts = grayArg.slice('--gray='.length).split(',');
+    // ⚠️ `flagValue()` 已經係值（以前係 `--gray=…` 成個 token，要自己 slice）→ 直接 split
+    const parts = grayArg.split(',');
     const y0 = +parts[0];
     const y1 = +parts[1];
     const x0 = parts[2] !== undefined ? +parts[2] : 0;

@@ -14,14 +14,16 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { evaluate, uniqueSkillPoints, normalSkillPoints, APTITUDE_COEFFICIENT } from '../src/umascore/index.js';
+import { hasFlag, positionalArgs, toolArgs } from './lib/args.js';
 import { pad } from './lib/width.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GT_DIR = join(ROOT, 'data', 'ground-truth');
 
-const args = process.argv.slice(2);
-const combosOnly = args.includes('--combos');
-const filter = args.find((a) => !a.startsWith('--'));
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）
+const args = toolArgs();
+const combosOnly = hasFlag(args, 'combos');
+const filter = positionalArgs(args)[0];
 
 // 中文／全形字佔 2 格 → 補空格工具住喺 `tools/lib/width.js`
 // （同 `fit-score.js` 共用**一份**，見獨立審計 M9）。

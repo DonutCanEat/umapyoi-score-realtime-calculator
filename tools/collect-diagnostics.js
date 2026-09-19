@@ -29,11 +29,13 @@ import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { hasFlag, toolArgs } from './lib/args.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const args = new Set(process.argv.slice(2));
-const RUN_GATES = args.has('--run-gates');
-const WITH_DUMPS = args.has('--with-dumps');
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）——以前係 `new Set(process.argv.slice(2))`
+//    再 `.has('--run-gates')`；`hasFlag()` 係同一個嚴格比對。
+const RUN_GATES = hasFlag(toolArgs(), 'run-gates');
+const WITH_DUMPS = hasFlag(toolArgs(), 'with-dumps');
 const MAX_DUMPS = 5;
 
 /** 要跑嘅閘（`--run-gates` 之下）：[標籤, 命令, 參數…]。 */

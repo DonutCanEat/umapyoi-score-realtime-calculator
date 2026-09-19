@@ -26,11 +26,13 @@ import { fileURLToPath } from 'node:url';
 import { decodePng } from '../src/vision/png.js';
 import { cosineSimilarity, standardize } from '../src/vision/similarity.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
+import { hasFlag, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const args = process.argv.slice(2);
-const showBoxes = args.includes('--boxes');
-const showWidths = args.includes('--widths');
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）
+const args = toolArgs();
+const showBoxes = hasFlag(args, 'boxes');
+const showWidths = hasFlag(args, 'widths');
 // 名框 → 特徵網格。
 // ⚠️ 唔可以「拉伸到固定闊度」：名框係**左對齊**，右邊留白長度跟頁面最長名 →
 //    拉伸會令「短名 + 好多空白」同「長名」變成一樣 → 實測唔同名都有 1.000 相似度。

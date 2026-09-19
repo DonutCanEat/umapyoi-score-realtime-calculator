@@ -19,12 +19,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodePng } from '../src/vision/png.js';
 import { encodePng } from '../src/vision/pngwrite.js';
+import { flagValue, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const arg = (name, dflt) => {
-  const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`));
-  return hit ? hit.slice(name.length + 3) : dflt;
-};
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）；`args` 只讀一次
+const args = toolArgs();
+const arg = (name, dflt) => flagValue(args, name) ?? dflt;
 const libDir = join(ROOT, arg('lib', 'data/skill-name-lib'));
 const outRel = arg('out', 'shots/live-debug/skill-lib.png');
 const scale = Number(arg('scale', '2'));

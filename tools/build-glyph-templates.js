@@ -28,17 +28,22 @@ import { buildInkMask } from '../src/vision/inkmask.js';
 import { detectDigitRow } from '../src/vision/digitrow.js';
 import { extractGlyphs, standardize, readNumberTrimmed, GLYPH_W, GLYPH_H } from '../src/vision/glyphs.js';
 import { collectStatBarGlyphs, readStatBar } from '../src/vision/statbar.js';
+import { flagValue, hasFlag, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）
+const args = toolArgs();
 const DB_PATH = join(ROOT, 'data', 'glyph-templates.json');
 const GT_DIR = join(ROOT, 'data', 'ground-truth');
 const SHOTS_DIR = join(ROOT, 'shots', 'gt');
 const LIVE_TRUTH_PATH = join(ROOT, 'data', 'live-truth.json');
 
-const verifyOnly = process.argv.includes('--verify');
+const verifyOnly = hasFlag(args, 'verify');
 /** --exclude=uma2：排除某啲來源（用嚟診斷「截圖同 ground truth 唔對應」嘅情況） */
-const excludeArg = process.argv.find((a) => a.startsWith('--exclude='));
-const excludes = excludeArg ? excludeArg.slice(10).split(',').map((s) => s.trim()).filter(Boolean) : [];
+const excludeRaw = flagValue(args, 'exclude');
+const excludes = excludeRaw === undefined
+  ? []
+  : excludeRaw.split(',').map((s) => s.trim()).filter(Boolean);
 
 /**
  * 來源：ground-truth JSON ↔ 面板截圖。

@@ -24,14 +24,16 @@ import { fileURLToPath } from 'node:url';
 import { decodePng } from '../src/vision/png.js';
 import { buildInkMask, isDigitInk, pixelHue, pixelLum } from '../src/vision/inkmask.js';
 import { readStats, loadTemplates } from '../src/vision/reader.js';
+import { flagValue, hasFlag, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const args = process.argv.slice(2);
-const verbose = args.includes('--verbose');
-const single = args.find((a) => a.startsWith('--scale='));
-const scales = single
-  ? [Number(single.slice('--scale='.length))]
-  : [1, 0.8, 0.6, 0.5, 0.42, 0.336, 0.3, 0.25];
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）
+const args = toolArgs();
+const verbose = hasFlag(args, 'verbose');
+const scaleRaw = flagValue(args, 'scale');
+const scales = scaleRaw === undefined
+  ? [1, 0.8, 0.6, 0.5, 0.42, 0.336, 0.3, 0.25]
+  : [Number(scaleRaw)];
 
 const templates = loadTemplates(JSON.parse(readFileSync(join(ROOT, 'data', 'glyph-templates.json'), 'utf8')));
 
@@ -85,9 +87,9 @@ console.log(`來源 ${sources.length} 張（原圖 ${sources[0].image.width}×${
 console.log('尺度 = 相對原圖嘅比例；0.336 ≈ 實機 640px 縮圖（640/1902）\n');
 
 // ── 細尺度參數掃描：睇下調 windowRadius／minHeight／lightFraction 救唔救得返 ──
-const tuneArg = args.find((a) => a.startsWith('--tune='));
-if (tuneArg) {
-  const tf = Number(tuneArg.slice('--tune='.length));
+const tuneArg = flagValue(args, 'tune');
+if (tuneArg !== undefined) {
+  const tf = Number(tuneArg);
   const scaled = sources.map((s) => ({ ...s, image: tf === 1 ? s.image : downsample(s.image, tf) }));
   console.log(`── 尺度 ${tf}（闊 ${scaled[0].image.width}）之下掃細尺度參數`);
   console.log('windowRadius  minHeight  lightFraction   偵測到   讀中格數');
@@ -123,9 +125,9 @@ if (tuneArg) {
  * 逐格量「墨色窗口有幾多像素過」同「結構條件有幾多像素過」，
  * 分清係色相窗口失守定係結構條件失守。
  */
-const probeArg = args.find((a) => a.startsWith('--probe='));
-if (probeArg) {
-  const pf = Number(probeArg.slice('--probe='.length));
+const probeArg = flagValue(args, 'probe');
+if (probeArg !== undefined) {
+  const pf = Number(probeArg);
   console.log(`── 探針：尺度 ${pf}（闊 ${Math.round(sources[0].image.width * pf)}）`);
   console.log('截圖          數字框內墨色候選   過結構條件   框內像素   平均 lum   平均 delta');
   for (const s of sources) {

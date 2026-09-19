@@ -24,16 +24,17 @@ import { fileURLToPath } from 'node:url';
 import { searchSkills, whatIfAddSkill } from '../src/umascore/whatif.js';
 import { groupHits } from '../src/umascore/aptitude.js';
 import { statPoints } from '../src/umascore/tables.js';
+import { bareFlags, flagValue, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
-function argValue(name) {
-  const prefix = `--${name}=`;
-  const hit = process.argv.find((a) => a.startsWith(prefix));
-  return hit ? hit.slice(prefix.length) : null;
-}
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）。⚠️ 以前係喺**整個** `process.argv`
+//    上面搵（同 `slice(2)` 等價：argv[0]／[1] 係 node 同腳本路徑，冇可能係 `--x=`）。
+//    回 `null`（唔係 `undefined`）—— 下面用 `if (!rawStats)` 判。
+const args = toolArgs();
+const argValue = (name) => flagValue(args, name) ?? null;
 
-const flags = new Set(process.argv.filter((a) => a.startsWith('--') && !a.includes('=')));
+const flags = bareFlags(args);
 
 const rawStats = argValue('stats');
 if (!rawStats) {

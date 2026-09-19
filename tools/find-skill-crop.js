@@ -25,12 +25,12 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodePng } from '../src/vision/png.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
+import { flagValue, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const arg = (name, dflt) => {
-  const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`));
-  return hit ? hit.slice(name.length + 3) : dflt;
-};
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）；`args` 只讀一次
+const args = toolArgs();
+const arg = (name, dflt) => flagValue(args, name) ?? dflt;
 const dir = join(ROOT, arg('in', 'shots/skill-dump'));
 const maxPages = Number(arg('pages', '0')) || 0;
 const topN = Number(arg('top', '3')) || 3;

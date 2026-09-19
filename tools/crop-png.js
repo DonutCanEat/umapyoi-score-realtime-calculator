@@ -10,9 +10,13 @@ import { join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodePng } from '../src/vision/png.js';
 import { encodePng } from '../src/vision/pngwrite.js';
+import { flagValue, positionalArgs, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const args = process.argv.slice(2);
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）。
+//    ⚠️ `file = args[0]` 係**第一個參數**（唔係第一個位置參數）—— 保持原樣：
+//    `crop-png.js --scale=4 a.png …` 一直係讀唔到檔案名嘅（唔准靜默改語意）。
+const args = toolArgs();
 const file = args[0];
 const boxArg = args.find((a) => /^-?\d+,-?\d+,-?\d+,-?\d+$/.test(a));
 if (!file || !boxArg) {
@@ -20,8 +24,8 @@ if (!file || !boxArg) {
   process.exit(1);
 }
 const [x0, y0, x1, y1] = boxArg.split(',').map(Number);
-const scaleArg = args.find((a) => a.startsWith('--scale='));
-const scale = scaleArg ? Math.max(1, Math.round(Number(scaleArg.slice(8)))) : 1;
+const scaleRaw = flagValue(args, 'scale');
+const scale = scaleRaw === undefined ? 1 : Math.max(1, Math.round(Number(scaleRaw)));
 const outArg = args.find((a) => a !== file && a !== boxArg && !a.startsWith('--'));
 const out = join(ROOT, outArg ?? `.cache-local/crop-${basename(file, '.png')}-${x0}_${y0}.png`);
 

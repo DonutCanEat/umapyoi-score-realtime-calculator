@@ -32,12 +32,12 @@ import { decodePng } from '../src/vision/png.js';
 import { encodePng } from '../src/vision/pngwrite.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
 import { nameBoxesOfPage, nameSimilarity, SKILLNAME_MATCH } from '../src/vision/skillname.js';
+import { flagValue, flagValues, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const arg = (name, dflt) => {
-  const hit = process.argv.slice(2).find((a) => a.startsWith(`--${name}=`));
-  return hit ? hit.slice(name.length + 3) : dflt;
-};
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）；`args` 只讀一次
+const args = toolArgs();
+const arg = (name, dflt) => flagValue(args, name) ?? dflt;
 const inDir = join(ROOT, arg('in', 'shots/skill-dump'));
 const outDir = join(ROOT, arg('out', 'data/skill-name-lib'));
 const MATCH = Number(arg('match', String(SKILLNAME_MATCH)));
@@ -46,9 +46,8 @@ const MIN_INK_W = Number(arg('min-w', '4'));
 const MIN_INK_H = Number(arg('min-h', '8'));
 // 存檔用嘅圖最闊幾多（太闊就縮；唔影響比對，比對用特徵向量唔用呢張圖）
 const MAX_CROP_W = Number(arg('max-w', '260'));
-const extraPages = process.argv.slice(2)
-  .filter((a) => a.startsWith('--page='))
-  .map((a) => join(ROOT, a.slice(7)));
+// ⚠️ `--page=` 可以重複 → 用 `flagValues()`（以前係自己 filter ＋ `slice(7)` 手寫算式）
+const extraPages = flagValues(args, 'page').map((p) => join(ROOT, p));
 
 /** 收集要處理嘅圖：目錄入面全部 page-*.png（排序），加任何 --page= 指定嘅圖。 */
 function collectPages() {

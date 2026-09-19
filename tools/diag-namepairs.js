@@ -22,12 +22,15 @@ import { decodePng } from '../src/vision/png.js';
 import { encodePng } from '../src/vision/pngwrite.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
 import { nameBoxFeature, nameSimilarity } from '../src/vision/skillname.js';
+import { flagValue, hasFlag, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const flags = process.argv.slice(2).filter((a) => a.startsWith('--'));
-const topArg = flags.find((f) => f.startsWith('--top='));
-const topN = topArg ? Number(topArg.slice(6)) : 25;
-const doDump = flags.includes('--dump');
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）：以前自己砌 `flags` 陣列 ＋ `topArg.slice(6)`／
+//    `showArg.slice(7)` 兩個手寫長度
+const args = toolArgs();
+const topRaw = flagValue(args, 'top');
+const topN = topRaw === undefined ? 25 : Number(topRaw);
+const doDump = hasFlag(args, 'dump');
 
 const GH = 24;
 const GW = 240;
@@ -98,9 +101,9 @@ for (let i = 0; i < all.length; i += 1) {
 pairs.sort((x, y) => y.s - x.s);
 
 // ── 診斷：印出指定格嘅墨跡尺寸（睇下係唔係「同尺寸嘅唔同字」撞分）──
-const showArg = flags.find((f) => f.startsWith('--show='));
-if (showArg) {
-  for (const spec of showArg.slice(7).split(',')) {
+const showRaw = flagValue(args, 'show');
+if (showRaw !== undefined) {
+  for (const spec of showRaw.split(',')) {
     const [shotName, rc] = spec.split(':');
     const [r, c] = rc.split('/').map(Number);
     const hit = all.find((x) => x.shot.startsWith(shotName) && x.row === r && x.col === c);

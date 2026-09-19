@@ -17,6 +17,7 @@
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { flagValue, hasFlag } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const API = 'https://wiki.biligame.com/umamusume/api.php';
@@ -28,13 +29,12 @@ const PAGES = {
 };
 
 function parseArgs(argv) {
-  let lang = 'tw';
-  let refresh = false;
-  for (const arg of argv) {
-    if (arg.startsWith('--lang=')) lang = arg.slice('--lang='.length);
-    else if (arg === '--refresh') refresh = true;
-  }
-  return { lang, refresh };
+  // ⚠️ 值／旗標讀法住喺 `tools/lib/args.js`（審計 M6）；呢度保留 `parseArgs()` 嘅形狀
+  //    （回 `{lang, refresh}`），因為呼叫點同測試都用呢個名。
+  return {
+    lang: flagValue(argv, 'lang') ?? 'tw',
+    refresh: hasFlag(argv, 'refresh'),
+  };
 }
 
 /** 解析一句 `var skraw={ "k":v, ... }; skillData.push(skraw);` */

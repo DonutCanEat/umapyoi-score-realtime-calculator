@@ -16,18 +16,15 @@ import { fileURLToPath } from 'node:url';
 
 import { analyzeSamples, getProfile, SEGMENT_COUNT, SEGMENT_SIZE } from '../src/umascore/index.js';
 import { lpad, pad } from './lib/width.js';
+import { flagValue, positionalArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DEFAULT_DIR = join(ROOT, 'data', 'ground-truth');
 
 function parseArgs(argv) {
-  const files = [];
-  let profileId = 'tw';
-  for (const arg of argv) {
-    if (arg.startsWith('--profile=')) profileId = arg.slice('--profile='.length);
-    else files.push(arg);
-  }
-  return { files, profileId };
+  // ⚠️ 值／位置參數讀法住喺 `tools/lib/args.js`（審計 M6）；保留 `parseArgs()` 嘅形狀
+  //    （回 `{files, profileId}`），因為下面呼叫點用呢個名。
+  return { files: positionalArgs(argv), profileId: flagValue(argv, 'profile') ?? 'tw' };
 }
 
 function loadSamples(files) {
