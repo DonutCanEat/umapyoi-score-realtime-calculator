@@ -16,51 +16,22 @@ import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// ⭐ 適性規則搬去核心庫（`src/umascore/aptitude.js`）—— 以前呢度同核心庫各有一套，
+//    而核心庫嗰套係「全部條件一律相乘」（冇「同類取最大」）→ 地雷 #6 只守到一半
+//    （獨立審計 H1）。C1 what-if 係第一個要喺核心庫揀適性嘅功能，所以規則收埋一份，
+//    兩邊共用；呢個 tool 嘅 4/4 誤差 0 就係嗰份規則嘅回歸閘。
+import { aptitudesFor } from '../src/umascore/aptitude.js';
+
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GT_DIR = join(ROOT, 'data', 'ground-truth');
 
 /**
- * 適性倍率：**同一類別內取最大，跨類別相乘**（同 bwiki widget 嘅 if 鏈一致）。
+ * ⚠️ 適性倍率規則（**同一類別內取最大，跨類別相乘**、草地／沙地唔乘）
+ * 而家喺 `src/umascore/aptitude.js` —— 呢度**唔准**再寫一份。
  *
- * 例：
- *   「中距離, 長距離」→ 兩個都係距離類 → max(中距離, 長距離)
- *   「前列, 居中」   → 兩個都係腳質類 → max(前列, 居中)
- *   「前列, 中距離」 → 唔同類別        → 前列 × 中距離
- *
- * 實測驗證：4 條 ground truth 樣本，每個都啱啱好有一招多條件技能，
- * 用「同類取最大」之後**四條全部誤差 = 0**。
- * （之前試過同一條規則但覺得更差，係因為當時技能 base 錯得好犀利，污染咗比較。）
- *
- * 草地／沙地唔乘（widget 個 if 鏈冇場地分支；小栗帽 UG2 有「良好場地◎」仍然 = 0 可證）。
+ * 嗰份規則嘅驗證就係本 tool：4 條 ground truth 樣本，每條都啱啱好有一招多條件技能，
+ * 用「同類取最大」之後**四條全部誤差 = 0**（`node tools/fit-score.js`）。
  */
-const MULTIPLIER_GROUPS = [
-  ['領頭', '大逃', '前列', '居中', '後追'],
-  ['短距離', '中距離', '一哩', '長距離'],
-];
-
-/** 適性等級 → 倍率（同 src/umascore/skills.js 一致，用嚟揀同類最大）。 */
-const GRADE_MULTIPLIER = { S: 1.1, A: 1.1, B: 0.9, C: 0.9, D: 0.8, E: 0.8, F: 0.8, G: 0.7 };
-
-function aptitudesFor(condition, aptitudes) {
-  const grades = [];
-  for (const group of MULTIPLIER_GROUPS) {
-    let bestGrade = null;
-    let bestMultiplier = -Infinity;
-    for (const keyword of group) {
-      if (!condition.includes(keyword)) continue;
-      const key = keyword === '大逃' ? '領頭' : keyword;
-      const grade = aptitudes?.[key];
-      if (!grade) continue;
-      const multiplier = GRADE_MULTIPLIER[String(grade).toUpperCase()] ?? 1;
-      if (multiplier > bestMultiplier) {
-        bestMultiplier = multiplier;
-        bestGrade = grade;
-      }
-    }
-    if (bestGrade) grades.push(bestGrade);
-  }
-  return grades;
-}
 
 const dryRun = process.argv.includes('--dry-run');
 const dbPath = join(ROOT, 'data', 'skill-db-tw.json');
