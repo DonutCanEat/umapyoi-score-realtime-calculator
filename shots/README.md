@@ -27,6 +27,6 @@
 ```bash
 node tools/diag-shots.js                    # 列晒所有截圖同尺寸（睇下而家有咩）
 node tools/raw-to-png.js shots/live-debug   # dump 幀（.raw）轉 PNG
-node tools/diag-statbar.js --read           # 對 data/live-truth.json（14/14）＋ 負樣本（5/5 唔出數）
+node tools/diag-statbar.js --read           # 對 data/live-truth.json（14/14）＋ 負樣本（6/6 唔出數）
 node tools/diag-row.js shots/debug-crops/reference.png --gray=300,420,730,792   # 睇字形嗰陣用
 ```
