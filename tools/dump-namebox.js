@@ -17,13 +17,16 @@ import { fileURLToPath } from 'node:url';
 import { decodePng } from '../src/vision/png.js';
 import { encodePng } from '../src/vision/pngwrite.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
+import { flagValue, hasFlag, positionalArgs, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const argv = process.argv.slice(2).filter((a) => !a.startsWith('--'));
-const flags = process.argv.slice(2).filter((a) => a.startsWith('--'));
-const scaleArg = flags.find((f) => f.startsWith('--scale='));
-const scale = scaleArg ? Number(scaleArg.slice(8)) : 5;
-const allRows = flags.includes('--all-rows');
+// ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）：以前係自己砌 `flags`／`argv` 兩個陣列 ＋
+//    `scaleArg.slice(8)`（`8` 就係 `'--scale='` 嘅長度，手寫）
+const args = toolArgs();
+const argv = positionalArgs(args);
+const scaleRaw = flagValue(args, 'scale');
+const scale = scaleRaw === undefined ? 5 : Number(scaleRaw);
+const allRows = hasFlag(args, 'all-rows');
 
 const [shot, rowArg, colArg] = argv;
 if (!shot) {
@@ -33,8 +36,12 @@ if (!shot) {
 
 const img = decodePng(readFileSync(join(ROOT, 'shots', 'gt', shot)));
 const image = { data: img.data, width: img.width, height: img.height };
-const { counts, mask, scale } = rowInkProfile(image);
-const rows = findSkillRows(counts, img.width, img.height, { unit: scale.unit });
+// ⚠️ 呢個 `scale` 係 **profile 嘅尺度**（`{unit, factor, measured}`），同上面嘅 CLI
+//    `--scale=N`（放大倍數）**係兩件事** → 一定要改名，唔可以兩個都叫 `scale`。
+//    （HEAD 版兩個都叫 `scale` → `SyntaxError: Identifier 'scale' has already been declared`
+//     → 呢個工具一直爆，冇人發現，因為冇測試。已修。）
+const { counts, mask, scale: profileScale } = rowInkProfile(image);
+const rows = findSkillRows(counts, img.width, img.height, { unit: profileScale.unit });
 console.log(`${shot}　${img.width}×${img.height}　偵測到 ${rows.length} 列`);
 
 const wanted = allRows || rowArg === undefined
