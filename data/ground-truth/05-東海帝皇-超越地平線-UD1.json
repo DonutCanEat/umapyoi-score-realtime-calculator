@@ -1,0 +1,220 @@
+{
+  "id": "東海帝皇[超越地平線] UD1",
+  "server": "tw",
+  "character": "東海帝皇",
+  "costume": "超越地平線",
+  "note": "育成終了「賽馬娘詳情」畫面（2026-09-19 用戶提供；技能由捲動前後三張截圖合併去重）。⭐ 呢條係**第一次用遊戲自己顯示嘅評價点**（35,050）做真值 —— 之前 4 條係同第三方紀錄對答案。",
+  "stats": [
+    1689,
+    1349,
+    1038,
+    1302,
+    1311
+  ],
+  "total": 35050,
+  "rank": "UD1",
+  "aptitudes": {
+    "場地": {
+      "草地": "S",
+      "沙地": "G"
+    },
+    "距離": {
+      "短距離": "F",
+      "一哩": "E",
+      "中距離": "A",
+      "長距離": "A"
+    },
+    "腳質": {
+      "領頭": "D",
+      "前列": "A",
+      "居中": "C",
+      "後追": "E"
+    }
+  },
+  "uniqueSkills": [
+    {
+      "name": "絕對是我",
+      "star": 4,
+      "level": 5
+    }
+  ],
+  "skills": [
+    {
+      "name": "京都賽場○",
+      "base": 129,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 90
+    },
+    {
+      "name": "喜歡獨處○",
+      "base": 129,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 90
+    },
+    {
+      "name": "弧線的教授",
+      "base": 508,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 360
+    },
+    {
+      "name": "彎道回復○",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 170
+    },
+    {
+      "name": "奔馳勝疾風",
+      "base": 633,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": null
+    },
+    {
+      "name": "直線回復",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 170
+    },
+    {
+      "name": "集中力",
+      "base": 129,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 140
+    },
+    {
+      "name": "取位天賦",
+      "base": 129,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 120
+    },
+    {
+      "name": "尾段加速",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 170
+    },
+    {
+      "name": "競賽的天才",
+      "base": 633,
+      "condition": "前列",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 360
+    },
+    {
+      "name": "加快節奏",
+      "base": 217,
+      "condition": "中距離",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 160
+    },
+    {
+      "name": "牽制前列",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 130
+    },
+    {
+      "name": "直線滑下",
+      "base": 217,
+      "condition": "前列",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 120
+    },
+    {
+      "name": "貪吃鬼",
+      "base": 508,
+      "condition": "前列",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 360
+    },
+    {
+      "name": "干擾",
+      "base": 85,
+      "condition": "前列",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 110
+    },
+    {
+      "name": "登山家",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 160
+    },
+    {
+      "name": "打好基礎",
+      "base": 217,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 100
+    },
+    {
+      "name": "絕佳良機",
+      "base": 508,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 320
+    },
+    {
+      "name": "傳說降臨",
+      "base": 758,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": null
+    },
+    {
+      "name": "競賽的精髓・體能",
+      "base": 174,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 150
+    },
+    {
+      "name": "重播夢想的方法",
+      "base": 263,
+      "condition": "中距離, 長距離",
+      "aptitudes": [
+        "A"
+      ],
+      "skillPt": 200
+    },
+    {
+      "name": "改變時代之人",
+      "base": 263,
+      "condition": "通用",
+      "aptitudes": [],
+      "skillPt": 200
+    }
+  ],
+  "inheritedSkills": [
+    "逐夢之星",
+    "VICTORY SHOT！",
+    "Shadow Break",
+    "∴win Q.E.D."
+  ],
+  "unconfirmed": [
+    "技能資料由 bwiki 繁中技能資料庫自動填入（含條件同適性倍率）",
+    "唔喺資料庫嘅技能名一律當繼承固有（固定 180）"
+  ],
+  "inheritedUniqueCount": 4
+}
