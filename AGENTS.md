@@ -62,7 +62,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 | Phase 0 | 評價分運算核心 | ✅ **誤差 = 0**（4 條實機樣本全部吻合）|
 | Phase 0 | 技能資料庫（1323 招）＋ 進化技能 override | ✅ |
 | Phase 1 | 畫面擷取（`npm start` 跑得通）| ✅ |
-| Phase 1 | **五維數字辨識（零校準）** | ✅ 兩條路都通：**畫面 A 面板條**（`statbar.js`）**9/9 全中**（1356→2560 五個解析度 ＋ 4 個實機失敗／金色格回歸）；ステータス面板排法 **30/30**。✅ 已實機跑過（`npm start`，1920 窗），修好間歇性「讀唔清」（地雷 #25）同**金色格靜默讀錯**（地雷 #26）|
+| Phase 1 | **五維數字辨識（零校準）** | ✅ 兩條路都通：**畫面 A 面板條**（`statbar.js`）**13/13 全中**（1356→2560 五個解析度 ＋ 4 個實機失敗／金色格回歸 ＋ 4 個實機狀態樣本）＋ **負樣本 3/3 唔出數**（其他畫面唔准出數，見地雷 #30）；ステータス面板排法 **30/30**。✅ 已實機跑過（`npm start`，1920 窗），修好間歇性「讀唔清」（地雷 #25）同**金色格靜默讀錯**（地雷 #26）|
 | Phase 1 | HUD overlay ＋ 設定面板 | ✅ **可用**（透明置頂穿透；顯示評價点 + 五維逐格 + 技能分 `？／總分 ≥ X` ＋ 金色格提示）。**已做**：`hud-position.json` 存檔（env > 檔案 > 預設）、獨立**設定窗**（8 個數值 slider ＋ 7 個顯示選項，改動即時生效）、**對位模式（`UMAPYOI_HUD_EDIT=1`）可以直接拖 HUD**（放手即反推 + 存檔）＋ 設定窗跟住更新（唔會「拖完撳儲存就彈返」）。✅ **2026-09-19 用戶實機驗過（原話：「而家 hud 冇問題」）**。⏸️ **唔做**：跟住遊戲視窗移動（**用戶 2026-09-19 決定** —— 可以用拖位擺去自己想擺嘅位，跟窗冇必要；見 §9 ①）。對位模式期間切換仍然要重開程式 |
 | Phase 2 | 技能 icon 識別（自動知學咗邊啲技能）| ⏸️ **暫停（用戶 2026-09-19 指示：暫時唔處理技能呢一 part）** —— 已經做好嘅部分見下面，隨時可以接返。原狀態：🚧 **兩步做好**：① 技能畫面欄／行偵測器（`skillscreen.js`，8 張實機圖全部搵到 7 行）；② **名稱框抽取**（112 個全部抽到）＋ **影像比對可行性已量化**（互相最佳配對中位數 **0.986**、撞分上限 **0.604** —— 見 `docs/skill-screen.md` §5）。⏳ 未做：接上**候選名單**（見 §9）|
 | Phase 3 | what-if 模擬（加一招加幾多分／Pt）、成長曲線 | 未開始 |
@@ -125,7 +125,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（198 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（202 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ renderer inline script 語法閘（三個 HTML ＋ main.js；見 §8 4b）
 
 # HUD 相關開關（環境變數）
@@ -194,7 +194,9 @@ node tools/read-stats.js shots/gt/uma1-p1.png --gt=data/ground-truth/01-小栗�
 node tools/build-glyph-templates.js        # 建字形模板（面板截圖 ＋ 實機面板條；**雙閘**）
 node tools/build-glyph-templates.js --verify
 node tools/diag-statbar.js                 # ⭐ 實機面板條定位（ROI／切行／相對比例）
-node tools/diag-statbar.js --read          # ⭐ 自動對 `data/live-truth.json` 真值（應該 9/9）
+node tools/diag-statbar.js --read          # ⭐ 對 `data/live-truth.json` 真值（應該 13/13）
+                                           #    ＋ 自動跑 `shots/negatives/`（其他畫面唔准出數，3/3）
+                                           #    ⚠️ 有真值對唔上／負樣本讀到數 → exit 1（真閘）
 node tools/diag-statbar.js --read --cropped --trace            # 模擬 renderer 剪 ROI（執行時路徑）
 node tools/replay-dumps.js --verbose       # ⭐ 重播實機 dump 幀（驗證「讀唔清」嘅修正，見地雷 #25）
 node tools/raw-to-png.js shots/live-debug  # dump 幀（.raw）轉 PNG，畀上面兩個工具讀
@@ -234,14 +236,18 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **198 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **202 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 4/4　完全命中 4/4　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
-   → **面板截圖 30/30**（雙閘：**實機面板條 9/9**），兩個都要中
+   → **面板截圖 30/30**（三閘：**實機面板條 13/13**、**負樣本 3/3 唔出數**），全部都要中
+   ⚠️ 負樣本（`shots/negatives/`）有任何一幀讀到數 → **唔會寫檔**（同其他失敗一樣）
 4. 動到墨點／色相／亮度門檻嘅話：`node tools/diag-hue.js --assert` 要通過
 5. 動到實機面板條（`statbar.js`／`capture.html`）嘅話：
-   `node tools/diag-statbar.js --read` → **9/9**（自動對 `data/live-truth.json`）
-   ＋ `node tools/replay-dumps.js` → **退步 0**（有 dump 幀嘅話）
+   `node tools/diag-statbar.js --read` → **13/13**（自動對 `data/live-truth.json`）
+   ＋ **負樣本 3/3 唔出數**；＋ `node tools/replay-dumps.js` → **退步 0**
+   ⚠️ `replay-dumps` 仲會報「修正假陽性」同「冇當時結果記錄（every 幀）」——
+      後者係 `UMAPYOI_DUMP_FRAMES` 影嘅任意幀（冇 reason 亦冇 stats）→ **唔准當佢係 OK**
+      （舊版 `tagOf(undefined)` = OK → 假退步；2026-09-19 已修）
 
 任何改動令呢幾樣唔達標，就係改壞咗。
 
@@ -386,6 +392,9 @@ shots/
   gt/*.png               # ステータス面板排法（30/30 嘅證據）
   live/live-*.png        # ⭐ 實機育成主畫面 1356→2560 五個解析度
   live/roi-regress-*.png # ⭐ **實機失敗幀**（已剪 ROI）—— 永久回歸案例（地雷 #25/#26）
+  live/roi-live-*.png    # ⭐ 實機**成功**幀（已剪 ROI，每個檔名尾 = 速度值）；真值喺 `live-truth.json`
+  negatives/*.png        # ⭐ **負樣本**（其他畫面：支援卡列表／插畫…）—— 每一幀都**唔准出數**；
+                         #    資料夾本身就係宣告（加檔就自動入四個閘，見地雷 #30）
   skill-dump/            # ⭐ 技能連拍收到嘅頁面 PNG（UMAPYOI_SKILL_DUMP=1；唔入 git）
   live-debug/            # ⚠️ 執行時自動 dump（.raw ＋ .json，唔入 git）；有代表性嘅
                          #    手動複製去 shots/live/ 再入 live-truth 做正式回歸
@@ -479,6 +488,7 @@ oval > 0 → 再加 oval 部分；最後 floor
 | 27 | ⭐⭐ **以為「揀擷取來源」係小事，同埋「自己個窗標題唔會撞到遊戲關鍵字」** | ⛔ **最貴嘅一個 bug（用戶 2026-09-19 實機報「擷取咗設定視窗而唔係賽馬娘個 app」）**。舊寫法係 `sources.find((s) => GAME_TITLE_HINTS.some((h) => s.name.includes(h)))`，而**本程式自己嘅設定窗標題**係「賽馬娘即時評價分 — HUD 設定」→ **含「賽馬娘」**。`getSources()` 係 **z-order／前景優先** → 用戶一撳設定窗（它一定喺前景，因為啱啱先撳過）就揀咗佢。⚠️ **完全唔會報錯**（個窗真係存在），但症狀離奇：① 三個窗都有 `setContentProtection(true)`（＝`WDA_EXCLUDEFROMCAPTURE`）→ 擷取到嘅係**全黑** → 五維永遠讀唔到（只 log「唔見面板條」，屬正常）；② `capture.html` 報返嘅 `fullWidth/fullHeight` 變咗**設定窗大細**（實測 560×780）→ `placeHud()` 攞住錯嘅「遊戲內容區」（560×315）→ HUD 縮到 188×146、**可拖範圍** x∈[0, 932]（＝1920 螢幕嘅左半邊）→ 用戶見到嘅係「HUD 淨係可以喺左半邊拖嚟拖去，右半邊唔得」＋ 存檔 `offset.dx` 飽和成 **1**。**指紋**：`offset.dy = -0.8235294117647058`（＝要個窗擺喺內容區上方 0.8235×高，用真內容區（1080）根本做唔到，最多 −size.h；用 315 就啱啱好）。**正解**：①「**排除自己嘅窗**」係**必要條件**（HWND 硬排除 ＋ 標題第二重，見 `src/capture/source.js`，有 10 個測試）；② 標題三級相符（完全相符 3／開頭 2／包含 1）令瀏覽器攻略頁（只「包含」）唔會贏遊戲本體；③ 自己嘅窗標題**唔准**含遊戲關鍵字（`settings.html` 嘅 `<title>` 會蓋過 BrowserWindow 嘅 `title` → 兩邊都要改）；④ `warnIfSourceTooSmall()`：「擷取到嘅畫面比工作區細好多」即刻大聲警告（呢句就係可見防線）；⑤ ⚠️ **關鍵字清單要包含「完全相符」嘅真標題** —— 實機遊戲窗係「**賽馬娘Pretty Derby**」（`娘` 同 `Pretty` 之間冇空格），只寫「賽馬娘」嘅話遊戲本體**只係 2 分（開頭相符）**，同瀏覽器攻略頁**同分** → 同分就跟 z-order 亂咁揀（實測 log：`揀咗：賽馬娘Pretty Derby（分數 2）`）。加咗完整標題之後遊戲係 **3 分**，永遠贏（回歸：`test/capture-source.test.js`「實機見到嘅遊戲標題要係完全相符」）。驗法：開住設定窗跑 `npm start`，睇 `[來源] 見到嘅視窗` 清單同 `[HUD] 對位：遊戲 W×H` 係唔係遊戲大細 |
 | 28 | ⭐⭐ **以為「拖位只改 `offset`」同「slider `max=1`」冇問題** | ⛔ 用戶實機報「拉到某個位就唔再跟」、「拉咗之後自己彈返」、「HUD 淨係可以喺左半邊拖」。根因兩個，都係**上下限唔對應模型**：① `layoutFromBounds()` 舊設計只改 `offset`，而 `offset` 有 **±1** 上限（`config.js` 契約）→ 拖到某個位就**飽和**（實測用戶存檔 `offset.dx` 寫死成 **1**）；② 設定窗 `x0`／`y0` 嘅 slider `max` 寫死成 **1**，但模型係 `x0 + w ≤ 1`（用戶 w = 0.335 → 真正上限 0.665）→ 拉到 0.8 會被夾返，而 reply 又**無條件 `writeForm()`**（連用戶正拖緊嗰個 slider 都改）→ thumb 彈返原位。**正解**：① 拖位**位置直接寫 `x[0]`／`y[0]`**（冇 ±1 上限）＋ `clampLayout()` **夾入內容區**（`x0 ∈ [0, 1−size.w]`）→ HUD **永遠唔會走失**、`offset` 歸零（佢係 env 微調旋鈕，唔應該同拖位疊加）；② 設定窗上下限由純函數 `fieldBounds()` 計（x0 最多 = 1 − w、w 最多 = 1 − x0…）＋**貼 slider 格仔**（`stepFloor6/stepCeil6`，同 `LAYOUT_EPSILON` 相容 → 唔會假警報）；③ 用戶**互動中唔准**改佢手上嗰個控制（pointerdown／input／focus ＋ 400ms watchdog，放手 250ms 後對帳）。⚠️ **唔准**把「拖位只改 offset」改返（會即刻令 ① 復發）；⚠️ **唔准**把 slider `max` 寫死成 1。回歸：`test/hud-drag.test.js`（⭐「拖出界一定要夾返入內容區」、⭐「舊檔嘅飽和 offset 唔會再令拖位卡死」）＋ `test/hud-settings-html.test.js`（⭐「x0 上限唔可以再寫死成 1」、⭐「冇死區」，**真係由 HTML 抽** `fieldBounds()` 出嚟執行）|
 | 29 | ⭐ **以為「拖完 HUD 就完」—— 唔記得通知設定窗** | ⛔ 用戶 2026-09-18 實機報：「拖完之後去設定窗撳『儲存』，HUD 彈返滑條嗰個舊位」。根因係一條**唔存在嘅線**：`applyHudConfig()` 只推 HUD（`placeHud()`／`pushHud()`），**從來冇通知設定窗** → 設定窗手上永遠係「上次 `hud-config` reply 嗰份」→ 用戶一撳「儲存」就 `readForm()` 送出舊值 → 覆寫拖完嘅位置（而且**照樣寫入 `hud-position.json`**）。⚠️ 症狀好易誤診成「拖位冇效」（拖位其實完全正常，係之後嗰下儲存拆返轉頭）。**正解**：`notifySettingsWindow()`（推 `remote: true`）喺 `applyHudConfig(config, { fromUi: false })` 嗰陣叫；設定窗收到 `remote` **一定**要 `writeForm()`（**蓋過** `interacting`，唔可以只更新「實際位置」嗰行）；三條由設定窗送落嚟嘅路（preview／save／reset）全部標明 `fromUi: true`（佢哋已經有 `replyHudConfig()` 回覆）。回歸：`test/hud-config-sync.test.js` —— **接線閘**（兩個檔一個係 IPC 主程序、一個係 classic script ＋ DOM，**都入唔到 `node --test`**，所以退而求其次由原始碼抽關鍵接線斷言）。⚠️ **唔准**拆走「拖完通知設定窗」嗰句 |
+| 30 | ⭐⭐ **以為「只有面板條先砌得出 5 個等距數字」** | ⛔ 用戶 2026-09-18 實機 dump 揭出嘅**假陽性**（B5）：有一幀 `kind: ok` 讀到 `27/27/25/25/25`（信心 0.71），但當時真實數值係 700+。真身係**支援卡列表** —— 5 張卡嘅 `Lv27／Lv27／Lv25／Lv25／Lv25` 徽章**啱啱好**砌得出「5 個等距數字」，而「上限行」其實只係一條**卡片邊線**（4px 高、**24 粒墨**）。⚠️ 好彩嗰次只係 1 幀（投票冇出到），但**停留喺嗰個畫面 3/5 幀就會鎖定一個錯分**。**根因（兩個閘都太鬆，實測）**：字元高 ÷ 預期字高 真值 **0.85–0.96** vs 假陽性 **0.64**，舊門檻 **0.6** 啱啱好放佢過關；上限行**絕對**墨量 真值 **164–1599** vs 假陽性 **24**，而舊版**根本冇呢個檢查**。**正解**：`minGlyphHeightRatio` **0.8** ＋ 新增 `minLimitsInk` **60**（冇上限行嗰陣唔用 —— 有真值圖因為俾對話框遮住而冇上限行）。⚠️ **唔可以用「上限行墨量 ÷ 大數值行墨量」嘅比值**：真值 0.10–0.62 同假陽性 0.03 太近，會殺錯良民。**負樣本庫**：`shots/negatives/*.png` = 資料夾本身就係宣告「全部唔准出數」→ `npm.cmd test`／`diag-statbar --read`／`build-glyph-templates --verify`／`replay-dumps` **四個閘**都食（`replay-dumps` 用像素 hash 認得返「呢幀係已入庫負樣本」→ 計「修正假陽性」而唔係退步）|
 
 
 ---
@@ -515,6 +525,14 @@ readNumberTrimmed()   由右邊貪心收 → 數字；信心 < minConfidence 就
 HUD 要顯示上一個穩定值，唔好空白或者閃走。
 ⚠️ **用戶 2026-09-19 再確認一次**：log 見到 `[讀唔到] … ROI 內只搵到 1 條帶`（判 `notBar`）
 係因為佢當時喺**其他介面**（唔係育成主畫面）—— 即係 `notBar` 判斷**冇誤報**，唔係讀唔清。
+
+⚠️ **但係「唔喺面板畫面」唔等於「唔會出數」**（B5，2026-09-19）：實機 dump 揭出
+**支援卡列表**嘅 5 個 `Lv27` 徽章砌得出「5 個等距數字」→ 舊版讀成 `27/27/25/25/25`
+（真值 700+）＝ **靜默報錯數**。已加兩條閘（見地雷 #30）：字高比 **≥0.8**、
+上限行墨量 **≥60**（兩個門檻都係量出嚟嘅：真值 0.85–0.96／164–1599、
+假陽性 0.64／24）。**負樣本庫 `shots/negatives/`**：資料夾入面每一幀都係「其他畫面」
+→ 全部唔准出數，四個閘（`npm test`／`diag-statbar --read`／`build-glyph-templates --verify`／
+`replay-dumps`）都會自動覆核 —— **加檔就自動入閘**，唔使改 code。
 
 ⚠️ **金色格**（屬性 > 1200 之後**長期**金色，用戶確認）：**唔可以唔出數** ——
 千二點之後會永遠冇數。判準係該格墨點色相 p90 ≥ 33°（正常幀 27–28°）→
@@ -837,7 +855,7 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **198 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **202 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
@@ -970,8 +988,8 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 | B1 | ~~**HUD 跟住遊戲視窗移動**~~ ⏸️ **唔做（用戶 2026-09-19 決定）** | 理由：「可以用拖位擺去自己想擺嘅位，跟窗冇必要」（見 §9 ①）。量測數據保留（將來要返先睇）：PowerShell ＋ Win32 `EnumWindows`／`GetWindowRect` **已實測可行**（~365ms、讀到 -34,141 1943×1123） | 中 |
 | B2 | ~~**驗 HUD 防擷取**~~ ✅ **已做（2026-09-19 用戶實機驗）：dump 幀冇 HUD 自己嘅字 → 通過** | `UMAPYOI_DUMP_FRAMES=5 npm start` → `node tools/raw-to-png.js shots/live-debug` → 睇 dump 幀有冇 HUD 自己嘅字（見 §6.4）。⚠️ 驗法要留住（將來改 HUD 窗嘅 flag／`setContentProtection` 就要重驗） | 細 |
 | B3 | ~~**確認 uma2 真值**~~ ⏸️ **唔做（用戶 2026-09-19 決定唔理）** | 截圖讀到 `1937/993/1077/848/1198` 但 JSON 係舊一輪（地雷 #19）。⚠️ 保留 `--exclude=uma2`（見地雷 #19） | 細 |
-| B4 | **收多啲數字樣本** | 唔同培育進度／唔同馬／唔同主題色 → 模板相似度同信心再升 | 中 |
-| B5 | **其他畫面／狀態嘅面板條** | ステータス面板、比賽前後、訓練動畫、轉場期間 → 確認唔會讀錯 | 中 |
+| B4 | **收多啲數字樣本** 🔄 **做緊** | ① ✅ 由**現有** `shots/live-debug/` dump 收咗 **4 個新狀態**（264／387／220／1133）→ 實機面板條樣本 9 → **13**；⚠️ **每一格都用眼核實**（唔可以信舊 dump 嘅 `stats`：舊 build 嘅 `ok` 有假陽性，例如 `27/27/25/25/25`）。<br>② ⏳ **要更多就要新實拍**（唔使改 code）：放一張**整個遊戲視窗**截圖（或者已剪 ROI）入 `shots/live/` ＋ 話我知五個數值 → 我用眼核實 → 入 `data/live-truth.json`（`shots` ＋ `perShot`）→ `node tools/build-glyph-templates.js --exclude=uma2`（驗證唔過**唔會**寫檔）。<br>③ 最弱兩格：數字「3」「8」樣本最少 | 中 |
+| B5 | **其他畫面／狀態嘅面板條** 🔄 **做緊（閘已建）** | ① ✅ **搵到一個真 bug**：支援卡列表嘅 5 個 `Lv27` 徽章砌得出「5 個等距數字」→ 讀成 `27/27/25/25/25`（真值 700+）＝ **靜默報錯數** → 已修（兩條閘）＋ 入庫負樣本（見地雷 #30）。<br>② ✅ **負樣本閘**：`shots/negatives/`（資料夾就係宣告）—— `npm test`／`diag-statbar --read`／`build-glyph-templates --verify`／`replay-dumps` 四個閘都食。<br>③ ⏳ 未覆蓋：ステータス面板／比賽前後／訓練動畫／轉場 —— 有實拍就放入 `shots/negatives/`（唔准出數）或者 `shots/live/` ＋ 真值（要出數），即刻入閘 | 中 |
 | B6 | **實機效能** | 5fps 下嘅延遲、CPU、記憶體（未正式量過） | 細 |
 
 ### C. 新功能（Phase 3 打後）
