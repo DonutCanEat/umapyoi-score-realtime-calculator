@@ -32,6 +32,8 @@ import { anchorHud, contentRect, hudState, clampLayout, layoutFromBounds, relati
 import { loadConfig, saveConfig, resolveHudConfig, validateConfig, assertFullDisplay } from '../src/hud/config.js';
 import { configPathFor } from '../src/hud/config-path.js';
 import { envFlag, envIsSet, envNumber } from '../src/hud/env-flag.js';
+// ⭐ 四個窗共用嘅 `webPreferences`（**唯一一份**）——見獨立審計 M2 同嗰個檔嘅註釋。
+import { APP_WEB_PREFERENCES } from './web-preferences.js';
 import { MAX_HISTORY, pushSample } from '../src/hud/history.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -197,10 +199,7 @@ function createHudWindow() {
     focusable: false,
     show: false,
     title: 'Umapyoi HUD',
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-    },
+    webPreferences: { ...APP_WEB_PREFERENCES },
   });
   win.setAlwaysOnTop(true, 'screen-saver');
   // 穿透點擊：唔會搶遊戲嘅滑鼠（⭐ 底線，無條件）。
@@ -765,10 +764,7 @@ function createSettingsWindow() {
     focusable: true, // 要打字（⚠️ HUD overlay 剛剛相反：focusable:false）
     show: false,
     backgroundColor: '#1b1f24',
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-    },
+    webPreferences: { ...APP_WEB_PREFERENCES },
   });
   win.setContentProtection(true); // 同其他窗一致：唔會入到自己嘅擷取畫面
   win.loadFile(join(__dirname, 'settings.html'));
@@ -802,10 +798,7 @@ function createWhatifWindow() {
     focusable: true, // 要打字／揀選項（⚠️ HUD overlay 剛剛相反：focusable:false）
     show: false,
     backgroundColor: '#1b1f24',
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-    },
+    webPreferences: { ...APP_WEB_PREFERENCES },
   });
   win.setContentProtection(true); // 同其他窗一致：唔會入到自己嘅擷取畫面
   win.loadFile(join(__dirname, 'whatif.html'));
@@ -1076,11 +1069,9 @@ function createCaptureWindow() {
     show: true,
     title: 'Umapyoi 擷取（除錯視窗，Phase 1 完結後會變成隱藏）',
     backgroundColor: '#111',
-    webPreferences: {
-      // 呢個視窗載入嘅係我哋自己嘅本機頁面，唔載入任何遠端內容。
-      nodeIntegration: true,
-      contextIsolation: false,
-    },
+    // 呢個視窗載入嘅係我哋自己嘅本機頁面，唔載入任何遠端內容
+    // → `webPreferences` 同其他三個窗一樣（唯一一份常數）。
+    webPreferences: { ...APP_WEB_PREFERENCES },
   });
   win.setContentProtection(true); // = Win32 WDA_EXCLUDEFROMCAPTURE，令自己唔會入到自己嘅擷取
   win.loadFile(join(__dirname, 'capture.html'));
