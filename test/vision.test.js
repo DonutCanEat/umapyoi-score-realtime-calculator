@@ -12,6 +12,7 @@ import {
   detectDigitRow,
 } from '../src/vision/digitrow.js';
 import { extractGlyphs, standardize, similarity, readNumberTrimmed, GLYPH_W, GLYPH_H } from '../src/vision/glyphs.js';
+import { solidImage } from './helpers/image.js';
 
 /* ──────────────────────────── 合成圖工具 ──────────────────────────── */
 
@@ -20,16 +21,10 @@ const INK = [140, 90, 50];       // 橙棕數字墨（色相 ≈ 27°、亮度 �
 const ART = [150, 110, 80];      // 暖色插畫（同樣係「墨色」，但唔係淺色底上面）
 const BADGE = [255, 120, 200];   // ランク徽章（飽和色相）
 
-function makeCanvas(width, height) {
-  const data = new Uint8ClampedArray(width * height * 4);
-  for (let i = 0; i < width * height; i += 1) {
-    data[i * 4] = BG[0];
-    data[i * 4 + 1] = BG[1];
-    data[i * 4 + 2] = BG[2];
-    data[i * 4 + 3] = 255;
-  }
-  return { data, width, height };
-}
+// ⚠️ 砌底色 buffer 呢一步住喺 `test/helpers/image.js`（審計 L2）。
+// ⚠️ 下面嗰個 `fill()`（畫色塊）**刻意唔抽**：佢連 alpha 都寫 255，同其他測試檔
+//    嗰三個 `paint()` 語意唔完全一樣 → 唔合併。
+const makeCanvas = (width, height) => solidImage(width, height, BG);
 
 function fill(img, x, y, w, h, color) {
   for (let py = y; py < y + h; py += 1) {

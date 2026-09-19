@@ -15,6 +15,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { decodePng } from '../src/vision/png.js';
+import { solidImage } from './helpers/image.js';
 
 import {
   contentBox,
@@ -38,16 +39,9 @@ const INK = [140, 90, 50];      // 實測數字墨（色相 ≈ 26.7°、亮度 
 const GOLD_INK = [190, 150, 80]; // 金色格（色相 ≈ 38°、亮度 ≈ 0.60）—— 屬性 ≥ 1200
 const BG = [240, 240, 240];     // 遊戲面板近白底
 
-function makeImage(width, height, bg = BG) {
-  const data = new Uint8ClampedArray(width * height * 4);
-  for (let i = 0; i < width * height; i += 1) {
-    data[i * 4] = bg[0];
-    data[i * 4 + 1] = bg[1];
-    data[i * 4 + 2] = bg[2];
-    data[i * 4 + 3] = 255;
-  }
-  return { data, width, height };
-}
+// ⚠️ 砌底色 buffer 呢一步住喺 `test/helpers/image.js`（審計 L2）；底色本身係
+//    **實測情境**（面板近白 240）→ 留返呢個檔自己決定。
+const makeImage = (width, height, bg = BG) => solidImage(width, height, bg);
 
 function paint(image, x0, y0, w, h, color = INK) {
   for (let y = y0; y < y0 + h; y += 1) {

@@ -16,6 +16,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { solidImage } from './helpers/image.js';
+
 import {
   nameBoxFeature,
   nameSimilarity,
@@ -27,13 +29,8 @@ import {
 const BG = [233, 229, 245];
 const TEXT = [128, 74, 20];
 
-function makeImage(width, height) {
-  const data = new Uint8ClampedArray(width * height * 4);
-  for (let i = 0; i < width * height; i += 1) {
-    data[i * 4] = BG[0]; data[i * 4 + 1] = BG[1]; data[i * 4 + 2] = BG[2]; data[i * 4 + 3] = 255;
-  }
-  return { data, width, height };
-}
+// ⚠️ 砌底色 buffer 呢一步住喺 `test/helpers/image.js`（審計 L2）
+const makeImage = (width, height) => solidImage(width, height, BG);
 
 function paint(image, x0, y0, w, h, color = TEXT) {
   for (let y = y0; y < y0 + h; y += 1) {
