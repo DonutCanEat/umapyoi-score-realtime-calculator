@@ -105,6 +105,10 @@
 
     <script>
       const { ipcRenderer } = require('electron');
+      // ⭐ channel 名嘅唯一來源（`electron/ipc-channels.cjs`，同 `main.js` 同一個檔）。
+      //    ⚠️ 一定要喺最頂解構好（classic script）：page 一開頭 throw 嘅話，
+      //    下面所有 `ipcRenderer.on(...)` 都會靜默唔註冊 → 窗永遠空白。
+      const { IPC_CHANNELS } = require('./ipc-channels.cjs');
 
       /** 五維標籤（跟遊戲ステータス面板由左至右；同 `src/hud/layout.js` 一致）。 */
       const STAT_LABELS = ['速度', '持久', '力量', '毅力', '智力'];
@@ -308,13 +312,13 @@
           renderPicked(null);
           return;
         }
-        ipcRenderer.send('whatif-eval', { key: picked.key, stats, grades });
+        ipcRenderer.send(IPC_CHANNELS.whatifEval, { key: picked.key, stats, grades });
       }
 
       /** ⭐ C4：升級建議（主程序計，呢邊只排版）。 */
       function refreshAdvice(stats) {
         if (stats.some((n) => !Number.isFinite(n))) return;
-        ipcRenderer.send('whatif-advice', { stats });
+        ipcRenderer.send(IPC_CHANNELS.whatifAdvice, { stats });
       }
 
       /** C4 建議嘅排版（`advice` 由 `src/umascore/advice.js` 嚟，唔喺呢度計）。 */
@@ -349,14 +353,14 @@
       }
 
       document.getElementById('go').addEventListener('click', () => {
-        ipcRenderer.send('whatif-search', qEl.value);
+        ipcRenderer.send(IPC_CHANNELS.whatifSearch, qEl.value);
       });
       qEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') ipcRenderer.send('whatif-search', qEl.value);
+        if (e.key === 'Enter') ipcRenderer.send(IPC_CHANNELS.whatifSearch, qEl.value);
       });
 
       // ── IPC：主程序 → 呢度 ─────────────────────────────────
-      ipcRenderer.on('whatif-live', (_event, payload) => {
+      ipcRenderer.on(IPC_CHANNELS.whatifLive, (_event, payload) => {
         live = payload;
         dbCount = payload.dbCount ?? dbCount;
         dbError = payload.dbError ?? null;
@@ -372,7 +376,7 @@
         renderCurrent(payload.live);
       });
 
-      ipcRenderer.on('whatif-results', (_event, payload) => {
+      ipcRenderer.on(IPC_CHANNELS.whatifResults, (_event, payload) => {
         if (payload.error) {
           banner(payload.error);
           return;
@@ -383,7 +387,7 @@
         renderResults(payload.items);
       });
 
-      ipcRenderer.on('whatif-result', (_event, payload) => {
+      ipcRenderer.on(IPC_CHANNELS.whatifResult, (_event, payload) => {
         if (payload.error) {
           banner(`試算失敗：${payload.error}`);
           renderPicked(null);
@@ -393,7 +397,7 @@
       });
 
       // ⭐ C4：升級建議（主程序砌好，呢邊只排版）
-      ipcRenderer.on('whatif-advice-result', (_event, payload) => {
+      ipcRenderer.on(IPC_CHANNELS.whatifAdviceResult, (_event, payload) => {
         if (payload.error) {
           banner(`升級建議失敗：${payload.error}`);
           return;
@@ -402,9 +406,9 @@
       });
 
       // 開窗即問一次（唔想等 2 秒）
-      ipcRenderer.send('whatif-get');
+      ipcRenderer.send(IPC_CHANNELS.whatifGet);
       // 之後每 2 秒問一次實機狀態（讀唔到就保持手動輸入）
-      setInterval(() => ipcRenderer.send('whatif-get'), 2000);
+      setInterval(() => ipcRenderer.send(IPC_CHANNELS.whatifGet), 2000);
     </script>
   </body>
 </html>

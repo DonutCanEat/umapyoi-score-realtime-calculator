@@ -90,6 +90,11 @@
 
     <script>
       const { ipcRenderer } = require('electron');
+      // ⭐ channel 名嘅唯一來源（`electron/ipc-channels.cjs`，同 `main.js` 同一個檔）。
+      //    ⚠️ 一定要喺最頂解構好：下面 `scheduleSend()`／`ipcRenderer.on(...)` 用到
+      //    `IPC_CHANNELS.*`，classic script 冇 module 邊界嘅保護（page 一開頭 throw
+      //    ＝ 所有 listener 靜默唔註冊）。
+      const { IPC_CHANNELS } = require('./ipc-channels.cjs');
 
       /** 數值欄位：key 對應 `config.layout` 內嘅位置。 */
       const NUM_FIELDS = [
@@ -403,7 +408,7 @@
           const text = JSON.stringify(config);
           if (text === lastSent) return;
           lastSent = text;
-          ipcRenderer.send('hud-config-preview', config);
+          ipcRenderer.send(IPC_CHANNELS.hudConfigPreview, config);
         }, 40);
       }
 
@@ -419,7 +424,7 @@
       }
 
       // ── 收主程序 ───────────────────────────────────────────
-      ipcRenderer.on('hud-config', (_e, payload) => {
+      ipcRenderer.on(IPC_CHANNELS.hudConfig, (_e, payload) => {
         const { config, path, why, envOverridden, loadError, changed, saved, error } = payload;
         if (payload.bounds !== undefined) lastBounds = payload.bounds;
         if (payload.content !== undefined) lastContent = payload.content;
@@ -515,10 +520,10 @@
       // ── 按鈕 ───────────────────────────────────────────────
       document.getElementById('save').addEventListener('click', () => {
         setStatus('儲存中…', '');
-        ipcRenderer.send('hud-config-save', readForm());
+        ipcRenderer.send(IPC_CHANNELS.hudConfigSave, readForm());
       });
       document.getElementById('reset').addEventListener('click', () => {
-        ipcRenderer.send('hud-config-reset');
+        ipcRenderer.send(IPC_CHANNELS.hudConfigReset);
         setStatus('已還原預設（即時生效，未存檔 —— 要寫檔請按「儲存」）', 'ok');
       });
 
@@ -529,7 +534,7 @@
       }
 
       // 開窗即問主程序攞「而家生效嘅設定 + 檔案路徑」。
-      ipcRenderer.send('hud-config-get');
+      ipcRenderer.send(IPC_CHANNELS.hudConfigGet);
     </script>
   </body>
 </html>

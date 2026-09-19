@@ -8,15 +8,16 @@
  * （唔會 throw、唔會 log）→ 打錯一個字母嘅後果係「按咗但冇反應」，而
  * `npm.cmd test`（以前）同 `check-renderer-syntax.js` 都捉唔到。
  *
- * ## 現時架構（2026-09-19 起）
+ * ## 現時架構（2026-09-19 起；⭐ H1 第二步已完成）
  *
  * - channel 名嘅**唯一來源** = `electron/ipc-channels.cjs`（`IPC_CHANNELS`）
- * - `main.js` 已經全部改用 `IPC_CHANNELS.<key>`（29 處）
- * - 4 個 renderer **暫時仍然用字面值**（要換 `require('./ipc-channels.cjs')` 之前
- *   一定要先實機驗 —— 嗰個失敗模式係「page 一開頭 throw → 全部 IPC listener
- *   靜默唔註冊」；今次審計環境開唔到 Electron，所以**未換**）
- *   → 所以呢個閘**兩種寫法都要支援**，而 renderer 嘅字面值會被**逐個對照 map 嘅 value**
- *     （打錯字／有人改 map 但冇改 HTML → 即刻 fail）
+ * - `main.js` 全部改用 `IPC_CHANNELS.<key>`（29 處）
+ * - 4 個 renderer 亦**全部**改用 `require('./ipc-channels.cjs')`（H1 第二步）
+ *   → 抽取器仍然**兩種寫法都要支援**（字面值寫法留住係為咗自測突變），
+ *     但下面「renderer 唔准再有字面值」呢條閘會釘死「真檔已經冇人寫字面值」。
+ *   ⚠️ renderer 係 classic script（`file://` + `nodeIntegration`）→ 只可以 `require()`
+ *     （`import` 會被 CORS 擋）；而且 `.cjs` 一定要**喺頁面最頂**解構好，
+ *     否則 page 一開頭 throw → **全部 IPC listener 靜默唔註冊**（最難查嘅失敗模式）。
  *
  * ## 閘驗咩
  *
@@ -198,6 +199,27 @@ test('IPC 接線閘：抽取器真係抽得到嘢（唔係抽到空集合就靜�
   for (const file of RENDERER_FILES) {
     const n = rendererCalls('ipcRenderer\\.(?:send|on)\\(', 'both').channels.length;
     assert.ok(n >= 0, `${file}`);
+  }
+});
+
+// ─────────────── ②b renderer 一定要用 map（H1 第二步：唔准再寫字面值）───────────────
+
+test('IPC 接線閘：4 個 renderer 全部 require 咗 ipc-channels.cjs（唔准再寫字面值）', () => {
+  for (const file of RENDERER_FILES) {
+    const code = codeOf(file);
+    // ① 一定要有解構陳述式（打錯 `.cjs` 路徑 = page 一開頭 throw）
+    assert.match(
+      code,
+      /const\s*\{\s*IPC_CHANNELS\s*\}\s*=\s*require\('\.\/ipc-channels\.cjs'\)/,
+      `${file}：一定要有 const { IPC_CHANNELS } = require('./ipc-channels.cjs');`,
+    );
+    // ② 唔准再有 `ipcRenderer.send('xxx')`／`on('xxx')` 呢種字面值寫法
+    const literals = [...code.matchAll(/ipcRenderer\.(?:send|on|invoke)\(\s*'([^']+)'/g)].map((m) => m[1]);
+    assert.deepEqual(literals, [], `${file}：仲有 channel 字面值（要換成 IPC_CHANNELS.<key>）：${literals.join('、')}`);
+    // ③ 解構一定要**早過**第一次用（classic script 冇 module 邊界 → TDZ 會直接 throw）
+    const at = code.indexOf("require('./ipc-channels.cjs')");
+    const firstUse = code.indexOf('IPC_CHANNELS.');
+    assert.ok(firstUse > at, `${file}：IPC_CHANNELS 未解構就用（page 一開頭會 throw）`);
   }
 });
 

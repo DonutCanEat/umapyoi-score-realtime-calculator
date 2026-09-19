@@ -26,6 +26,12 @@
     <canvas id="c"></canvas>
     <script>
       const { ipcRenderer } = require('electron');
+      // ⭐ channel 名嘅唯一來源（`electron/ipc-channels.cjs`）——`main.js` 用同一個檔
+      //    （透過 ESM default import）。以前兩邊各自寫字面值：`ipcRenderer.send()`
+      //    去冇 handler 嘅 channel 係**靜默丟棄** → 打錯一個字母 = 「按咗冇反應」。
+      // ⚠️ 呢個 `require()` 一定要喺頁面最頂（同 electron 一齊）：classic script 冇
+      //    hoisting 嘅保護，下面用 `IPC_CHANNELS.*` 之前一定要已經解構好。
+      const { IPC_CHANNELS } = require('./ipc-channels.cjs');
 
       const video = document.getElementById('v');
       const canvas = document.getElementById('c');
@@ -59,12 +65,12 @@
       let started = false;
       let lastSent = 0;
 
-      ipcRenderer.on('no-source', () => {
+      ipcRenderer.on(IPC_CHANNELS.noSource, () => {
         statusEl.textContent = '揾唔到遊戲視窗';
         hintEl.textContent = '請先開賽馬娘，再重新啟動本程式。';
       });
 
-      ipcRenderer.on('roi', (_event, rect) => {
+      ipcRenderer.on(IPC_CHANNELS.roi, (_event, rect) => {
         roi = rect;
         // ⭐ 內容區比例由主程序嚟（唯一來源）——呢邊唔准再寫死一組（審計 H3）。
         // ⚠️ 欄位係**選填**（舊格式／未收到就冇）→ 保留後備值，行為同以前一樣
@@ -74,7 +80,7 @@
       });
 
       // 主程序可以調幀率（技能連拍模式用 1fps）。
-      ipcRenderer.on('fps', (_event, value) => {
+      ipcRenderer.on(IPC_CHANNELS.fps, (_event, value) => {
         const n = Number(value);
         if (Number.isFinite(n) && n > 0) {
           targetFps = n;
@@ -83,14 +89,14 @@
       });
 
       // 主程序可以再指定一個「內容區比例」矩形（連拍模式專用；null = 唔剪）。
-      ipcRenderer.on('crop', (_event, rect) => {
+      ipcRenderer.on(IPC_CHANNELS.crop, (_event, rect) => {
         crop = rect && rect.w > 0 && rect.h > 0 ? rect : null;
         hintEl.textContent = crop
           ? ` · 只剪內容區 ${(crop.w * 100).toFixed(0)}%×${(crop.h * 100).toFixed(0)}%`
           : '';
       });
 
-      ipcRenderer.on('start', async (_event, sourceId) => {
+      ipcRenderer.on(IPC_CHANNELS.start, async (_event, sourceId) => {
         if (started) return;
         started = true;
         try {
@@ -114,7 +120,7 @@
         } catch (error) {
           statusEl.textContent = '擷取失敗';
           hintEl.textContent = String(error && error.message ? error.message : error);
-          ipcRenderer.send('capture-error', String(error));
+          ipcRenderer.send(IPC_CHANNELS.captureError, String(error));
         }
       });
 
@@ -183,7 +189,7 @@
         ctx.drawImage(video, cx, cy, cw, ch, 0, 0, width, height);
         const image = ctx.getImageData(0, 0, width, height);
 
-        ipcRenderer.send('frame', {
+        ipcRenderer.send(IPC_CHANNELS.frame, {
           width,
           height,
           fullWidth: vw,

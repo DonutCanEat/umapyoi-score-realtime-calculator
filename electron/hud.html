@@ -75,6 +75,9 @@
     </div>
     <script>
       const { ipcRenderer } = require('electron');
+      // ⭐ channel 名嘅唯一來源（`electron/ipc-channels.cjs`，同 `main.js` 同一個檔）。
+      //    以前呢度係字面值 → 打錯字 = `ipcRenderer.send()` 靜默丟棄（拖位「按咗冇反應」）。
+      const { IPC_CHANNELS } = require('./ipc-channels.cjs');
       const totalEl = document.getElementById('total');
       const statsEl = document.getElementById('stats');
       const summaryEl = document.getElementById('summary');
@@ -127,7 +130,7 @@
 
       // 顯示邏輯（狀態機）喺 src/hud/layout.js 嘅 hudState()，主程序計好先推落嚟，
       // 呢邊只負責畫 —— 免得兩邊各寫一套判斷。
-      ipcRenderer.on('hud', (_event, view) => {
+      ipcRenderer.on(IPC_CHANNELS.hud, (_event, view) => {
         document.body.dataset.state = view.state;
 
         const total = view.lines.find((l) => l.key === 'total');
@@ -187,7 +190,7 @@
         } catch {
           /* 捕捉唔到都用得（主程序另有 watchdog） */
         }
-        ipcRenderer.send('hud-drag-start', { x: e.screenX, y: e.screenY });
+        ipcRenderer.send(IPC_CHANNELS.hudDragStart, { x: e.screenX, y: e.screenY });
         e.preventDefault();
       });
 
@@ -198,7 +201,7 @@
         if (dx === drag.dx && dy === drag.dy) return; // 冇動過就唔好 send
         drag.dx = dx;
         drag.dy = dy;
-        ipcRenderer.send('hud-drag-move', { dx, dy });
+        ipcRenderer.send(IPC_CHANNELS.hudDragMove, { dx, dy });
       });
 
       function endDrag(e) {
@@ -210,7 +213,7 @@
         } catch {
           /* 已自動釋放 */
         }
-        ipcRenderer.send('hud-drag-end', { dx: d.dx, dy: d.dy });
+        ipcRenderer.send(IPC_CHANNELS.hudDragEnd, { dx: d.dx, dy: d.dy });
       }
 
       window.addEventListener('pointerup', endDrag);
