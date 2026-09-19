@@ -25,6 +25,7 @@
  */
 
 import { buildInkMask, findTextLines, isDigitInk, maskRowCounts } from './inkmask.js';
+import { forEachCombination5 } from './combinations.js';
 
 export { isDigitInk, buildInkMask, findTextLines, maskRowCounts };
 
@@ -113,28 +114,21 @@ export function pickBestFive(numbers, options = {}) {
   if (numbers.length < 5) return null;
   if (numbers.length === 5) return { numbers, cost: 0 };
 
-  const n = numbers.length;
   let best = null;
-  const idx = [0, 1, 2, 3, 4];
-  const advance = () => {
-    let i = 4;
-    while (i >= 0 && idx[i] === n - 5 + i) i -= 1;
-    if (i < 0) return false;
-    idx[i] += 1;
-    for (let j = i + 1; j < 5; j += 1) idx[j] = idx[j - 1] + 1;
-    return true;
-  };
-
-  do {
+  // 組合迭代器住喺 `combinations.js`（同 `statbar.pickFiveBySpacing()` 共用**同一份**）。
+  // ⚠️ 成本函數（闊度 + 間距變異）同門檻係呢條「gt 排法」路專用 ——
+  //    面板條嗰條**刻意唔同**（只按右邊界間距，見 pitfalls #23），唔准順手統一。
+  // ⚠️ `visit` 入面用 `return` ＝ 原本嘅 `continue`。
+  forEachCombination5(numbers.length, (idx) => {
     const sel = idx.map((i) => numbers[i]);
     const widths = sel.map((s) => s.x1 - s.x0 + 1);
     const gaps = [];
     for (let i = 1; i < 5; i += 1) gaps.push(sel[i].x0 - sel[i - 1].x1 - 1);
-    if (gaps.some((g) => g < 3)) continue;
+    if (gaps.some((g) => g < 3)) return;
 
     const wMean = widths.reduce((a, b) => a + b, 0) / 5;
     const gMean = gaps.reduce((a, b) => a + b, 0) / 4;
-    if (wMean < 8 || gMean <= 0) continue;
+    if (wMean < 8 || gMean <= 0) return;
     const wVar = widths.reduce((a, w) => a + (w - wMean) ** 2, 0) / 5 / (wMean ** 2);
     const gVar = gaps.reduce((a, g) => a + (g - gMean) ** 2, 0) / 4 / (gMean ** 2);
     const cost = wVar + gVar * (options.spacingWeight ?? 1.5);
@@ -142,7 +136,7 @@ export function pickBestFive(numbers, options = {}) {
     if (!best || cost < best.cost) {
       best = { numbers: sel, cost, widthSpread: Math.max(...widths) / Math.min(...widths) };
     }
-  } while (advance());
+  });
 
   return best;
 }

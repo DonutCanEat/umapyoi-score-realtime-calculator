@@ -27,6 +27,7 @@
 import { buildInkMask, findTextLines, pixelHue } from './inkmask.js';
 import { denseBands, tightenBand, columnsToGroups, groupsToNumbers } from './digitrow.js';
 import { extractGlyphs, readNumberTrimmed } from './glyphs.js';
+import { forEachCombination5 } from './combinations.js';
 
 /** 帶入面嘅墨點數。 */
 function countInk(mask, width, y0, y1) {
@@ -316,26 +317,21 @@ export function pickFiveBySpacing(numbers, options = {}) {
   if (n === 5) return { numbers, cost: 0, gaps: [] };
 
   let best = null;
-  const idx = [0, 1, 2, 3, 4];
-  const advance = () => {
-    let i = 4;
-    while (i >= 0 && idx[i] === n - 5 + i) i -= 1;
-    if (i < 0) return false;
-    idx[i] += 1;
-    for (let j = i + 1; j < 5; j += 1) idx[j] = idx[j - 1] + 1;
-    return true;
-  };
-  do {
+  // 組合迭代器住喺 `combinations.js`（同 `digitrow.pickBestFive()` 共用**同一份**）。
+  // ⚠️ 成本函數（**只**按右邊界 x1 間距嘅相對方差）同 `minPitch` 係呢條路專用，
+  //    唔准換成「闊度相近」（pitfalls #23：咁會揀到 `/上限` 欄）。
+  // ⚠️ `visit` 入面用 `return` ＝ 原本嘅 `continue`。
+  forEachCombination5(n, (idx) => {
     const sel = idx.map((i) => numbers[i]);
     const gaps = [];
     for (let i = 1; i < 5; i += 1) gaps.push(sel[i].x1 - sel[i - 1].x1);
     const minGap = Math.min(...gaps);
-    if (minGap < (options.minPitch ?? 3)) continue;
+    if (minGap < (options.minPitch ?? 3)) return;
     const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
     const varSum = gaps.reduce((a, g) => a + (g - mean) ** 2, 0) / gaps.length;
     const cost = varSum / (mean * mean); // 相對方差：等距 = 0
     if (!best || cost < best.cost) best = { numbers: sel, cost, gaps };
-  } while (advance());
+  });
   return best;
 }
 
