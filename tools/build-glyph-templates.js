@@ -96,6 +96,25 @@ function discoverLiveSources() {
 
 const liveSources = discoverLiveSources();
 
+/**
+ * **負樣本**（`shots/negatives/*.png`）：其他畫面（支援卡列表、插畫…）→ 全部**唔准出數**。
+ *
+ * 為何要入埋呢個閘（2026-09-19，見 AGENTS 地雷 #30）：支援卡列表嘅 5 個 `Lv27` 徽章
+ * 啱啱好砌得出「5 個等距數字」→ 舊版靜默讀出 `27/27/25/25/25`（用戶真實數值 700+）。
+ * 呢種「假陽性」同「讀唔清」唔同：佢會**顯示一個錯嘅分**，所以一定要有閘守住。
+ * ⚠️ 負樣本**唔入訓練**（佢哋根本冇面板條），只係驗證「唔出數」。
+ */
+function discoverNegativeSources() {
+  const dir = join(ROOT, 'shots', 'negatives');
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.png'))
+    .sort()
+    .map((file) => ({ shot: `shots/negatives/${file}`, file, cropped: file.startsWith('roi-') }));
+}
+
+const negativeSources = discoverNegativeSources();
+
 if (sources.length === 0 && liveSources.length === 0) {
   console.error('揾唔到任何「ground truth + 截圖」配對，冇嘢可以做。');
   process.exit(1);
@@ -281,12 +300,42 @@ if (liveSources.length) {
   console.log(`\n完全命中 ${liveHits}/${liveTotal}（實機面板條）`);
 }
 
-if (hits !== total || liveHits !== liveTotal) {
+// ── 負樣本驗證（其他畫面**唔准出數**）──
+let negTotal = 0;
+let negOk = 0;
+const negFailures = [];
+if (negativeSources.length) {
+  console.log('\n=== 驗證（負樣本：其他畫面唔准出數）===');
+  for (const source of negativeSources) {
+    const img = decodePng(readFileSync(join(ROOT, source.shot)));
+    const read = readStatBar(
+      { data: img.data, width: img.width, height: img.height },
+      runtime,
+      { whole: source.cropped },
+    );
+    negTotal += 1;
+    const ok = read.stats === null;
+    if (ok) negOk += 1;
+    else {
+      negFailures.push(
+        `${source.shot}：**讀到 ${read.stats.join('/')}**（信心 ${read.confidence.toFixed(2)}）—— ` +
+        `呢幀係其他畫面，讀到數就係「靜默報錯數」`,
+      );
+    }
+    console.log(
+      `  ${source.file.padEnd(26)} ${read.stats ? `⛔ ${read.stats.join('/')}` : '✅ 唔出數'}`,
+    );
+  }
+  console.log(`\n唔出數 ${negOk}/${negTotal}（負樣本）`);
+}
+
+if (hits !== total || liveHits !== liveTotal || negOk !== negTotal) {
   const badShots = [...new Set(failures.map((f) => /(uma\d+-p\d+\.png)/.exec(f)?.[1]).filter(Boolean))];
   console.log('\n❌ 驗證唔通過，**唔會**寫入模板檔（防止垃圾模板污染正式資料）。');
   console.log('\n失敗明細：');
   for (const f of failures) console.log(`   - ${f}`);
   for (const f of liveFailures) console.log(`   - ${f}`);
+  for (const f of negFailures) console.log(`   - ${f}`);
   console.log(
     '\n可能原因：\n' +
       '   1. 嗰張截圖同 ground truth JSON **唔對應**（例如 JSON 換咗做新一輪培育嘅紀錄，\n' +

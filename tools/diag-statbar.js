@@ -16,6 +16,10 @@
  *   node tools/diag-statbar.js --read --trace       # 印切字／模板比對中間結果
  *   node tools/diag-statbar.js --read --mask=3,0.4  # 覆寫遮罩窗口半徑,淺色比例
  *   node tools/diag-statbar.js --read --cropped     # 模擬 renderer 先剪 ROI（執行時路徑）
+ *
+ * ⚠️ 呢個工具同時係**負樣本閘**（AGENTS 地雷 #30）：`shots/negatives/*.png` 入面每一幀
+ *    都係「其他畫面」（支援卡列表／插畫…）→ **全部唔准出數**。只要有一幀讀到數，
+ *    呢個工具就 exit 1（因為嗰個就係「靜默報錯數」）。冇指定檔案（＝跑預設清單）先會跑。
  */
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
@@ -193,3 +197,41 @@ for (const entry of list) {
   }
 }
 if (doRead && (expect || liveTruth)) console.log(`\n完全命中 ${pass}/${total}`);
+
+/**
+ * 負樣本閘（`shots/negatives/`）：每一幀都係**其他畫面**，全部唔准出數。
+ *
+ * 規則同 `shots/live/` 一致：`roi-` 開頭 = 已經剪好嘅 ROI（renderer 傳過嚟嘅幀）。
+ * 為何一定要（2026-09-19，見 AGENTS 地雷 #30）：支援卡列表嘅 5 個 `Lv27` 徽章
+ * 啱啱好砌得出「5 個等距數字」→ 舊版靜默讀出 `27/27/25/25/25`（真值 700+）。
+ * 呢個閘就係守住「唔可以喺其他畫面出數」。
+ */
+const NEG_DIR = join(ROOT, 'shots', 'negatives');
+let negBad = 0;
+if (doRead && files.length === 0 && existsSync(NEG_DIR)) {
+  const negs = readdirSync(NEG_DIR).filter((f) => f.endsWith('.png')).sort();
+  if (negs.length) {
+    console.log('\n=== 負樣本（其他畫面）—— 全部唔准出數 ===');
+    let negOk = 0;
+    for (const f of negs) {
+      const whole = f.startsWith('roi-');
+      const img = decodePng(readFileSync(join(NEG_DIR, f)));
+      const read = readStatBar({ data: img.data, width: img.width, height: img.height }, templates, {
+        minConfidence: 0, ...maskOverride, whole,
+      });
+      const ok = read.stats === null;
+      if (ok) negOk += 1;
+      else negBad += 1;
+      console.log(
+        `  ${f.padEnd(26)} ${read.stats ? `⛔ 讀到 ${read.stats.join('/')}（信心 ${read.confidence.toFixed(2)}）` : `✅ ${read.reason ?? '唔出數'}`}`,
+      );
+    }
+    console.log(`\n負樣本唔出數 ${negOk}/${negs.length}`);
+    if (negBad) {
+      console.error('⛔ 有負樣本讀到數 —— 即係會喺其他畫面靜默報錯數，唔可以接受。');
+    }
+  }
+}
+
+// 有真值（或負樣本）而對唔上 → exit 1，令呢個工具可以當**閘**用（AGENTS §8）。
+if (negBad > 0 || (doRead && liveTruth && total > 0 && pass < total)) process.exit(1);
