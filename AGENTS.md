@@ -63,9 +63,9 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 | Phase 0 | 技能資料庫（1323 招）＋ 進化技能 override | ✅ |
 | Phase 1 | 畫面擷取（`npm start` 跑得通）| ✅ |
 | Phase 1 | **五維數字辨識（零校準）** | ✅ 兩條路都通：**畫面 A 面板條**（`statbar.js`）**13/13 全中**（1356→2560 五個解析度 ＋ 4 個實機失敗／金色格回歸 ＋ 4 個實機狀態樣本）＋ **負樣本 3/3 唔出數**（其他畫面唔准出數，見地雷 #30）；ステータス面板排法 **30/30**。✅ 已實機跑過（`npm start`，1920 窗），修好間歇性「讀唔清」（地雷 #25）同**金色格靜默讀錯**（地雷 #26）|
-| Phase 1 | HUD overlay ＋ 設定面板 | ✅ **可用**（透明置頂穿透；顯示評價点 + 五維逐格 + 技能分 `？／總分 ≥ X` ＋ 金色格提示）。**已做**：`hud-position.json` 存檔（env > 檔案 > 預設）、獨立**設定窗**（8 個數值 slider ＋ 7 個顯示選項，改動即時生效）、**對位模式（`UMAPYOI_HUD_EDIT=1`）可以直接拖 HUD**（放手即反推 + 存檔）＋ 設定窗跟住更新（唔會「拖完撳儲存就彈返」）。✅ **2026-09-19 用戶實機驗過（原話：「而家 hud 冇問題」）**。⏸️ **唔做**：跟住遊戲視窗移動（**用戶 2026-09-19 決定** —— 可以用拖位擺去自己想擺嘅位，跟窗冇必要；見 §9 ①）。對位模式期間切換仍然要重開程式 |
+| Phase 1 | HUD overlay ＋ 設定面板 | ✅ **可用**（透明置頂穿透；顯示評價点 + 五維逐格 + 技能分 `？／總分 ≥ X` ＋ 金色格提示 ＋ **ランク目標（仲差幾多分升級，C5）**）。**已做**：`hud-position.json` 存檔（env > 檔案 > 預設）、獨立**設定窗**（8 個數值 slider ＋ **8 個顯示選項**，改動即時生效）、**對位模式（`UMAPYOI_HUD_EDIT=1`）可以直接拖 HUD**（放手即反推 + 存檔）＋ 設定窗跟住更新（唔會「拖完撳儲存就彈返」）。✅ **2026-09-19 用戶實機驗過（原話：「而家 hud 冇問題」）**。⏸️ **唔做**：跟住遊戲視窗移動（**用戶 2026-09-19 決定** —— 可以用拖位擺去自己想擺嘅位，跟窗冇必要；見 §9 ①）。對位模式期間切換仍然要重開程式（⚠️ C5 加咗第 8 個顯示選項之後**未再實機睇過 HUD**）|
 | Phase 2 | 技能 icon 識別（自動知學咗邊啲技能）| ⏸️ **暫停（用戶 2026-09-19 指示：暫時唔處理技能呢一 part）** —— 已經做好嘅部分見下面，隨時可以接返。原狀態：🚧 **兩步做好**：① 技能畫面欄／行偵測器（`skillscreen.js`，8 張實機圖全部搵到 7 行）；② **名稱框抽取**（112 個全部抽到）＋ **影像比對可行性已量化**（互相最佳配對中位數 **0.986**、撞分上限 **0.604** —— 見 `docs/skill-screen.md` §5）。⏳ 未做：接上**候選名單**（見 §9）|
-| Phase 3 | what-if 模擬（加一招加幾多分／Pt）、成長曲線 | 未開始 |
+| Phase 3 | what-if 模擬（加一招加幾多分／Pt）、成長曲線 | 🚧 **C1 已做（核心＋窗；未實機驗）**：`src/umascore/whatif.js`（純函數）＋ `tools/whatif.js` CLI ＋ **獨立 what-if 窗**（`electron/whatif.html`，`UMAPYOI_NO_WHATIF=1` 唔開）＋ `src/umascore/aptitude.js`（適性規則**單一來源**）。⏳ 未做：成長曲線（C3）|
 | Phase 4 | 事件選項助手（已 mark，見 `docs/vision-design.md` §5.5）| 暫緩 |
 
 > **影像辨識里程碑（2026-09）**：由實機截圖直接讀出五維，
@@ -125,12 +125,12 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（202 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
-node tools/check-renderer-syntax.js  # ⭐ renderer inline script 語法閘（三個 HTML ＋ main.js；見 §8 4b）
+npm.cmd test              # 單元測試（243 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+node tools/check-renderer-syntax.js  # ⭐ renderer inline script 語法閘（四個 HTML ＋ main.js；見 §8 4b）
 
 # HUD 相關開關（環境變數）
-#   ⚠️ 三個旗標（UMAPYOI_NO_HUD／UMAPYOI_NO_SETTINGS／UMAPYOI_HUD_EDIT）嘅**確切**語意
-#      （唯一讀法 = `src/hud/env-flag.js` 嘅 `envFlag()`，唔准用 truthiness）：
+#   ⚠️ **四個**旗標（UMAPYOI_NO_HUD／UMAPYOI_NO_SETTINGS／UMAPYOI_NO_WHATIF／UMAPYOI_HUD_EDIT）
+#      嘅**確切**語意（唯一讀法 = `src/hud/env-flag.js` 嘅 `envFlag()`，唔准用 truthiness）：
 #        開  ＝ 只有 "1" 或者 "true"（**大小寫唔敏感**，"TRUE"/"True"/"TrUe" 都算；前後空白忽略）
 #        閂  ＝ "0"／"false"／空字串／**冇 set**
 #        ⚠️ 其他值（"yes"／"on"／"2"／"tru"／"-1"…）＝ **當冇開，而且會 log 警告**
@@ -140,6 +140,7 @@ node tools/check-renderer-syntax.js  # ⭐ renderer inline script 語法閘（�
 #           同文件寫嘅「=1」對唔上（已修，見 §9.1）
 #   UMAPYOI_NO_HUD=1            唔開 HUD（⭐ 連設定窗都唔開；淨係要 console log 嗰陣用）
 #   UMAPYOI_NO_SETTINGS=1       唔開設定窗（HUD 照開）—— 做防擷取測試時想畫面乾淨就用
+#   UMAPYOI_NO_WHATIF=1         唔開 what-if 模擬窗（C1；HUD／設定窗照開）
 #   UMAPYOI_HUD_EDIT=1          ⭐ 對位模式：HUD 顯示自己嘅範圍／偏移，而且可以直接拖（放手即存檔）
 #                               ⚠️ 對位模式下 HUD **全程**食滑鼠事件（唔止拖緊嗰陣）—— 見 §6.4
 #
@@ -180,6 +181,14 @@ node tools/check-renderer-syntax.js  # ⭐ renderer inline script 語法閘（�
 #   ⚠️ `hud-position.json` 唔入 git（runtime 用戶狀態，人人唔同）
 
 node src/cli.js 600 600 600 600 600        # 手動試算 → 5715 / C+
+
+# ── Phase 3：C1 what-if（加一招會加幾多分／要幾多 Pt）──
+node tools/whatif.js --stats=1200,600,600,600,600 --skill=弧線的教授
+                                           # ⭐ 唔開 Electron 都試算得到（同 what-if 窗共用
+                                           #    `src/umascore/whatif.js`，唔可能算出唔同答案）
+node tools/whatif.js --stats=... --skill=弧線的教授 --grades=距離:S   # 指定適性（冇寫嘅類別一律假設 A 並講明）
+node tools/whatif.js --stats=... --skill=直線 --all                  # 列晒所有命中（最多 200）
+node tools/whatif.js --stats=... --skill=弧線的教授 --json           # 餵落其他工具用
 
 # ── Phase 0（計分核心）──
 node tools/fetch-skill-db.js               # 由 bwiki 拎技能庫（有 cache）
@@ -236,7 +245,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **202 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **243 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 4/4　完全命中 4/4　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 13/13**、**負樣本 3/3 唔出數**），全部都要中
@@ -261,6 +270,14 @@ src/umascore/
   skills.js       # 技能評價點（適性倍率、固有、繼承固有）
   profiles.js     # 版本 profile（tw / cn / jp，現時三個共用同一張表）
   evaluate.js     # evaluate()：唯一需要 100% 準確嘅核心，純函數零 I/O
+  aptitude.js     # ⭐ 適性倍率規則**唯一一份實作**（同類取最大、跨類別相乘、草地／沙地唔乘）：
+                  #    MULTIPLIER_GROUPS／GRADE_MULTIPLIER／aptitudeKeyOf()／aptitudesFor()／
+                  #    groupHits()／multiplierForGrades()。`tools/fill-ground-truth.js` 同
+                  #    what-if 都係用呢份（獨立審計 H1 去重；地雷 #6 由「只守一半」變單一來源）
+  whatif.js       # ⭐ C1 what-if（純函數零 I/O）：searchSkills()／skillSearchItems()／
+                  #    aptitudeMapFor()／skillPointsFor()／parseStatInput()／
+                  #    whatIfAddSkill()（加一招 → Δ分／Pt／ランク變化；`after` 照樣經 evaluate() 計，
+                  #    令「Δ ＝ 該招自己嘅分」變成一個測得到嘅不變式）
   calibrate.js    # 對答案邏輯
   index.js        # re-export
 
@@ -295,14 +312,14 @@ src/hud/
                   #    round6()（6 位小數收斂；config.js 推導 size／x[1] 都用佢，避免寫浮點噪音入用戶個檔）
   config.js       # ⭐ HUD 設定存檔層（`hud-position.json`）：DEFAULT_HUD_CONFIG／
                   #    validateConfig()／loadConfig()／saveConfig()／resolveHudConfig()（env > 檔案 > 預設）／
-                  #    assertFullDisplay()（7 個 display key 齊全嘅閘，applyHudConfig 用）
+                  #    assertFullDisplay()（8 個 display key 齊全嘅閘，applyHudConfig 用）
                   #    ⚠️ 語意（2026-09-19）：**size 為準**，x[1] = x[0] + size.w 由推導得出；
                   #       寫死嘅 x[1] 同推導值唔一致 → 警告（onWarn，唔 throw）；
                   #       只有「推導出嚟嘅範圍唔合法」才 throw（見 §2／§6.4）
   config-path.js  # ⭐ 設定檔擺邊（純函數）：開發 = 專案根；打包／asar = app.getPath('userData')
   env-flag.js     # ⭐ 環境變數開關旗標嘅**唯一**讀法（`envFlag()`，純函數可 node --test）：
                   #    只有 "1"／"true"（大小寫唔敏感）＝ 開；0／false／空字串／冇 set ＝ 閂；
-                  #    其他值 ＝ 閂 ＋ 警告（`onWarn` 可收集）。main.js 三個旗標都用佢
+                  #    其他值 ＝ 閂 ＋ 警告（`onWarn` 可收集）。main.js 四個旗標都用佢
 
 electron/
   main.js         # 主程序：視窗列舉 → statbar.readStatBar()（cropped）／reader.readStats()
@@ -310,10 +327,14 @@ electron/
                   #    另有：HUD 設定窗管理、滑鼠穿透 funnel（setHudInteractive）、拖位 IPC
   capture.html    # 擷取 renderer：getUserMedia → **1:1 剪面板 ROI**（冇 ROI 就退回 640px 縮圖）
   hud.html        # HUD overlay renderer：透明無邊框，只畫主程序推落嚟嘅 view（＋對位模式拖位）
-  settings.html   # ⭐ HUD 設定窗（**普通視窗**，classic script）：8 個數值 slider ＋ 7 個顯示選項
+  settings.html   # ⭐ HUD 設定窗（**普通視窗**，classic script）：8 個數值 slider ＋ 8 個顯示選項
                   #    ⚠️ 標題唔准含遊戲關鍵字（會蓋過 BrowserWindow 嘅 title，見地雷 #27）
                   #    ⚠️ slider 上下限由純函數 fieldBounds() 動態計（冇死區）＋
                   #       用戶互動中唔搶佢手上嗰個控制 ＋ 顯示 HUD 實際螢幕像素範圍（地雷 #28）
+  whatif.html     # ⭐ C1 what-if 模擬窗（**普通視窗**，classic script）：實機五維（可改＝手動輸入）
+                  #    ＋ 技能搜尋 ＋ 適性下拉 ＋ 即時試算。⚠️ 標題一樣唔准含遊戲關鍵字；
+                  #    ⚠️ 窗**唔准**自己計分（只 send／聽，算式一律喺 `src/umascore/whatif.js`）
+                  #    ⚠️ 開／閂由 `UMAPYOI_NO_WHATIF` 喺啟動時決定（同設定窗一樣）
 
 test/
   capture-source.test.js # ⭐ 擷取來源挑選（**排除本程式自己嘅窗**、標題三級相符、
@@ -322,7 +343,7 @@ test/
                       #    一定要通知設定窗（`remote: true`）＋ 設定窗收到一定要寫返落表單
                       #    —— 防止「拖完再撳儲存就彈返舊位」靜默復發（見地雷 #29；兩個檔都入唔到 node --test）
   hud.test.js         # HUD 幾何／狀態（anchorHud／contentRect／hudState 基本行為）
-  hud-display.test.js # ⭐ 顯示選項（7 個 boolean）＋ 金色格嘅**真實粒度**（整體 boolean）
+  hud-display.test.js # ⭐ 顯示選項（8 個 boolean，含 rankTarget）＋ 金色格嘅**真實粒度**（整體 boolean）
   hud-clamp.test.js   # ⭐ clampLayout()（slider 拉爆／拖位反推共用嘅夾法）
   hud-drag.test.js    # ⭐ 拖完反推：round-trip（±1px）、唔改 size、30 次唔漂；
                       #    ⭐ 位置寫入 x0／y0 ＋ offset 歸零；⭐ 拖出界一律夾返入內容區；
@@ -347,12 +368,21 @@ test/
                       #    「大細下限／x1 起碼值／dx dy 嘅 ±1」（地雷 #28）
   hud-env-flag.test.js # ⭐ `envFlag()` 21 個值嘅行為（1／true 系 7 個開、7 個閂、7 個唔認識要警告）
                       #    ＋ 預設 env＝process.env、預設 onWarn＝console.warn
+  whatif.test.js      # ⭐ C1 what-if 核心（23 條）：適性同類取最大／跨類別相乘／場地唔乘、
+                      #    「Δ 一定等於該招自己嘅分」不變式、進化技能負分、skillPt=0 唔准當冇資料、
+                      #    標點無關搜尋、IPC 契約（skillSearchItems 嘅 key／parseStatInput 範圍）
+  whatif-window.test.js # ⭐ C1 **接線閘**（main.js ↔ whatif.html 兩個檔都入唔到 node --test）：
+                      #    renderer 送嘅 channel 一定要有 main handler（反之亦然）、標題唔准含遊戲
+                      #    關鍵字（地雷 #27）＋ main/HTML 標題要一致、五維標籤同 HUD 一致、
+                      #    窗唔准自己計分、loadFile 路徑 ＋ setContentProtection ＋ ready-to-show
 
 tools/
   fetch-skill-db.js      # bwiki 技能庫抓取
   fill-ground-truth.js   # 技能名 → base／條件／適性；override 機制
   fit-score.js           # 對答案報表
   breakdown.js           # 逐招明細表
+  whatif.js              # ⭐ C1 what-if CLI（加一招幾多分／Pt／升唔升級）—— 同 what-if 窗共用
+                         #    `src/umascore/whatif.js`，所以 CLI 同窗一定同一個答案（headless 可驗）
   read-stats.js          # ⭐ 截圖 → 五維（可 --gt 對答案、--trace 睇字元分數）
   build-glyph-templates.js  # ⭐ 建字形模板（面板截圖 ＋ 實機面板條；驗證唔過就唔寫檔）
   tune-detect.js         # 參數掃描（用 ground truth 做客觀評分；--hue = 色相窗口單軸掃描）
@@ -375,7 +405,7 @@ tools/
   raw-to-png.js          # dump 幀（.raw ＋ .json）轉 PNG，畀上面兩個工具讀
   diag-shots.js          # 列出所有截圖尺寸
   check-renderer-syntax.js # ⭐ renderer inline script 嘅**語法閘**（抽出 `<script>` 再 `node --check`）——
-                         #    三個 HTML 入唔到 `node --test`（classic script ＋ DOM），打錯一個字
+                         #    四個 HTML 入唔到 `node --test`（classic script ＋ DOM），打錯一個字
                          #    就係「HUD 靜默唔郁」而冇錯誤訊息 → 呢個係最低成本嘅防線（見 §8 4b）
 
 data/
@@ -621,7 +651,7 @@ UMAPYOI_NO_HUD=1 npm.cmd start       # ⭐ 兩個窗都唔開（淨係要 consol
 - 一個**普通視窗**（`frame:true`／`resizable:true`／`focusable:true`／唔透明）——
   ⚠️ **唔可以塞入 HUD 裏面**：HUD 一開滑鼠事件就會擋住用戶點遊戲（本專案底線）。
 - 8 個數值（`x0`／`x1`／`y0`／`y1`／`dx`／`dy`／`w`／`h`）：slider ＋ 輸入框雙向；
-  7 個顯示選項 checkbox（`total`／`stats`／`statScore`／`skillScore`／`goldMark`／`note`／`edit`）。
+  8 個顯示選項 checkbox（`total`／`stats`／`statScore`／`skillScore`／`rankTarget`／`goldMark`／`note`／`edit`）。
 - 改任何值 → **即時**經 IPC 推落 HUD（未存檔）；「儲存」→ 寫 `hud-position.json`；
   「還原預設」→ 即時套用純出廠預設（**刻意唔寫檔**，要寫就再按「儲存」）。
 - ⚠️ **閂咗設定窗就要重開程式先開得返**（冇選單／快捷鍵，因為 `focusable:false` 嗰種限制
@@ -792,7 +822,34 @@ focus，**Ctrl+R 就踩得到**）就唔會再收到 view → 只要狀態唔變
 → 只要遊戲位置／大細唔變，重開之後一模一樣；但**換咗遊戲大細**（或者將遊戲搬去第二個位／
 第二個螢幕）就會按比例移位，嗰陣用對位模式再拖一次（或者設定窗撳「還原預設」）就係。
 
-### 6.5 技能畫面（畫面 B，Phase 2）
+### 6.6 what-if 模擬（C1；2026-09-19 新增）
+
+```
+src/umascore/whatif.js   純函數（零 I/O、零 Electron）：searchSkills()（標點無關搜尋）／
+                         skillSearchItems()（IPC 條目）／aptitudeMapFor()／skillPointsFor()／
+                         parseStatInput()（窗傳上嚟嘅五維當**唔可信輸入**）／
+                         whatIfAddSkill()（加一招 → Δ分／Pt／rankUp／gapAfter）
+src/umascore/aptitude.js 適性規則**唯一一份**（見 §3；同類取最大、跨類別相乘、場地唔乘）
+tools/whatif.js          CLI（headless 可驗；同窗共用上面嘅核心）
+electron/whatif.html     窗（普通窗，唔碰 HUD 穿透）＋ `main.js` 三個 IPC：
+                         whatif-get（實機五維＋技能庫狀態）／whatif-search（query → 20 條）／
+                         whatif-eval（{key, stats, grades} → 試算結果）
+```
+
+- **唔使等 Phase 2**：窗同 CLI 都係用「**而家五維**（讀得到就用實機，讀唔到就自己入數）＋
+  你自己揀嘅一招」去試算 —— 因為加一招嘅 Δ **就係嗰招自己嘅分**（技能之間冇互動）。
+  ⚠️ 代價：五維係下限（技能分未讀到），所以顯示嘅「評價点」係 `≥` 而唔係實際總分。
+- **Pt 係技能庫嘅 `skillPt`**（唔使讀畫面 C）：`0` 係劇本進化技能嘅**真值**，
+  缺席（`null`）才係「唔知」—— 兩者唔可以混淆（有測試守住）。
+- ⚠️ **窗唔准自己計分**：`whatif.html` 只可以 `send`／聽；算式一律喺 `src/umascore/whatif.js`
+  （單一來源，所以 CLI／窗／將來嘅工具一定同一個答案）。呢條有接線閘
+  `test/whatif-window.test.js`（channel 對稱、標題唔含遊戲關鍵字、窗冇 `GRADE_MULTIPLIER` 之類）。
+- ⚠️ 沙盒／頭盔環境注意（2026-09-19 實測）：本專案嘅 agent 沙盒會向**子程序**注入
+  `ELECTRON_RUN_AS_NODE=1` → `npm start` 會用**純 Node** 跑 `main.js`
+  （症狀：`does not provide an export named 'BrowserWindow'`）。呢個**唔係**本專案嘅 bug
+  —— 要睇真窗就要用戶自己喺正常 shell 跑 `npm.cmd start`。
+
+
 
 ```
 src/vision/skillscreen.js
@@ -878,7 +935,7 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
      ＋ `node tools/replay-dumps.js` → **退步 0**（有 `shots/live-debug/` 幀嘅話）
 4b. **如果改咗 `electron/*.html`（renderer inline script）或者 `electron/main.js`**：
    `node tools/check-renderer-syntax.js` → 全部 `✓`。
-   ⚠️ 為何要（唔係多餘）：三個 HTML 係 classic script（`require('electron')` ＋ DOM）
+   ⚠️ 為何要（唔係多餘）：四個 HTML 係 classic script（`require('electron')` ＋ DOM）
    → **入唔到 `node --test`**，打錯一個字（少個括號、`await` 喺非 async）嘅後果係
    **renderer 一開頭 throw → 之後所有 IPC listener 都註冊唔到 → HUD／設定窗靜默唔郁**。
    呢個閘只驗語法（唔執行、唔需要 DOM／Electron），邏輯錯要靠 `test/*.test.js` 嗰類
@@ -996,11 +1053,11 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 
 | # | 項目 | 內容 | 大細 |
 |---|---|---|---|
-| C1 | **what-if 模擬**（Phase 3 主菜） | 「加呢招會加幾多分／要幾多 Pt」—— 揀技能即時試算 | 中大 |
-| C2 | **Pt／技能點畫面（畫面 C）** | 讀點技能畫面嘅 Pt 價格同「已獲得」 | 中 |
+| C1 | **what-if 模擬**（Phase 3 主菜）| ✅ **已做（2026-09-19；未實機驗）** | 「加呢招會加幾多分／要幾多 Pt」—— 技能名搜尋（標點無關）＋ 每類適性下拉 ＋ 即時試算。<br>　 ① 核心：`src/umascore/whatif.js`（`searchSkills()`／`whatIfAddSkill()`，純函數）＋ `src/umascore/aptitude.js`（適性規則**單一來源**，順手去重獨立審計 H1）；<br>　 ② CLI（headless 可驗）：`node tools/whatif.js --stats=1200,600,600,600,600 --skill=弧線的教授` → `+508 分 / 360 Pt / 8413 B+ → 8921 B+`（`--grades=距離:S` 可以改適性、`--json`、`--all`）；<br>　 ③ 窗：`electron/whatif.html`（普通窗；五維預設每 2 秒跟實機，一改就變手動輸入；`UMAPYOI_NO_WHATIF=1` 唔開）；<br>　 ④ 測試 36 條（`test/whatif.test.js` 29 ＋ `test/whatif-window.test.js` 7 接線閘）。<br>　 ⏳ 未做：實機驗（要開遊戲睇窗）；技能分仍然讀唔到 → what-if 只可以逐招加，唔可以累加「已學晒嘅技能」 | 中大 |
+| C2 | **Pt／技能點畫面（畫面 C）** | 讀點技能畫面嘅 Pt 價格同「已獲得」（⚠️ 技能庫已經有 `skillPt`，所以 C1 出得到 Pt；C2 係「由畫面自動認得」） | 中 |
 | C3 | **成長曲線** | 記錄每次五維變化 → 畫圖（HUD 歷史） | 中 |
 | C4 | **訓練建議** | 邊個訓練加最多分（用 fans／屬性成長率） | 大 |
-| C5 | **ランク目標** | 「仲差幾多分到 UG」 | 細 |
+| C5 | **ランク目標** | ✅ **已做（2026-09-19，`1309c78`）** | 「仲差幾多分到 UG」—— HUD summary 出「升級 UG3 差 66」（`evaluate()` 本身已經有 `nextRank`，只係一直冇人用）。新增顯示選項 `rankTarget`（8 個之一，預設開）；⚠️ 舊 `hud-position.json`（7 個 key）照讀得入（`validateDisplay()` 補預設，有回歸測試）。⚠️ 未實機睇過 HUD | 細 |
 | C6 | **多語介面** | 繁中／日文／英文（技能庫已有簡體名欄位） | 中 |
 | C7 | **事件選項助手**（Phase 4，已 mark 暫緩） | 認事件 → 建議揀邊個選項（見 `docs/vision-design.md` §5.5） | 大 |
 
@@ -1019,4 +1076,6 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 1. **B2** 驗 HUD 防擷取（安全關鍵、最快）
 2. **A1 ＋ A2 ＋ A4** HUD 拖位／設定面板／存檔（用戶明講想要；一半唔使開遊戲）
 3. **B1** HUD 跟遊戲視窗（同 A1 一套做最順）
-4. **C1** what-if 模擬（Phase 3 主菜）
+4. ~~C1 what-if 模擬（Phase 3 主菜）~~ ✅ **2026-09-19 已做**（核心＋CLI＋窗；見 §6.6）。
+   ⏳ **下一步**：實機開 `npm.cmd start` 睇 what-if 窗（沙盒注入 `ELECTRON_RUN_AS_NODE=1` → agent 呢邊開唔到真 Electron）。
+5. **C3** 成長曲線／**C6** 多語介面（C2 已經有替代：技能庫嘅 `skillPt` 就係 Pt 價格）
