@@ -38,7 +38,10 @@
       let frameMs = 1000 / targetFps;
 
       // 遊戲內容區比例（賽馬娘桌面版冇固定解析度，只有固定 16:9）。
-      const CONTENT_ASPECT = 9 / 16;
+      // ⚠️ 呢個係**後備**值：真正來源係主程序（`src/vision/statbar.js` 嘅
+      //    `DEFAULT_STATBAR_OPTIONS.aspect`，經 IPC `roi.aspect` 傳落嚟）——
+      //    以前主程序傳咗 `aspect` 但呢邊冇讀，兩邊各自寫死一個比例（審計 H3）。
+      let contentAspect = 9 / 16;
 
       // ⚠️ 2026-09-18：唔可以再把**整個視窗**縮到 640px 先傳！
       //    UI 係等比縮放 → 面板數字得 0.0098×圖闊 咁高，縮到 640px 之後得 ~6px，
@@ -63,6 +66,11 @@
 
       ipcRenderer.on('roi', (_event, rect) => {
         roi = rect;
+        // ⭐ 內容區比例由主程序嚟（唯一來源）——呢邊唔准再寫死一組（審計 H3）。
+        // ⚠️ 欄位係**選填**（舊格式／未收到就冇）→ 保留後備值，行為同以前一樣
+        //    （要向後兼容「新 renderer ＋ 舊 main」同「舊 renderer ＋ 新 main」）。
+        const aspect = Number(rect?.aspect);
+        if (Number.isFinite(aspect) && aspect > 0) contentAspect = aspect;
       });
 
       // 主程序可以調幀率（技能連拍模式用 1fps）。
@@ -130,7 +138,7 @@
         }
 
         // 內容框：如果擷取到嘅高度大過 16:9（例如連埋標題列），多出嘅部分喺頂
-        const contentH = Math.min(vh, Math.round(vw * CONTENT_ASPECT));
+        const contentH = Math.min(vh, Math.round(vw * contentAspect));
         const contentTop = Math.max(0, vh - contentH);
 
         // 有 ROI → 1:1 剪出嚟；冇 → 退回舊行為（縮圖全畫面）
