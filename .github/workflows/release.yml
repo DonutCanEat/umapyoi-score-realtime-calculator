@@ -1,0 +1,62 @@
+# ⭐ 發佈流程：推 `v*` tag → 自動打包 portable exe → 掛上 GitHub Release
+#
+# 為何要：exe 唔可以入 git（95.7 MB 二進位，每次改動都出新檔），所以一律做 Release 資產。
+# 用戶要求「每次改動都要 commit」＋「exe 擺 Release」→ tag 一推就自動做好呢兩件事。
+#
+# ⚠️ 有測試閘：`npm test` 唔過就唔會發佈（唔會出一個壞嘅 exe 畀人下載）。
+# ⚠️ 手動做法（唔想用 Actions）：見 docs/github.md §3 做法甲。
+# ⚠️ 版號一定要同 tag 對得上（tag `v0.1.1` ↔ package.json `0.1.1`），唔係嘅話 artifact 名會唔一致。
+
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # 要 write 先上傳得到 release 資產
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # ⚠️ 一定要 npm ci（唔係 npm install）：要完全照 package-lock.json 裝，
+      #    否則打包出嚟嘅 exe 同本地驗收過嘅唔係同一份依賴。
+      - name: 安裝依賴
+        run: npm ci
+
+      # ⭐ 測試閘：唔過就唔會發佈
+      - name: 跑單元測試（346 條）
+        run: npm test
+
+      # ⭐ 語法閘：4 個 renderer HTML ＋ electron/main.js ＋ src/** ＋ tools/**
+      #    （renderer 入唔到 node --test，打錯字會令窗靜默唔郁）
+      - name: 語法閘
+        run: node tools/check-renderer-syntax.js
+
+      - name: 對答案（計分核心必須誤差 0）
+        run: node tools/fit-score.js
+
+      - name: 打包 portable exe
+        run: npm run pack:win
+
+      - name: 列出產物（方便核對檔名同大細）
+        shell: pwsh
+        run: Get-ChildItem dist/*.exe | Select-Object Name, @{n='MB';e={[math]::Round($_.Length/1MB,1)}}
+
+      - name: 上傳做 Release 資產
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
+          generate_release_notes: true
+          draft: false
