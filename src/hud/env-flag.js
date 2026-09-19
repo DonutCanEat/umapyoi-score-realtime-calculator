@@ -55,3 +55,62 @@ export function envFlag(name, env = process.env, onWarn = console.warn) {
   );
   return false;
 }
+
+/**
+ * 環境變數有冇「真係 set 咗」。
+ *
+ * 語意（**唯一**一份）：`undefined`／`null`／空字串／純空白 = **冇 set**。
+ *
+ * 為何要抽（獨立審計 M1）：同一個判斷以前散落兩處 —— `electron/main.js`
+ * （砌 `hudEnvOverridden` 去提醒用戶「env 會蓋過你存嘅值」）同
+ * `src/hud/config.js` 嘅 `set()`（合併 env > 檔案 > 預設）—— 兩處一旦走樣，
+ * 就會出現「明明冇 set 但當 set 咗」（或者掉轉）嘅靜默行為。
+ *
+ * ⚠️ 空字串＝「用戶 set 咗但冇值」→ 當**冇 set**（同 `envFlag()` 一致：
+ *    空字串係「明確閂」，但對「有冇 set」嚟講唔算寫咗嘢）。
+ *
+ * @param {string} name 環境變數名
+ * @param {Record<string,string|undefined|null>} [env] 預設 `process.env`
+ * @returns {boolean}
+ */
+export function envIsSet(name, env = process.env) {
+  const raw = env?.[name];
+  if (raw === undefined || raw === null) return false;
+  return String(raw).trim() !== '';
+}
+
+/**
+ * 讀一個環境變數**數字**（`UMAPYOI_DUMP_FRAMES`／`UMAPYOI_SKILL_MAX`／
+ * `UMAPYOI_CAPTURE_FPS` 呢類旋鈕）。
+ *
+ * 語意（同 `envFlag()` 一樣「唔准靜默」）：
+ *   - **冇 set** → 回 `fallback`（**唔警告**，因為冇 set 係正常狀態）
+ *   - 合法數字 → 回嗰個數
+ *   - 唔係有限數字（`abc`／`1,5`／`Infinity`）→ **大聲警告** ＋ 回 `fallback`
+ *   - `positive: true` 而個數 ≤ 0 → **大聲警告** ＋ 回 `fallback`
+ *     （⚠️ 呢個係刻意：`UMAPYOI_SKILL_MAX=0` 以前會被 `|| 400` 靜默當 400，
+ *      而 `UMAPYOI_CAPTURE_FPS=0` 會被 `|| 1` 靜默當 1 —— 一樣係「靜默改咗用戶寫嘅嘢」）
+ *
+ * ⚠️ **唔 throw**：呢啲係除錯／收圖模式嘅旋鈕（dump 幾多幀、存幾多頁、幾 fps），
+ *    讀錯唔會令評價分出錯 —— 但仍要嘈一句，唔准靜默當 0。
+ *
+ * @param {string} name
+ * @param {{env?:Record<string,string|undefined|null>, fallback?:number,
+ *          positive?:boolean, onWarn?:(message:string)=>void}} [options]
+ * @returns {number}
+ */
+export function envNumber(name, { env = process.env, fallback = 0, positive = false, onWarn = console.warn } = {}) {
+  if (!envIsSet(name, env)) return fallback;
+  const raw = env?.[name];
+  const warn = typeof onWarn === 'function' ? onWarn : console.warn;
+  const value = Number(String(raw).trim());
+  if (!Number.isFinite(value)) {
+    warn(`[旗標] ⚠️ ${name}＝「${raw}」唔係數字 → 用預設 ${fallback}。`);
+    return fallback;
+  }
+  if (positive && value <= 0) {
+    warn(`[旗標] ⚠️ ${name}＝「${raw}」唔係正數 → 用預設 ${fallback}。`);
+    return fallback;
+  }
+  return value;
+}

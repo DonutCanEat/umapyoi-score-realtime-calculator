@@ -31,7 +31,7 @@ import { trainingAdvice } from '../src/umascore/advice.js';
 import { anchorHud, contentRect, hudState, clampLayout, layoutFromBounds, relativeFromBounds, HUD_ENV_KEYS } from '../src/hud/layout.js';
 import { loadConfig, saveConfig, resolveHudConfig, validateConfig, assertFullDisplay } from '../src/hud/config.js';
 import { configPathFor } from '../src/hud/config-path.js';
-import { envFlag } from '../src/hud/env-flag.js';
+import { envFlag, envIsSet, envNumber } from '../src/hud/env-flag.js';
 import { MAX_HISTORY, pushSample } from '../src/hud/history.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -309,10 +309,9 @@ function loadHudConfig() {
   });
   hudConfigPath = path;
   hudConfigWhy = why;
-  hudEnvOverridden = Object.values(HUD_ENV_KEYS).filter((name) => {
-    const raw = process.env[name];
-    return raw !== undefined && raw !== null && String(raw) !== '';
-  });
+  // ⚠️ 「有冇 set」嘅判斷只有一個實作（`envIsSet()`）——同 `config.js` 合併 env 時
+  //    用嘅係同一個函數（審計 M1：以前兩處各寫一次，走樣就會靜默講錯嘢）。
+  hudEnvOverridden = Object.values(HUD_ENV_KEYS).filter((name) => envIsSet(name));
 
   let fileConfig = null;
   hudConfigLoadError = null;
@@ -951,7 +950,7 @@ let okDumps = 0;
  * 開呢個模式 dump 幾幀，用 `node tools/raw-to-png.js shots/live-debug` 轉 PNG，
  * 睇下有冇 HUD 嘅字入咗畫面就知。
  */
-const DUMP_EVERY = Number(process.env.UMAPYOI_DUMP_FRAMES || 0) || 0;
+const DUMP_EVERY = envNumber('UMAPYOI_DUMP_FRAMES', { fallback: 0, positive: true });
 let everyCount = 0;
 
 /**
@@ -970,7 +969,7 @@ let everyCount = 0;
  */
 const SKILL_DUMP = Boolean(process.env.UMAPYOI_SKILL_DUMP);
 const SKILL_DIR = join(ROOT, 'shots', 'skill-dump');
-const SKILL_MAX = Number(process.env.UMAPYOI_SKILL_MAX || 400) || 400;
+const SKILL_MAX = envNumber('UMAPYOI_SKILL_MAX', { fallback: 400, positive: true });
 
 /**
  * ⭐ 連拍模式預設只剪「技能清單」嗰橛（內容區比例）。
@@ -1269,7 +1268,7 @@ app.whenReady().then(async () => {
       });
     win.webContents.send('start', hit.id);
     if (SKILL_DUMP) {
-      win.webContents.send('fps', Number(process.env.UMAPYOI_CAPTURE_FPS || 1) || 1);
+      win.webContents.send('fps', envNumber('UMAPYOI_CAPTURE_FPS', { fallback: 1, positive: true }));
       if (SKILL_CROP) win.webContents.send('crop', SKILL_CROP);
       console.log('');
       console.log('📸 技能連拍模式（UMAPYOI_SKILL_DUMP=1）');

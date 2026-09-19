@@ -57,6 +57,8 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import { envIsSet } from './env-flag.js';
+
 import {
   DEFAULT_HUD_LAYOUT,
   DEFAULT_HUD_OFFSET,
@@ -671,10 +673,9 @@ export function resolveHudConfig(env = {}, fileConfig = null, { onWarn } = {}) {
   const file = fileConfig == null ? null : validateConfig(fileConfig, { onWarn });
   const fromEnv = layoutFromEnv(e);
 
-  const set = (name) => {
-    const raw = e[name];
-    return raw !== undefined && raw !== null && String(raw) !== '';
-  };
+  // ⚠️ 「有冇 set」嘅判斷用 `envIsSet()`（同 `electron/main.js` 砌 `hudEnvOverridden`
+  //    嗰句共用同一個實作，見審計 M1）——以前兩處各寫一次，走樣就會靜默講錯嘢。
+  const set = (name) => envIsSet(name, e);
   const envX = set(HUD_ENV_KEYS.x);
   const envY = set(HUD_ENV_KEYS.y);
   const envW = set(HUD_ENV_KEYS.w);
