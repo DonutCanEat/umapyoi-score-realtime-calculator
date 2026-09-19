@@ -1,10 +1,12 @@
 # Electron 去重审计报告
 
-> 版本：**2026-09-19 v4（執行紀錄：M3 完成）**
+> 版本：**2026-09-19 v5（執行紀錄：全部簇做完 —— M6／L2／L3 收尾）**
 > - 基準：commit `8febf94`（重核時 267 測試、`fit-score` 5/5 誤差 0）
-> - 執行後：**312 測試全過**（新增 45 條閘；267 → 312）、`fit-score` 5/5 誤差 0、
+> - 執行後：**318 測試全過**（新增 51 條閘；267 → 318）、`fit-score` 5/5 誤差 0、
 >   `--verify` 30/30＋實機 14/14＋負樣本 6/6、`diag-statbar --read` 14/14＋6/6、
 >   `replay-dumps` 退步 0、`diag-hue --assert` ✓、`diag-skills --all` 8×(7 列)
+> - **語法閘**：`check-renderer-syntax.js` 已經由「只驗 4 個 HTML ＋ main.js」擴充到
+>   **＋ `src/**`（29 檔）＋ `tools/**`（33 檔）**
 > - ⚠️ v1 報告係對住舊樹寫嘅：當時嘅 **H1（適性規則雙實作）已經修好**
 >   （`src/umascore/aptitude.js`；`anchor.js`／`panel.js` 亦已清走）
 > - ⚠️ v2 嘅簇編號**已經改變過一次**，閱讀舊 commit message 嘅時候以「簇標題」為準（唔好靠編號）。
@@ -16,7 +18,8 @@
   **shared** `src/{hud,vision,umascore,capture}`＋`src/cli.js`／**tools** 32 個 CLI／**test** 23 檔
 - 排除：`node_modules/`、`.git/`、各快取、`diagnostics/`、`shots/**/*.png`（證據庫）、`data/*.json`（生成物）
 - 文件約數：**85 個原始檔**（main 1、renderer 4、shared 25、tools 32、test 23）
-- 簇數：high **3** / med **9** / low **3** —— **已修 12 簇（H1／H3 只做咗關鍵一步）、剩 3 簇未做**（M6／L2／L3）
+- 簇數：high **3** / med **9** / low **3** —— **15 簇全部做完**（H1／H3 只做咗關鍵一步，
+>   第二步係可選）；另外**順手修好 2 個 HEAD 已經壞咗嘅工具**同**加咗 2 個新閘**
 
 ## Top 问题（現況）
 
@@ -30,13 +33,14 @@
 | M3 | 逐列／逐欄墨量投影同「連續段掃描」9 處變體 | ✅ **已修**（`src/vision/projection.js`：投影 ＋ `runSpans()`／`densestRun()`） |
 | M4 | `pickBestFive()` / `pickFiveBySpacing()` 組合搜尋寫兩次 | ✅ **已修**（`src/vision/combinations.js`） |
 | M5 | 設定檔寫入路徑兩套（原子性唔一致） | ✅ **已修**（`saveConfig({ atomic: true })`） |
-| M6 | tools CLI 參數解析 5 種寫法、25+ 檔 | ⏳ **未做** |
+| M6 | tools CLI 參數解析 5 種寫法、25+ 檔 | ✅ **已修**（`tools/lib/args.js` ＋ 28 個工具） |
 | M7 | 色相／亮度計算喺 tools 重複 | ✅ **已修**（`pixelHue`／`pixelLum`） |
 | M8 | 去均值＋L2／內積相似度**三**套 | ✅ **已修**（`src/vision/similarity.js`） |
 | M9 | tools 顯示寬度／`pad()` 抄兩份 | ✅ **已修**（`tools/lib/width.js`） |
 | L1 | `src/hud` 兩個檔各有一套小工具 | ✅ **已修**（`src/hud/util.js`） |
-| L2 | `test/` 內 4 個 `makeImage()` fixture builder | ⏳ 未做（低優先） |
-| L3 | `main.js` 兩個 dump 函數共用「建目錄＋時間戳」 | ⏳ 未做（低優先） |
+| L2 | `test/` 內 4 個 `makeImage()` fixture builder | ✅ **已修**（`test/helpers/image.js`） |
+| L3 | `main.js` 兩個 dump 函數共用「建目錄＋時間戳」 | ✅ **已修**（`ensureDir()`／`dumpStamp()`） |
+| 額外 | `diag-skills.js`／`dump-namebox.js` 喺 HEAD 已經爆 `SyntaxError` | ✅ **已修** ＋ 加咗語法閘（見下） |
 
 ## 執行紀錄（每個 commit 都跑齊相關驗收先 commit）
 
@@ -57,32 +61,18 @@
 | `26b6d6d` | 順手修 | `tools/diag-skills.js` 補返 `scale` 解構（**HEAD 已經爆** `ReferenceError`，唔係 `--gray` 嘅用法全中） | `--all` → 8 張圖全部 **7 列** |
 | （M3-①） | M3 | `src/vision/projection.js`：`rowCounts`／`columnCounts`／`countInk`；9 處手寫投影收斂（含 `statbar.bandStats` 改用欄投影、`tightenBand` 刪死碼 `peakIndex`、`main.js` 收圖進度） | 307/307、30/30＋14/14＋6/6、5/5、14/14＋6/6、色相閘、退步 0、`diag-skills --all` 8×7 列 |
 | `b299bb0` | M3 | `runSpans(values,{minValue,gapTolerance,trimTrailingGap})`／`densestRun()`；7 處手寫切段收斂。**A/B 對照證明逐位元等價**（stash 回 HEAD 跑 `diag-namematch`／`diag-namepairs` → 數字完全一樣） | 312/312、全套閘 + fit-score 5/5 誤差 0 |
+| `81d9c3e` | 額外 | `tools/dump-namebox.js` 修重複宣告 `scale`（**HEAD 已經爆** `SyntaxError`） | 實跑 → 1140×950、7 列 |
+| `e855f15` | M6 | `tools/lib/args.js`（6 支函數）＋ **28 個工具**改用；`fix` 嘅 dump-namebox 順手一齊 | 318/318、20 個唯讀工具輸出**逐行一樣（1022 行）** |
+| `2ca3644` | 額外 | 語法閘擴充：`src/**`（29）＋ `tools/**`（33）＋ 原本 4 HTML ＋ main.js；加可選 CLI 參數令閘可以自測 | 全 ✓（exit 0）；餵壞檔目錄 → exit 1 |
+| `646fac9` | L2 | `test/helpers/image.js`（`solidImage()`）——4 個測試檔收斂；⚠️ 只抽 buffer 嗰步（`paint()`／`fill()` 語意有微差，留返） | 318/318（測試語意零改動） |
+| `e2eed96` | L3 | `ensureDir()`／`dumpStamp()`（檔內小工具）；diff 只有 4 行 | 語法閘 ✓、318/318、`git diff` 逐行核對 |
 
-## 仍然未做嘅簇（附位置／建議／工作量）
+## 剩餘（**可選**，唔做都可以）
 
-### M6 · nearDuplicate · tools CLI 參數解析 5 種寫法、25+ 檔
-
-- 位置（節錄）：`includes('--x')`（`tune-detect`／`fill-ground-truth`／`build-glyph-templates`／`diag-hue`／`advice`）；
-  `.find(a => a.startsWith('--name='))`（`skillname-sheet`／`skill-lib-sheet`／`find-skill-crop`／`build-skill-library`／`read-stats`／`diag-row`）；
-  `filter` flags／positional（`skillrow-sheet`／`dump-namebox`／`diag-namepairs`／`diag-nameocl`／`diag-namematch`）；
-  `Set(process.argv)`（`whatif`／`collect-diagnostics`）；手寫 `parseArgs()`（`fit-score`／`fetch-skill-db`／`src/cli.js`）
-- 建議模組：`tools/lib/args.js` → `parseToolArgs(argv, { flags = [], values = [] })`
-- 工作量：M｜⚠️ AGENTS §2 每條指令簽名係**對外介面**（`--gt=`／`--verify`／`--exclude=`／`--trace`／`--cropped`／`--quick`／`--hue`／`--all`／`--match=`…），逐字保留；一個 commit 一個工具，跑返該工具原本嘅驗收
-
-### L2 · nearDuplicate · `test/` 內 4 個 `makeImage()`
-
-- 位置：`test/statbar.test.js` L41、`test/skillscreen.test.js` L21、`test/skillname.test.js` L30、`test/vision.test.js` L23（`makeCanvas`）
-- 建議：只抽「砌底色 RGBA buffer」呢一步（`test/helpers/image.js`）；⚠️ 每個測試嘅**合成內容**係刻意唔同嘅實測情境，唔准合併；303 條要全過
-
-### L3 · nearDuplicate · `main.js` 兩個 dump 函數
-
-- 位置：`dumpSkillPage()`（L1011 起）vs `dumpFrame()`（L1052 起，行號會浮動）
-- 建議：抽「`existsSync` + `mkdirSync(recursive)` + 時間戳」做檔內小工具；⚠️ 兩個 dump 嘅**檔案格式唔同**（`.raw`＋`.json` vs `.png`），唔准統一
-
-### 可選（唔做都可以）
-
-- H1 第二步：`electron/ipc-channels.cjs` ＋ main／5 個 HTML 換成常數 —— 因為 renderer 係 classic script（ESM 入唔到 `file://`），要先確認 `.cjs` 喺 `require()` 之下讀得到。**現時嘅靜態閘已經擋住打錯 channel 名呢個最痛嘅情況**。
+- H1 第二步：`electron/ipc-channels.cjs` ＋ main／4 個 HTML 換成常數 —— 因為 renderer 係 classic script（ESM 入唔到 `file://`），要先確認 `.cjs` 喺 `require()` 之下讀得到。**現時嘅靜態閘已經擋住打錯 channel 名呢個最痛嘅情況**。
 - H3 第二步：抽 `src/vision/content-box.js`（`contentRect()`／`contentBox()`／`capture.html` 三者用同一支）—— 現時三處仍然各自寫一次（但 renderer 已經跟主程序，唔會再靜默唔同步）。
+- ⚠️ **唔應該做**：`tools/diag-skillnames.js` 自己一套特徵抽取（見新發現 1）—— 佢讀嘅標註已知有錯位。
+- ⚠️ 三件事仍然要實機驗（本報告嘅所有改動都**冇開 Electron**）：`npm.cmd start` 睇 HUD 穿透／四個窗、`UMAPYOI_HUD_EDIT=1` 拖位、`UMAPYOI_DUMP_FRAMES=5` 睇 dump 檔名時間戳。
 
 ## 過程中新發現（v2 未有記錄）
 
@@ -101,7 +91,11 @@
    ⚠️ 將來加測試要順手更新（呢個係文檔同步，唔係 code）。
 6. **`tools/diag-skills.js` 喺 HEAD 已經壞咗**（`ReferenceError: scale is not defined`）：
    非 `--gray` 嘅用法（包括 AGENTS §2 寫住嘅 `--all`）全部即爆 → 已修（`26b6d6d`）。
-   ⚠️ 呢類「工具自己壞咗但冇測試」嘅位，正正係最需要**接線閘**嘅地方。
+   ⭐ **同類第二個**：`tools/dump-namebox.js` 都有同一個病（`scale` 喺同一個 scope 宣告兩次
+   → `SyntaxError`）→ 已修（`81d9c3e`）。
+   ⚠️ **根因唔係「兩個工具手民之誤」而係「`tools/` 冇語法閘」** → 已加：
+   `check-renderer-syntax.js` 而家連 `src/**`（29 檔）＋ `tools/**`（33 檔）一齊驗
+   （`2ca3644`）。呢類「冇測試、冇閘、冇人跑」嘅檔，正正係最需要閘嘅地方。
 7. **`skillname.js` 檔頭嗰組實測數字（34 對、中位數 0.986）已經過時**：今日重跑係
    **33 對、p50 0.974、≥0.9 有 75 對**。⚠️ 但**唔可以**當成「重構改壞咗」——
    已用 A/B（stash 回 HEAD）證明兩邊**數字完全一樣**；差異係樣本集／偵測細節之前改過。
@@ -126,12 +120,12 @@
 - 一堆 `normalize*` 同名函數：似但語意唔同，**唔係重複**。
 - 文件之間嘅重複敘述（AGENTS／`docs/design.md`／`docs/pitfalls.md`／程式碼註釋）：刻意嘅跨檔冗餘。
 
-## 建议落地顺序（剩餘部分）
+## 建议落地顺序（**已經全部做完**）
 
-1. **M6**（tools CLI 參數，一個工具一個 commit，逐字保留 CLI 介面）
-2. **L2**（test fixture builder，只抽砌 buffer 嗰步）
-3. **L3**（dump 小工具，檔內重構）
-4. 可選：H1 第二步（`.cjs` channel map）、H3 第二步（`content-box.js`）
+1. ~~**M6**（tools CLI 參數，逐字保留 CLI 介面）~~ ✅ `e855f15`
+2. ~~**L2**（test fixture builder，只抽砌 buffer 嗰步）~~ ✅ `646fac9`
+3. ~~**L3**（dump 小工具，檔內重構）~~ ✅ `e2eed96`
+4. 可選（未做）：H1 第二步（`.cjs` channel map）、H3 第二步（`content-box.js`）
    ⚠️ **唔應該做**：`tools/diag-skillnames.js` 自己一套特徵抽取（見新發現 1）——
    佢讀嘅標註已知有錯位，為佢改共用模組唔值得。
 
@@ -143,7 +137,7 @@
   但欄位保持選填 → 舊 main 照用後備值）、`frame.cropped`；將來收成共用 model 時
   **所有欄位一律 optional ＋ 有預設**（要向後兼容「新 main ＋ 舊 renderer」同「舊 main ＋ 新 renderer」）。
 - 本專案**冇 preload**：如果將來加，`electron/ipc-channels.cjs`（H1 第二步）正好可以變成 preload 嘅白名單來源。
-- 每次改動之後嘅驗收閘（AGENTS §8）：`npm.cmd test` **312** 全過、`fit-score` 5/5 誤差 0、
+- 每次改動之後嘅驗收閘（AGENTS §8）：`npm.cmd test` **318** 全過、`fit-score` 5/5 誤差 0、
   動影像就 30/30＋14/14＋負樣本 6/6、動墨點／色相就 `diag-hue --assert`、
   動 `statbar.js`／`capture.html` 就 `diag-statbar --read` 14/14＋6/6＋`replay-dumps` 退步 0、
-  動 `electron/*.html` 或 `main.js` 就 `check-renderer-syntax.js` 全 ✓。
+  **任何改動都建議跑 `check-renderer-syntax.js`**（而家 4 HTML ＋ main.js ＋ `src/**` ＋ `tools/**`）。
