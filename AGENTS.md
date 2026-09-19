@@ -69,7 +69,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 | Phase 0 | 評價分運算核心 | ✅ **誤差 = 0**（4 條實機樣本全部吻合）|
 | Phase 0 | 技能資料庫（1323 招）＋ 進化技能 override | ✅ |
 | Phase 1 | 畫面擷取（`npm start` 跑得通）| ✅ |
-| Phase 1 | **五維數字辨識（零校準）** | ✅ 兩條路都通：**畫面 A 面板條**（`statbar.js`）**13/13 全中**（1356→2560 五個解析度 ＋ 4 個實機失敗／金色格回歸 ＋ 4 個實機狀態樣本）＋ **負樣本 3/3 唔出數**（其他畫面唔准出數，見地雷 #30）；ステータス面板排法 **30/30**。✅ 已實機跑過（`npm start`，1920 窗），修好間歇性「讀唔清」（地雷 #25）同**金色格靜默讀錯**（地雷 #26）|
+| Phase 1 | **五維數字辨識（零校準）** | ✅ 兩條路都通：**畫面 A 面板條**（`statbar.js`）**14/14 全中**（1356→2560 五個解析度 ＋ 1929×1085 新樣本 ＋ 4 個實機失敗／金色格回歸 ＋ 4 個實機狀態樣本）＋ **負樣本 5/5 唔出數**（其他畫面唔准出數，見地雷 #30 —— 包括**培育結束確認**嘅「能力值」／「技能」tab）；ステータス面板排法 **30/30**。✅ 已實機跑過（`npm start`，1920 窗），修好間歇性「讀唔清」（地雷 #25）同**金色格靜默讀錯**（地雷 #26）|
 | Phase 1 | HUD overlay ＋ 設定面板 | ✅ **可用**（透明置頂穿透；顯示評價点 + 五維逐格 + 技能分 `？／總分 ≥ X` ＋ 金色格提示 ＋ **ランク目標（仲差幾多分升級，C5）** ＋ **成長曲線（C3，SVG 折線）**）。**已做**：`hud-position.json` 存檔（env > 檔案 > 預設）、獨立**設定窗**（8 個數值 slider ＋ **9 個顯示選項**，改動即時生效）、**對位模式（`UMAPYOI_HUD_EDIT=1`）可以直接拖 HUD**（放手即反推 + 存檔）＋ 設定窗跟住更新（唔會「拖完撳儲存就彈返」）。✅ **2026-09-19 用戶實機驗過（原話：「而家 hud 冇問題」）**。⏸️ **唔做**：跟住遊戲視窗移動（**用戶 2026-09-19 決定** —— 可以用拖位擺去自己想擺嘅位，跟窗冇必要；見 §9 ①）。對位模式期間切換仍然要重開程式（✅ **2026-09-19 用戶實機驗過**：新嗰行「升級 … 差 …」正常顯示；原話「呢兩樣都ok」）|
 | Phase 2 | 技能 icon 識別（自動知學咗邊啲技能）| ⏸️ **暫停（用戶 2026-09-19 指示：暫時唔處理技能呢一 part）** —— 已經做好嘅部分見下面，隨時可以接返。原狀態：🚧 **兩步做好**：① 技能畫面欄／行偵測器（`skillscreen.js`，8 張實機圖全部搵到 7 行）；② **名稱框抽取**（112 個全部抽到）＋ **影像比對可行性已量化**（互相最佳配對中位數 **0.986**、撞分上限 **0.604** —— 見 `docs/skill-screen.md` §5）。⏳ 未做：接上**候選名單**（見 §9）|
 | Phase 3 | what-if 模擬（加一招加幾多分／Pt）、成長曲線 | ✅ **C1 已做 ＋ 2026-09-19 用戶實機驗過（原話「呢兩樣都ok」）**：`src/umascore/whatif.js`（純函數）＋ `tools/whatif.js` CLI ＋ **獨立 what-if 窗**（`electron/whatif.html`，`UMAPYOI_NO_WHATIF=1` 唔開）＋ `src/umascore/aptitude.js`（適性規則**單一來源**）。✅ **C3 成長曲線亦已做（未實機驗）**：`src/hud/history.js`（樣本記錄／去重／上限／折線座標，純函數）＋ HUD 用 SVG polyline 畫（顯示選項 `history`，第 9 個）|
@@ -219,8 +219,8 @@ node tools/read-stats.js shots/gt/uma1-p1.png --gt=data/ground-truth/01-小栗�
 node tools/build-glyph-templates.js        # 建字形模板（面板截圖 ＋ 實機面板條；**雙閘**）
 node tools/build-glyph-templates.js --verify
 node tools/diag-statbar.js                 # ⭐ 實機面板條定位（ROI／切行／相對比例）
-node tools/diag-statbar.js --read          # ⭐ 對 `data/live-truth.json` 真值（應該 13/13）
-                                           #    ＋ 自動跑 `shots/negatives/`（其他畫面唔准出數，3/3）
+node tools/diag-statbar.js --read          # ⭐ 對 `data/live-truth.json` 真值（應該 14/14）
+                                           #    ＋ 自動跑 `shots/negatives/`（其他畫面唔准出數，5/5）
                                            #    ⚠️ 有真值對唔上／負樣本讀到數 → exit 1（真閘）
 node tools/diag-statbar.js --read --cropped --trace            # 模擬 renderer 剪 ROI（執行時路徑）
 node tools/replay-dumps.js --verbose       # ⭐ 重播實機 dump 幀（驗證「讀唔清」嘅修正，見地雷 #25）
@@ -264,12 +264,12 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 1. `npm.cmd test` 全過（現時 **267 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 4/4　完全命中 4/4　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
-   → **面板截圖 30/30**（三閘：**實機面板條 13/13**、**負樣本 3/3 唔出數**），全部都要中
+   → **面板截圖 30/30**（三閘：**實機面板條 14/14**、**負樣本 5/5 唔出數**），全部都要中
    ⚠️ 負樣本（`shots/negatives/`）有任何一幀讀到數 → **唔會寫檔**（同其他失敗一樣）
 4. 動到墨點／色相／亮度門檻嘅話：`node tools/diag-hue.js --assert` 要通過
 5. 動到實機面板條（`statbar.js`／`capture.html`）嘅話：
-   `node tools/diag-statbar.js --read` → **13/13**（自動對 `data/live-truth.json`）
-   ＋ **負樣本 3/3 唔出數**；＋ `node tools/replay-dumps.js` → **退步 0**
+   `node tools/diag-statbar.js --read` → **14/14**（自動對 `data/live-truth.json`）
+   ＋ **負樣本 5/5 唔出數**；＋ `node tools/replay-dumps.js` → **退步 0**
    ⚠️ `replay-dumps` 仲會報「修正假陽性」同「冇當時結果記錄（every 幀）」——
       後者係 `UMAPYOI_DUMP_FRAMES` 影嘅任意幀（冇 reason 亦冇 stats）→ **唔准當佢係 OK**
       （舊版 `tagOf(undefined)` = OK → 假退步；2026-09-19 已修）

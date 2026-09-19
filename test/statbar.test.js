@@ -289,7 +289,7 @@ test('⭐ 負樣本庫：`shots/negatives/*.png` 全部唔准出數（新增檔�
 });
 
 test('statbar「唔似面板條」字高門檻：0.64× 要拒（卡列表）／0.83× 要收（真面板可以細少少）', () => {
-  // 門檻 0.8 嘅兩邊都要釘住（實測：12 張真值圖 0.85–0.96、卡列表假陽性 0.64）。
+  // 門檻 0.8 嘅兩邊都要釘住（實測：14 張真值圖 0.85–0.96、卡列表假陽性 0.64）。
   // 1600 闊 → 預期字高 15.7px；畫 10px（=0.64×）同 13px（=0.83×）各一次。
   const bad = readStatBar(makeStatBarImage({ width: 1600, valueHeight: 10, limitHeight: 6 }), templates);
   assert.equal(bad.stats, null, `0.64× 唔應該出數，實得 ${bad.stats?.join('/')}`);
@@ -300,7 +300,7 @@ test('statbar「唔似面板條」字高門檻：0.64× 要拒（卡列表）／
 
 test('statbar：兩個「唔似面板條」門檻唔准放返鬆（實測數字見註釋）', () => {
   // ⚠️ 呢兩個常數係**量出嚟**嘅安全邊界（改動之前一定要重量，唔准「感覺上有餘裕」）：
-  //    字高比：12 張真值圖 0.85–0.96；卡列表假陽性 0.64 → 0.8（比最低真值低 0.05）
+  //    字高比：14 張真值圖 0.85–0.96；卡列表假陽性 0.64 → 0.8（比最低真值低 0.05）
   //    上限行墨量：真值圖 164–1599；卡列表「上限行」只係卡片邊線 24 粒 → 60
   assert.equal(DEFAULT_STATBAR_OPTIONS.minGlyphHeightRatio, 0.8);
   assert.equal(DEFAULT_STATBAR_OPTIONS.minLimitsInk, 60);

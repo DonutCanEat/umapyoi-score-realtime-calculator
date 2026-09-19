@@ -6,9 +6,9 @@
 | 資料夾 | 入唔入 git | 係咩 | 加檔嘅效果 |
 |---|---|---|---|
 | `gt/` | ✅ **要** | ステータス面板排法嘅真值截圖（uma1–uma4，各 p1／p2 ＋ `-top`／`-skills`）| 加檔唔會自動入閘；要 `read-stats.js --gt=…` 手動對 |
-| `live/` | ✅ **要** | ⭐ **實機育成主畫面**：`live-*.png`（5 個解析度 1356→2560）＋ `roi-live-*.png`（成功幀，已剪 ROI，**檔名尾 = 速度值**） | 加檔要**同時**入 `data/live-truth.json`（`shots` 清單 ＋ 必要時 `perShot`），否則唔算真值 |
+| `live/` | ✅ **要** | ⭐ **實機育成主畫面**：`live-*.png`（6 個解析度 1356→2560，其中 `live-1929x1085.png` 係 2026-09-19 用戶提供嘅新數值 168/131/143/123/130）＋ `roi-live-*.png`（成功幀，已剪 ROI，**檔名尾 = 速度值**） | 加檔要**同時**入 `data/live-truth.json`（`shots` 清單 ＋ 必要時 `perShot`），否則唔算真值 |
 | `live/roi-regress-*.png` | ✅ **要** | ⭐ **實機失敗幀**（已剪 ROI）＝ 永久回歸案例（地雷 #25 碎片、#26 金色格、marginal） | 加檔＝多一條回歸；`diag-statbar --read` 會覆核 |
-| `negatives/` | ✅ **要** | ⭐ **負樣本**：其他畫面（支援卡列表／插畫／1 條帶…）—— **每一幀都唔准出數** | **加檔就自動入四個閘**（`npm test`／`diag-statbar --read`／`build-glyph-templates --verify`／`replay-dumps`），唔使改 code（地雷 #30）|
+| `negatives/` | ✅ **要** | ⭐ **負樣本**：其他畫面（支援卡列表／插畫／1 條帶／**培育結束確認**嘅能力值＋技能 tab…）—— **每一幀都唔准出數**。⚠️ 命名規則同 `live/` 一樣：`roi-` 開頭 = 已經剪好嘅 ROI；`neg-*.png`（例如 `neg-result-ability.png`）＝**整個遊戲視窗**（會行相對 ROI 定位） | **加檔就自動入四個閘**（`npm test`／`diag-statbar --read`／`build-glyph-templates --verify`／`replay-dumps`），唔使改 code（地雷 #30）|
 | `debug-crops/` | ✅ **要** | 早期**人手剪**出嚟嘅面板／字形放大圖（`--scale=4` 嗰類）：`reference.png`、`panel-full.png`、`crop-*`、`left-strip.png`… | 唔入任何閘，純粹**理解用**（睇字形、睇面板外觀、`diag-row.js` 嘅示範圖）|
 | `live-debug/` | ❌ **唔入**（`.gitignore`）| 執行時自動 dump：`.raw`（RGBA）＋ `.json`（meta）—— 失敗幀 dump、`UMAPYOI_DUMP_FRAMES` 幀 | 有代表性嘅要**手動複製**去 `shots/live/`（成功）或者 `shots/negatives/`（唔准出數），再入 `live-truth.json` |
 | `skill-dump/` | ❌ **唔入**（`.gitignore`）| `UMAPYOI_SKILL_DUMP=1` 連拍收到嘅技能畫面頁（Phase 2 收圖用）| 唔入閘；用 `tools/build-skill-library.js` 消化 |
@@ -27,6 +27,6 @@
 ```bash
 node tools/diag-shots.js                    # 列晒所有截圖同尺寸（睇下而家有咩）
 node tools/raw-to-png.js shots/live-debug   # dump 幀（.raw）轉 PNG
-node tools/diag-statbar.js --read           # 對 data/live-truth.json（13/13）＋ 負樣本（3/3 唔出數）
+node tools/diag-statbar.js --read           # 對 data/live-truth.json（14/14）＋ 負樣本（5/5 唔出數）
 node tools/diag-row.js shots/debug-crops/reference.png --gray=300,420,730,792   # 睇字形嗰陣用
 ```
