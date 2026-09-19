@@ -18,6 +18,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -29,15 +30,35 @@ const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 const MAIN = read('electron/main.js');
 const WHATIF = read('electron/whatif.html');
 
-/** 由原始碼抽 `ipcRenderer.send('x')` / `ipcRenderer.on('x'` 之類嘅 channel 名。 */
-function channels(text, pattern) {
-  return [...text.matchAll(pattern)].map((m) => m[1]);
+// ⚠️ channel 名嘅唯一來源（獨立審計 H1）：`main.js` 而家用 `IPC_CHANNELS.<key>`，
+//    而 4 個 renderer 暫時仲係字面值 → 呢個閘兩種寫法都要支援，統一化成 **channel 值** 再比。
+const { IPC_CHANNELS } = createRequire(import.meta.url)('../electron/ipc-channels.cjs');
+
+/**
+ * 由原始碼抽「某個呼叫用咗邊條 channel」——支援 `IPC_CHANNELS.key` 同字面值兩種寫法。
+ * 引用唔存在嘅 key 直接 throw（唔准靜默當冇事）。
+ */
+function channels(text, callRe) {
+  const re = new RegExp(`${callRe}\\s*(?:IPC_CHANNELS\\.(\\w+)|'([^']+)')`, 'g');
+  const out = [];
+  for (const m of text.matchAll(re)) {
+    const [, key, literal] = m;
+    if (key === undefined) {
+      out.push(literal);
+      continue;
+    }
+    if (!Object.hasOwn(IPC_CHANNELS, key)) {
+      throw new Error(`main.js 引用咗 map 冇嘅 key：IPC_CHANNELS.${key}`);
+    }
+    out.push(IPC_CHANNELS[key]);
+  }
+  return out;
 }
 
-const SENT = channels(WHATIF, /ipcRenderer\.send\(\s*'([^']+)'/g);
-const LISTENED = channels(WHATIF, /ipcRenderer\.on\(\s*'([^']+)'/g);
-const HANDLED = channels(MAIN, /ipcMain\.on\(\s*'([^']+)'/g);
-const PUSHED = channels(MAIN, /(?:event\.sender|win\.webContents|webContents)\.send\(\s*'([^']+)'/g);
+const SENT = channels(WHATIF, 'ipcRenderer\\.send\\(');
+const LISTENED = channels(WHATIF, 'ipcRenderer\\.on\\(');
+const HANDLED = channels(MAIN, 'ipcMain\\.on\\(');
+const PUSHED = channels(MAIN, '(?:event\\.sender|win\\.webContents|webContents|sender)\\.send\\(');
 
 test('what-if 窗：renderer 送嘅 channel 一定要有主程序 handler（打錯一個字＝撳完冇反應）', () => {
   assert.ok(SENT.length >= 3, `whatif.html 應該送幾個 channel，實得 ${SENT.length} 個：${SENT}`);
@@ -70,7 +91,11 @@ test('C4：升級建議要喺主程序計（renderer 唔准自己計邊際效率
   // ⚠️ 同「窗唔准自己計分」一條道理：`advice.js` 有 `node --test` 覆蓋，
   //    窗自己砌一份就係繞過測試（而且冇人會發現）。
   assert.match(MAIN, /import \{ trainingAdvice \} from '\.\.\/src\/umascore\/advice\.js'/);
-  assert.match(MAIN, /event\.sender\.send\('whatif-advice-result', \{ advice: trainingAdvice\(stats\)/);
+  // ⚠️ 兩種寫法都要收（channel 已收斂去 map；值仍然係 'whatif-advice-result'）
+  assert.match(
+    MAIN,
+    /event\.sender\.send\((?:IPC_CHANNELS\.whatifAdviceResult|'whatif-advice-result'), \{ advice: trainingAdvice\(stats\)/,
+  );
   assert.match(WHATIF, /renderAdvice\(payload\.advice\)/, '窗只可以排版主程序傳落嚟嘅建議');
   assert.ok(!/statPoints\(/.test(WHATIF), '窗唔准叫核心庫自己計');
 });

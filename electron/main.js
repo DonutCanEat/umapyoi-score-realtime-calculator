@@ -36,6 +36,11 @@ import { envFlag, envIsSet, envNumber } from '../src/hud/env-flag.js';
 // ⭐ 四個窗共用嘅 `webPreferences`（**唯一一份**）——見獨立審計 M2 同嗰個檔嘅註釋。
 import { APP_WEB_PREFERENCES } from './web-preferences.js';
 import { MAX_HISTORY, pushSample } from '../src/hud/history.js';
+// ⭐ IPC channel 名嘅**唯一來源**：`electron/ipc-channels.cjs`（CommonJS —— 因為 4 個
+//    renderer 係 classic script，只可以 `require()`；見嗰個檔嘅檔頭）。
+//    ESM import CJS 用 default import 再解構（唔靠 cjs-module-lexer 嘅具名匯出偵測）。
+import ipcChannels from './ipc-channels.cjs';
+const { IPC_CHANNELS } = ipcChannels;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -163,7 +168,7 @@ let lastStats = null;
  *    ① 只有**真變化**先入記錄（唔係每幀記，否則 5fps 之下時間軸會被壓扁）；
  *    ② 有上限 `MAX_HISTORY`（滑動視窗，掉最舊嗰筆）；
  *    ③ 唔合法樣本（NaN）唔准入。
- *    呢度只負責「幾時餵」——**唯一**餵入點係 `ipcMain.on('frame')` 收到穩定值嗰度。
+ *    呢度只負責「幾時餵」——**唯一**餵入點係 `ipcMain.on(IPC_CHANNELS.frame)` 收到穩定值嗰度。
  */
 let statHistory = [];
 /**
@@ -390,7 +395,7 @@ function sameLayout(a, b) {
 /** 回覆設定窗（設定 + 路徑 + 問題提示）。`sender` 係 `event.sender`（有 send／isDestroyed）。 */
 function replyHudConfig(sender, extra = {}) {
   if (!sender || sender.isDestroyed?.()) return;
-  sender.send('hud-config', {
+  sender.send(IPC_CHANNELS.hudConfig, {
     config: hudConfig,
     defaults: resolveHudConfig({}, null), // 「還原預設」用嘅純預設（刻意唔理 env／檔案）
     path: hudConfigPath,
@@ -895,7 +900,7 @@ function pushHud(now = Date.now()) {
   ]);
   if (key === lastHudKey) return; // 冇變就唔好每幀 send
   lastHudKey = key;
-  hudWindow.webContents.send('hud', view);
+  hudWindow.webContents.send(IPC_CHANNELS.hud, view);
 }
 
 /**
@@ -1250,7 +1255,7 @@ app.whenReady().then(async () => {
     if (!hit) {
       console.log('');
       console.log('⚠️ 揾唔到遊戲視窗。請確認賽馬娘已經開咗，然後重新啟動本程式。');
-      win.webContents.send('no-source');
+      win.webContents.send(IPC_CHANNELS.noSource);
       return;
     }
     console.log('');
@@ -1261,7 +1266,7 @@ app.whenReady().then(async () => {
     // 面板條嘅相對範圍由**呢度**（statbar.js）話俾 renderer 知，
     // renderer 只負責 1:1 剪出嚟傳返嚟（唔可以兩邊各自寫死一組數字）。
     // ⭐ 技能連拍模式：唔剪面板條，傳整個內容區（再由 `SKILL_CROP` 剪技能清單嗰橛）。
-    win.webContents.send('roi', SKILL_DUMP
+    win.webContents.send(IPC_CHANNELS.roi, SKILL_DUMP
       ? { x0: 0, x1: 1, y0: 0, y1: 1, aspect: DEFAULT_STATBAR_OPTIONS.aspect }
       : {
         x0: DEFAULT_STATBAR_OPTIONS.roiX[0],
@@ -1270,10 +1275,10 @@ app.whenReady().then(async () => {
         y1: DEFAULT_STATBAR_OPTIONS.roiY[1],
         aspect: DEFAULT_STATBAR_OPTIONS.aspect,
       });
-    win.webContents.send('start', hit.id);
+    win.webContents.send(IPC_CHANNELS.start, hit.id);
     if (SKILL_DUMP) {
-      win.webContents.send('fps', envNumber('UMAPYOI_CAPTURE_FPS', { fallback: 1, positive: true }));
-      if (SKILL_CROP) win.webContents.send('crop', SKILL_CROP);
+      win.webContents.send(IPC_CHANNELS.fps, envNumber('UMAPYOI_CAPTURE_FPS', { fallback: 1, positive: true }));
+      if (SKILL_CROP) win.webContents.send(IPC_CHANNELS.crop, SKILL_CROP);
       console.log('');
       console.log('📸 技能連拍模式（UMAPYOI_SKILL_DUMP=1）');
       console.log('   ① 喺遊戲開「賽馬娘詳情 → 技能」清單畫面（即係彈窗嗰個清單）');
@@ -1335,7 +1340,7 @@ app.whenReady().then(async () => {
 /**
  * Renderer 每一幀傳過嚟嘅面板條 → 喺 Node 側讀五維 → 計評價分。
  */
-ipcMain.on('frame', (_event, frame) => {
+ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
   const { width, height, fullWidth, fullHeight, buffer, cropped } = frame;
   if (!width || !height) return;
 
@@ -1443,7 +1448,7 @@ ipcMain.on('frame', (_event, frame) => {
   pushHud(); // 有新數即刻推（唔等 500ms 嗰個 interval）
 });
 
-ipcMain.on('capture-error', (_event, message) => {
+ipcMain.on(IPC_CHANNELS.captureError, (_event, message) => {
   console.error('[擷取失敗]', message);
 });
 
@@ -1458,7 +1463,7 @@ ipcMain.on('capture-error', (_event, message) => {
  * IPC handler 拋出嘅例外喺 Electron 主程序係 **uncaught** → 會彈錯誤對話／搞死主程序。
  * 錯誤一樣經 `hud-config` channel 回報（`error` 欄位 → 設定窗出紅色橫額），唔准靜默。
  */
-ipcMain.on('hud-config-get', (event) => {
+ipcMain.on(IPC_CHANNELS.hudConfigGet, (event) => {
   try {
     replyHudConfig(event.sender);
   } catch (error) {
@@ -1469,7 +1474,7 @@ ipcMain.on('hud-config-get', (event) => {
 });
 
 /** 設定窗改任何值 → **即時**套用落 HUD（未存檔）。 */
-ipcMain.on('hud-config-preview', (event, raw) => {
+ipcMain.on(IPC_CHANNELS.hudConfigPreview, (event, raw) => {
   try {
     const config = configFromUi(raw);
     // 用戶送嘅值有冇被夾過（例如 x0 + w > 1）→ 話返畀設定窗知，唔好靜默改佢個數。
@@ -1484,7 +1489,7 @@ ipcMain.on('hud-config-preview', (event, raw) => {
 });
 
 /** 「儲存」→ 寫 `hud-position.json`（原子寫）。 */
-ipcMain.on('hud-config-save', (event, raw) => {
+ipcMain.on(IPC_CHANNELS.hudConfigSave, (event, raw) => {
   let saved;
   try {
     const config = configFromUi(raw);
@@ -1505,7 +1510,7 @@ ipcMain.on('hud-config-save', (event, raw) => {
  * ⚠️ 一樣要包 try/catch（見 `hud-config-get` 嘅註解）：而家只叫純預設所以冇 throw，
  * 但將來加嘢就會變成主程序 uncaught 例外 → 錯誤照樣經 `hud-config` 回報（紅橫額）。
  */
-ipcMain.on('hud-config-reset', (event) => {
+ipcMain.on(IPC_CHANNELS.hudConfigReset, (event) => {
   try {
     const config = resolveHudConfig({}, null);
     applyHudConfig(config, { why: '設定窗：還原預設（未存檔）', fromUi: true });
@@ -1526,29 +1531,29 @@ ipcMain.on('hud-config-reset', (event) => {
 //    算式喺主程序（`src/umascore/whatif.js`），窗只係一個笨介面。
 
 /** 窗開窗即問／每 2 秒問一次：實機五維 ＋ 技能庫狀態。 */
-ipcMain.on('whatif-get', (event) => {
+ipcMain.on(IPC_CHANNELS.whatifGet, (event) => {
   try {
     loadWhatifDb();
-    event.sender.send('whatif-live', whatifLivePayload());
+    event.sender.send(IPC_CHANNELS.whatifLive, whatifLivePayload());
   } catch (error) {
     console.error(`[what-if] ⚠️ 讀實機狀態失敗：${error?.message ?? error}`);
   }
 });
 
 /** 搜尋技能（標點無關，見 `src/umascore/whatif.js` `searchSkills()`）。 */
-ipcMain.on('whatif-search', (event, query) => {
+ipcMain.on(IPC_CHANNELS.whatifSearch, (event, query) => {
   try {
     loadWhatifDb();
     if (whatifDbError) {
-      event.sender.send('whatif-results', { query: String(query ?? ''), items: [], error: `技能庫未載入：${whatifDbError}` });
+      event.sender.send(IPC_CHANNELS.whatifResults, { query: String(query ?? ''), items: [], error: `技能庫未載入：${whatifDbError}` });
       return;
     }
     const items = skillSearchItems(whatifDb, query, { limit: 20 });
-    event.sender.send('whatif-results', { query: String(query ?? ''), items, error: null });
+    event.sender.send(IPC_CHANNELS.whatifResults, { query: String(query ?? ''), items, error: null });
   } catch (error) {
     const message = error?.message ?? String(error);
     console.error(`[what-if] ⚠️ 搜尋失敗：${message}`);
-    event.sender.send('whatif-results', { query: String(query ?? ''), items: [], error: message });
+    event.sender.send(IPC_CHANNELS.whatifResults, { query: String(query ?? ''), items: [], error: message });
   }
 });
 
@@ -1559,19 +1564,19 @@ ipcMain.on('whatif-search', (event, query) => {
  *    係可以由 `tables.js` 精確計出嚟嗰部分，見 `src/umascore/advice.js` 檔頭。
  * ⚠️ 窗容許用戶自己改五維 → 一樣要當**唔可信輸入**驗（用同一個 `parseStatInput()`）。
  */
-ipcMain.on('whatif-advice', (event, payload) => {
+ipcMain.on(IPC_CHANNELS.whatifAdvice, (event, payload) => {
   try {
     const stats = parseStatInput(payload?.stats);
-    event.sender.send('whatif-advice-result', { advice: trainingAdvice(stats), error: null });
+    event.sender.send(IPC_CHANNELS.whatifAdviceResult, { advice: trainingAdvice(stats), error: null });
   } catch (error) {
     const message = error?.message ?? String(error);
     console.error(`[what-if] ⚠️ 升級建議失敗：${message}`);
-    event.sender.send('whatif-advice-result', { advice: null, error: message });
+    event.sender.send(IPC_CHANNELS.whatifAdviceResult, { advice: null, error: message });
   }
 });
 
 /** 試算：「加呢招會加幾多分／要幾多 Pt／會唔會升級」。 */
-ipcMain.on('whatif-eval', (event, payload) => {
+ipcMain.on(IPC_CHANNELS.whatifEval, (event, payload) => {
   try {
     loadWhatifDb();
     if (whatifDbError) throw new Error(`技能庫未載入：${whatifDbError}`);
@@ -1579,11 +1584,11 @@ ipcMain.on('whatif-eval', (event, payload) => {
     if (!skill) throw new Error(`技能 key 唔合法：${JSON.stringify(payload?.key)}`);
     const stats = parseStatInput(payload?.stats);
     const grades = payload?.grades && typeof payload.grades === 'object' ? payload.grades : {};
-    event.sender.send('whatif-result', { result: whatIfAddSkill({ stats }, skill, grades), error: null });
+    event.sender.send(IPC_CHANNELS.whatifResult, { result: whatIfAddSkill({ stats }, skill, grades), error: null });
   } catch (error) {
     const message = error?.message ?? String(error);
     console.error(`[what-if] ⚠️ 試算失敗：${message}`);
-    event.sender.send('whatif-result', { result: null, error: message });
+    event.sender.send(IPC_CHANNELS.whatifResult, { result: null, error: message });
   }
 });
 
@@ -1593,7 +1598,7 @@ ipcMain.on('whatif-eval', (event, payload) => {
 // ⚠️ renderer 傳嘅係 `screenX/screenY`（螢幕座標）算出嚟嘅**總位移**，
 //    唔准用 `clientX/clientY`（相對視窗 → `setBounds()` 一移窗就自我回饋 → 抖／暴走）。
 
-ipcMain.on('hud-drag-start', (_event, point) => {
+ipcMain.on(IPC_CHANNELS.hudDragStart, (_event, point) => {
   if (!HUD_EDIT) return;
   if (!hudWindow || hudWindow.isDestroyed()) return;
   const x = Number(point?.x);
@@ -1605,7 +1610,7 @@ ipcMain.on('hud-drag-start', (_event, point) => {
   logHudBounds('開始拖', hudDrag.bounds);
 });
 
-ipcMain.on('hud-drag-move', (_event, delta) => {
+ipcMain.on(IPC_CHANNELS.hudDragMove, (_event, delta) => {
   if (!hudDrag || !hudWindow || hudWindow.isDestroyed()) return;
   const dx = Number(delta?.dx);
   const dy = Number(delta?.dy);
@@ -1626,7 +1631,7 @@ ipcMain.on('hud-drag-move', (_event, delta) => {
   }
 });
 
-ipcMain.on('hud-drag-end', () => finishDrag(true));
+ipcMain.on(IPC_CHANNELS.hudDragEnd, () => finishDrag(true));
 
 app.on('window-all-closed', () => {
   app.quit();

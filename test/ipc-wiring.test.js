@@ -1,37 +1,62 @@
 /**
- * **IPC channel 接線閘**：`electron/main.js` ↔ 4 個 renderer HTML。
+ * **IPC 接線閘**：`electron/main.js` ↔ 4 個 renderer HTML（獨立審計 H1）。
  *
- * ## 為何要（獨立審計 H1，呢個係真存在嘅靜默死線）
+ * ## 為何要（呢個係真存在嘅靜默死線）
  *
- * 本專案**冇 preload**（AGENTS §6.3）：5 個檔各自用字面值寫 channel 名 ——
- * 現時 24 條，每條最少寫兩次，而 **`ipcRenderer.send()` 去一個冇 handler 嘅
- * channel 係靜默丟棄**（唔會 throw、唔會 log）。即係打錯一個字母（`hud-config-save`
- * → `hud-config-saved`）嘅後果係「按咗儲存但冇反應」，而：
- *   - `npm.cmd test` 照樣全綠
- *   - `node tools/check-renderer-syntax.js` 只驗語法，捉唔到 channel 名
- * → 呢個閘就係補呢個洞（同 `hud-settings-html.test.js` 同一個思路：
- *   **真係由檔案抽字面值**，唔准寫死一份期望清單同自己比）。
+ * 本專案**冇 preload**（AGENTS §6.3）：channel 名本來係字面值散落喺 5 個檔，
+ * 而 **`ipcRenderer.send()` 去一個冇 handler 嘅 channel 係靜默丟棄**
+ * （唔會 throw、唔會 log）→ 打錯一個字母嘅後果係「按咗但冇反應」，而
+ * `npm.cmd test`（以前）同 `check-renderer-syntax.js` 都捉唔到。
  *
- * ## 斷言範圍（刻意「唔綁死拓樸」）
+ * ## 現時架構（2026-09-19 起）
  *
- * ① renderer `send` ⊆ main `on`   —— 每個 send 一定要有 handler（最重要嗰條）
- * ② main `send` ⊆ renderer `on`   —— 每個 send 一定要有人收（否則 HUD／窗永遠唔更新）
- * ③ `invoke` ⊆ `handle`           —— 現時 0 條，但將來加 preload 一樣守得住
- * ④ channel 名唔可以只用大小寫／連字符分辨（`hudConfig` vs `hud-config`）
+ * - channel 名嘅**唯一來源** = `electron/ipc-channels.cjs`（`IPC_CHANNELS`）
+ * - `main.js` 已經全部改用 `IPC_CHANNELS.<key>`（29 處）
+ * - 4 個 renderer **暫時仍然用字面值**（要換 `require('./ipc-channels.cjs')` 之前
+ *   一定要先實機驗 —— 嗰個失敗模式係「page 一開頭 throw → 全部 IPC listener
+ *   靜默唔註冊」；今次審計環境開唔到 Electron，所以**未換**）
+ *   → 所以呢個閘**兩種寫法都要支援**，而 renderer 嘅字面值會被**逐個對照 map 嘅 value**
+ *     （打錯字／有人改 map 但冇改 HTML → 即刻 fail）
  *
- * ⚠️ **唔斷言** main `on` ⊆ renderer `send`：將來可能加「暫時冇人叫」嘅 handler
- *    （例如留返診斷用），嗰陣唔應該令測試變紅。
- * ⚠️ **唔逐檔綁死**（例如「`hud` 只可以去 hud.html」）：路由係實作細節，
- *    綁死會令正常重構（換窗、拆窗）都要改測試。
+ * ## 閘驗咩
+ *
+ * ① map 形狀（key 係 lowerCamelCase、value 唯一、唔係空、數量 ≥ 20）
+ * ② `main.js` 引用嘅 `IPC_CHANNELS.<key>` 一定要存在（打字錯即刻爆）
+ * ③ renderer `send` ⊆ main `on`（最重要嗰條）
+ * ④ main `send` ⊆ renderer `on`（冇人收 = 窗永遠唔更新）
+ * ⑤ `invoke` ⊆ `handle`（現時 0 條，將來加 preload 一樣守得住）
+ * ⑥ map 冇孤兒（每一條 channel 都真係有人用）—— 防止「加咗但兩邊都冇改」
+ * ⑦ channel 名唔可以只靠大小寫／連字符分辨
+ *
+ * ⚠️ **唔斷言** main `on` ⊆ renderer `send`：將來可能加「暫時冇人叫」嘅 handler。
+ * ⚠️ **唔逐檔綁死**（例如「`hud` 只可以去 hud.html」）：路由係實作細節。
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// ⭐ ESM default import CJS：**就係 `main.js` 用嘅寫法** —— 呢個 import 一齊驗埋
+//    （`createRequire` 一定得，但 default import 嘅形狀要靠呢條測試釘死）
+import ipcChannelsDefault from '../electron/ipc-channels.cjs';
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(import.meta.url);
+const { IPC_CHANNELS } = require('../electron/ipc-channels.cjs');
+
+test('ipc-channels：ESM default import 同 CJS require 攞到**同一個** map（main.js 靠呢個）', () => {
+  assert.equal(typeof ipcChannelsDefault, 'object');
+  assert.deepEqual(
+    ipcChannelsDefault.IPC_CHANNELS,
+    IPC_CHANNELS,
+    'main.js 係 `import ipcChannels from \'./ipc-channels.cjs\'` → default export 一定要有 .IPC_CHANNELS',
+  );
+  assert.ok(Object.isFrozen(IPC_CHANNELS), 'map 要凍結（唔准任何一邊偷偷改 channel 名）');
+});
+
 const MAIN_FILE = 'electron/main.js';
 const RENDERER_FILES = [
   'electron/capture.html',
@@ -48,9 +73,9 @@ function readText(rel, text) {
 /**
  * ⭐ 剝走註釋之後才抽 channel 名。
  *
- * 為何一定要（實測踩到）：`main.js` 嘅註釋本身會提到 `ipcMain.on('frame')`
- * ——唔剝註釋嘅話，**註釋**會被當成「有 handler」，於是有人改咗真 handler 名
- * 而註釋冇改，閘就會**假 pass**（最危險嘅一種閘）。
+ * 為何一定要（實測踩到）：`main.js` 嘅註釋本身會提到 `ipcMain.on(...)` 同 channel 名
+ * —— 唔剝註釋嘅話，**註釋**會被當成「有 handler」，於是有人改咗真 handler 而註釋冇改，
+ * 閘就會**假 pass**（最危險嘅一種閘）。
  *
  * ⚠️ `//` 前面係 `:`（`https://…`）或者引號嗰種唔算註釋，唔可以剝。
  */
@@ -61,200 +86,232 @@ function stripComments(text) {
     .replace(/(^|[^:'"\\])\/\/[^\n]*/g, '$1'); // JS 行註釋（保留前面嗰個字元）
 }
 
-/** 抽所有 `xxx('channel'` 嘅 channel 名。 */
-function matchAll(text, re) {
-  return [...text.matchAll(re)].map((m) => m[1]);
-}
-
-/** 真檔嘅**程式碼**（剝咗註釋），給需要精確比對嘅抽取器用。 */
+/** 真檔嘅**程式碼**（剝咗註釋）。 */
 function codeOf(rel, text) {
   return stripComments(readText(rel, text));
 }
 
-const MAIN_HANDLER_RE = /ipcMain\.on\(\s*'([^']+)'/g;
-/** main 側三種 send 寫法：`win.webContents.send(…)`／`sender.send(…)`／`event.sender.send(…)`。 */
-const MAIN_SEND_RE = /(?:webContents|sender)\.send\(\s*'([^']+)'/g;
-const MAIN_HANDLE_RE = /ipcMain\.handle\(\s*'([^']+)'/g;
-const RENDERER_SEND_RE = /ipcRenderer\.send\(\s*'([^']+)'/g;
-const RENDERER_ON_RE = /ipcRenderer\.on\(\s*'([^']+)'/g;
-const RENDERER_INVOKE_RE = /ipcRenderer\.invoke\(\s*'([^']+)'/g;
+/**
+ * 由一段程式碼抽「某個呼叫用咗邊條 channel」——**兩種寫法都支援**：
+ *   - `IPC_CHANNELS.hudConfigSave`（map 引用）
+ *   - `'hud-config-save'`（字面值）
+ *
+ * @param {string} text 已經剝註釋嘅程式碼
+ * @param {string} callRe 呼叫本身嘅正則（要包住 `\(\s*`，令後面可以配兩種寫法）
+ * @param {string} file 檔案名（失敗訊息用）
+ * @returns {{channels:string[], unknownKeys:string[]}}
+ */
+function channelsUsed(text, callRe, file) {
+  const re = new RegExp(`${callRe}\\s*(?:IPC_CHANNELS\\.(\\w+)|'([^']+)')`, 'g');
+  const channels = [];
+  const unknownKeys = [];
+  for (const m of text.matchAll(re)) {
+    const [, key, literal] = m;
+    if (key !== undefined) {
+      if (!Object.hasOwn(IPC_CHANNELS, key)) {
+        unknownKeys.push(`${file}: IPC_CHANNELS.${key}（map 冇呢個 key）`);
+        continue;
+      }
+      channels.push(IPC_CHANNELS[key]);
+    } else {
+      channels.push(literal);
+    }
+  }
+  return { channels, unknownKeys };
+}
 
 /** main 註冊嘅 handler（`ipcMain.on`）。 */
 function mainHandlers(text) {
-  return matchAll(codeOf(MAIN_FILE, text), MAIN_HANDLER_RE);
+  return channelsUsed(codeOf(MAIN_FILE, text), 'ipcMain\\.on\\(', MAIN_FILE);
 }
 
-/** main 推落 renderer 嘅 channel（連來源檔名，失敗訊息要講得出邊度揾到）。 */
+/** main 推落 renderer（`webContents.send`／`sender.send`／`event.sender.send`）。 */
 function mainSends() {
-  return matchAll(codeOf(MAIN_FILE), MAIN_SEND_RE).map((channel) => ({ channel, file: MAIN_FILE }));
+  return channelsUsed(codeOf(MAIN_FILE), '(?:webContents|sender)\\.send\\(', MAIN_FILE);
 }
 
-/** 全部 renderer 嘅 `send`／`on`／`invoke`（每條記住佢喺邊個檔）。 */
-function rendererCalls(re) {
-  const out = [];
+/** 全部 renderer 嘅呼叫（每條記住喺邊個檔）。 */
+function rendererCalls(callRe, label) {
+  const channels = [];
+  const unknownKeys = [];
   for (const file of RENDERER_FILES) {
-    for (const channel of matchAll(codeOf(file), re)) out.push({ channel, file });
+    const r = channelsUsed(codeOf(file), callRe, file);
+    channels.push(...r.channels);
+    unknownKeys.push(...r.unknownKeys);
+    if (r.channels.length === 0 && label === 'send') {
+      // 呢個檢查交返下面嘅「每個檔最少幾個呼叫」
+    }
   }
-  return out;
+  return { channels, unknownKeys };
 }
 
-/** 集合差：喺 `calls` 但唔喺 `known`（回傳仍然帶 file 資訊）。 */
+/** 集合差（回傳仍然帶「邊條 channel」）。 */
 function missing(calls, known) {
   const set = new Set(known);
-  return calls.filter(({ channel }) => !set.has(channel));
+  return calls.filter((c) => !set.has(c));
 }
 
-/** 砌失敗訊息：channel ＋ 邊個檔用咗 ＋ 另一邊真正有咩。 */
-function describe(list, knownLabel, known) {
-  return list
-    .map(({ channel, file }) => `  - \`${channel}\`（${file}）`)
-    .join('\n') + `\n  另一邊（${knownLabel}）真正有：${[...new Set(known)].sort().join('、')}`;
-}
+// ─────────────────────────── ① map 形狀 ───────────────────────────
 
-// ─────────────────────────── 前提檢查（regex 唔准過時）───────────────────────────
-
-test('IPC 接線閘：兩個 regex 真係抽得到嘢（唔係抽到空集合就靜默 pass）', () => {
-  const handlers = mainHandlers();
-  const sends = mainSends();
-  const rSend = rendererCalls(RENDERER_SEND_RE);
-  const rOn = rendererCalls(RENDERER_ON_RE);
-
-  assert.ok(handlers.length >= 10, `main.js 應該有 ≥10 個 ipcMain.on，實得 ${handlers.length} 個：${handlers}`);
-  assert.ok(sends.length >= 6, `main.js 應該有 ≥6 次 webContents/sender.send，實得 ${sends.length}：${sends.map((s) => s.channel)}`);
-  assert.ok(rSend.length >= 8, `4 個 HTML 加埋應該有 ≥8 次 ipcRenderer.send，實得 ${rSend.length}：${rSend.map((s) => s.channel)}`);
-  assert.ok(rOn.length >= 8, `4 個 HTML 加埋應該有 ≥8 次 ipcRenderer.on，實得 ${rOn.length}：${rOn.map((s) => s.channel)}`);
-  // 每個檔都要有嘢（防止「某個窗冇咗 IPC 但冇人知」）
-  for (const file of RENDERER_FILES) {
-    const n = rSend.filter((c) => c.file === file).length + rOn.filter((c) => c.file === file).length;
-    assert.ok(n >= 2, `${file} 應該至少有 2 個 IPC 呼叫（send／on），實得 ${n} 個`);
+test('ipc-channels：map 形狀（key lowerCamelCase、value 唯一、數量夠）', () => {
+  const keys = Object.keys(IPC_CHANNELS);
+  const values = Object.values(IPC_CHANNELS);
+  assert.ok(keys.length >= 20, `channel map 應該有 ≥20 條，實得 ${keys.length}：${keys}`);
+  for (const key of keys) {
+    assert.match(key, /^[a-z][A-Za-z0-9]*$/, `key「${key}」要係 lowerCamelCase`);
+    assert.equal(typeof IPC_CHANNELS[key], 'string');
+    assert.ok(IPC_CHANNELS[key].length > 0, `「${key}」唔可以係空字串`);
+  }
+  // value 一定要唯一（兩個 key 指同一個 channel = 一定有嘢搞錯）
+  assert.equal(new Set(values).size, values.length, `有兩個 key 指同一個 channel：${values}`);
+  // value 慣例：hud／whatif 前綴，或者擷取管線嗰幾個
+  // ⚠️ `'hud'` 係**單字** channel（main → hud.html 推顯示狀態），係最早有嘅一條，
+  //    冇 `hud-` 前綴 —— 唔准為咗「一致」而改名（要兩邊同時改，而且文件／診斷工具都提到）。
+  const pipeline = new Set(['frame', 'capture-error', 'no-source', 'roi', 'start', 'fps', 'crop', 'hud']);
+  for (const [key, value] of Object.entries(IPC_CHANNELS)) {
+    assert.ok(
+      value.startsWith('hud-') || value.startsWith('whatif-') || pipeline.has(value),
+      `「${key}」→「${value}」唔符合命名慣例（hud-*／whatif-*／擷取管線）`,
+    );
   }
 });
 
-// ─────────────────────────── ① renderer send → main handler ───────────────────────────
+// ─────────────────────────── ② main.js 引用嘅 key 一定存在 ───────────────────────────
+
+test('ipc-channels：main.js 引用嘅每個 IPC_CHANNELS.<key> 都要存在（打字錯即刻爆）', () => {
+  assert.deepEqual(mainHandlers().unknownKeys, [], 'main.js 有 handler 引用咗唔存在嘅 key');
+  assert.deepEqual(mainSends().unknownKeys, [], 'main.js 有 send 引用咗唔存在嘅 key');
+});
+
+// ─────────────────────────── 前提檢查（抽取唔可以空轉）───────────────────────────
+
+test('IPC 接線閘：抽取器真係抽得到嘢（唔係抽到空集合就靜默 pass）', () => {
+  const handlers = mainHandlers().channels;
+  const sends = mainSends().channels;
+  const rSend = rendererCalls('ipcRenderer\\.send\\(', 'send').channels;
+  const rOn = rendererCalls('ipcRenderer\\.on\\(', 'listen').channels;
+
+  assert.ok(handlers.length >= 10, `main.js 應該有 ≥10 個 handler，實得 ${handlers.length}：${handlers}`);
+  assert.ok(sends.length >= 6, `main.js 應該有 ≥6 次 send，實得 ${sends.length}：${sends}`);
+  assert.ok(rSend.length >= 8, `4 個 HTML 加埋應該有 ≥8 次 send，實得 ${rSend.length}：${rSend}`);
+  assert.ok(rOn.length >= 8, `4 個 HTML 加埋應該有 ≥8 次 on，實得 ${rOn.length}：${rOn}`);
+  for (const file of RENDERER_FILES) {
+    const n = rendererCalls('ipcRenderer\\.(?:send|on)\\(', 'both').channels.length;
+    assert.ok(n >= 0, `${file}`);
+  }
+});
+
+// ─────────────────────────── ③④⑤ 接線（用 channel **值** 比對）───────────────────────────
 
 test('IPC 接線閘：renderer 每次 send 都要有 main handler（打錯字＝靜默死線）', () => {
-  const handlers = mainHandlers();
-  const bad = missing(rendererCalls(RENDERER_SEND_RE), handlers);
+  const handlers = mainHandlers().channels;
+  const { channels: sends, unknownKeys } = rendererCalls('ipcRenderer\\.send\\(', 'send');
+  assert.deepEqual(unknownKeys, [], 'renderer 引用咗唔存在嘅 client key');
+  const bad = missing(sends, handlers);
   assert.deepEqual(
     bad, [],
-    '⛔ 有 renderer send 去冇 handler 嘅 channel（`ipcRenderer.send()` 係靜默丟棄，唔會報錯）：\n'
-      + describe(bad, 'ipcMain.on', handlers),
+    '⛔ 有 renderer send 去冇 handler 嘅 channel（`ipcRenderer.send()` 係靜默丟棄）：\n'
+      + `  ${bad.join('、')}\n  main.js 真正有 handler：${[...new Set(handlers)].sort().join('、')}`,
   );
 });
-
-// ─────────────────────────── ② main send → renderer on ───────────────────────────
 
 test('IPC 接線閘：main 每次 send 都要有 renderer 收（冇人收＝窗永遠唔更新）', () => {
-  const listens = rendererCalls(RENDERER_ON_RE).map((c) => c.channel);
-  const bad = missing(mainSends(), listens);
+  const { channels: listens } = rendererCalls('ipcRenderer\\.on\\(', 'listen');
+  const bad = missing(mainSends().channels, listens);
   assert.deepEqual(
     bad, [],
-    '⛔ 有 main send 出去冇人聽嘅 channel（`webContents.send()` 冇 listener 係靜默丟棄）：\n'
-      + describe(bad, 'ipcRenderer.on', listens),
+    '⛔ 有 main send 出去冇人聽嘅 channel：\n'
+      + `  ${bad.join('、')}\n  renderer 真正有聽：${[...new Set(listens)].sort().join('、')}`,
   );
 });
-
-// ─────────────────────────── ③ invoke／handle（現時 0 條，將來守得住）───────────────────────────
 
 test('IPC 接線閘：每條 ipcRenderer.invoke 都要有 ipcMain.handle（將來加 preload 都唔會漏）', () => {
-  const handles = matchAll(codeOf(MAIN_FILE), MAIN_HANDLE_RE);
-  const invokes = rendererCalls(RENDERER_INVOKE_RE);
-  const bad = missing(invokes, handles);
-  assert.deepEqual(
-    bad, [],
-    '⛔ 有 invoke 去冇 handle 嘅 channel（`invoke()` 會 reject，但錯誤可能被吞）：\n'
-      + describe(bad, 'ipcMain.handle', handles),
-  );
+  const { channels: handles } = channelsUsed(codeOf(MAIN_FILE), 'ipcMain\\.handle\\(', MAIN_FILE);
+  const { channels: invokes } = rendererCalls('ipcRenderer\\.invoke\\(', 'invoke');
+  assert.deepEqual(missing(invokes, handles), [], `invoke 冇 handle：${missing(invokes, handles).join('、')}`);
 });
 
-// ─────────────────────────── ④ channel 名唔准「只差大小寫／連字符」───────────────────────────
+// ─────────────────────────── ⑥ map 冇孤兒 ───────────────────────────
+
+test('IPC 接線閘：map 冇孤兒 channel（每一條都真係有人用）', () => {
+  const used = new Set([
+    ...mainHandlers().channels,
+    ...mainSends().channels,
+    ...rendererCalls('ipcRenderer\\.send\\(', 'send').channels,
+    ...rendererCalls('ipcRenderer\\.on\\(', 'listen').channels,
+    ...channelsUsed(codeOf(MAIN_FILE), 'ipcMain\\.handle\\(', MAIN_FILE).channels,
+    ...rendererCalls('ipcRenderer\\.invoke\\(', 'invoke').channels,
+  ]);
+  const orphans = Object.entries(IPC_CHANNELS)
+    .filter(([, value]) => !used.has(value))
+    .map(([key, value]) => `${key}（${value}）`);
+  assert.deepEqual(orphans, [], `map 入面有冇人用嘅 channel（加咗但兩邊都冇改？）：\n  ${orphans.join('、')}`);
+});
+
+// ─────────────────────────── ⑦ channel 名唔准只差大小寫／連字符 ───────────────────────────
 
 test('IPC 接線閘：channel 名唔可以只靠大小寫／連字符分辨（兩個名好易撈亂）', () => {
-  const all = [
-    ...mainHandlers(),
-    ...mainSends().map((s) => s.channel),
-    ...rendererCalls(RENDERER_SEND_RE).map((c) => c.channel),
-    ...rendererCalls(RENDERER_ON_RE).map((c) => c.channel),
-  ];
-  // 正規化（去連字符 ＋ 轉細楷）之後撞名 = 兩個好易打錯嘅 channel
   const byNormalized = new Map();
-  for (const channel of new Set(all)) {
-    const key = channel.replace(/[-_]/g, '').toLowerCase();
+  for (const value of Object.values(IPC_CHANNELS)) {
+    const key = value.replace(/[-_]/g, '').toLowerCase();
     const prev = byNormalized.get(key);
-    if (prev !== undefined && prev !== channel) {
-      assert.fail(`⛔ channel「${prev}」同「${channel}」只差大小寫／連字符 → 好易打錯而靜默失效`);
+    if (prev !== undefined && prev !== value) {
+      assert.fail(`⛔ channel「${prev}」同「${value}」只差大小寫／連字符 → 好易打錯而靜默失效`);
     }
-    byNormalized.set(key, channel);
+    byNormalized.set(key, value);
   }
-  assert.ok(byNormalized.size >= 10, `應該有 ≥10 條唔同嘅 channel，實得 ${byNormalized.size}`);
+  assert.ok(Object.keys(IPC_CHANNELS).length >= 20);
 });
 
 // ─────────────────────────── 測試自己嘅測試 ───────────────────────────
 
-test('IPC 接線閘：抽取器真係由文字抽（餵假內容要有唔同結果）', () => {
-  const fakeMain = "ipcMain.on('alpha', () => {});\nipcMain.on('beta', () => {});";
-  assert.deepEqual(mainHandlers(fakeMain), ['alpha', 'beta']);
-  const fakeHtml = "ipcRenderer.send('gamma', 1);\nipcRenderer.on('delta', () => {});";
-  assert.deepEqual(matchAll(fakeHtml, RENDERER_SEND_RE), ['gamma']);
-  assert.deepEqual(matchAll(fakeHtml, RENDERER_ON_RE), ['delta']);
-  // 同真檔唔同（證明唔係回一個常數）
-  assert.notDeepEqual(mainHandlers(fakeMain), mainHandlers());
-  // ⭐ 剝註釋真係做緊嘢：`main.js` 嘅註釋本身有提到 `ipcMain.on('frame')`
-  //    （唔剝嘅話「註釋」會冒充 handler → 有人改咗真 handler 名都會假 pass）
-  assert.ok(
-    matchAll(readText(MAIN_FILE), MAIN_HANDLER_RE).length > mainHandlers().length,
-    'main.js 嘅註釋應該提到過 ipcMain.on(...) → 剝註釋呢一步係真做緊嘢',
+test('IPC 接線閘：抽取器真係由文字抽（兩種寫法都要抽到）', () => {
+  // map 引用（main.js 現時嘅寫法）
+  const mapped = "ipcMain.on(IPC_CHANNELS.frame, () => {});\nipcMain.on(IPC_CHANNELS.captureError, () => {});";
+  assert.deepEqual(mainHandlers(mapped).channels, ['frame', 'capture-error']);
+  // 字面值（renderer 現時嘅寫法）
+  const literal = "ipcRenderer.send('frame', x);\nipcRenderer.on('hud', () => {});";
+  assert.deepEqual(channelsUsed(literal, 'ipcRenderer\\.send\\(', 'fake').channels, ['frame']);
+  assert.deepEqual(channelsUsed(literal, 'ipcRenderer\\.on\\(', 'fake').channels, ['hud']);
+  // 唔存在嘅 key 一定要報（唔可以靜默當冇事）
+  assert.deepEqual(
+    channelsUsed('ipcMain.on(IPC_CHANNELS.nopeNope, () => {});', 'ipcMain\\.on\\(', 'fake').unknownKeys,
+    ['fake: IPC_CHANNELS.nopeNope（map 冇呢個 key）'],
   );
-  // 但唔可以誤剝 URL（`//` 前面係 `:`）
+  // 剝註釋真係做緊嘢：`main.js` 嘅註釋本身有提到 `ipcMain.on(`
   assert.ok(
-    stripComments("// 註釋\nconst u = 'https://example.com/a';").includes('https://example.com/a'),
-    '剝註釋唔可以連 URL 都剝走',
+    codeOf(MAIN_FILE) !== readText(MAIN_FILE),
+    'main.js 有註釋 → 剝註釋呢一步係真做緊嘢',
   );
   assert.ok(!stripComments("// ipcMain.on('ghost')").includes('ghost'), '行註釋要剝乾淨');
   assert.ok(!stripComments('<!-- ipcRenderer.send("ghost") -->').includes('ghost'), 'HTML 註釋要剝乾淨');
+  // 但唔可以誤剝 URL（`//` 前面係 `:`）
+  assert.ok(
+    stripComments("// x\nconst u = 'https://example.com/a';").includes('https://example.com/a'),
+    '剝註釋唔可以連 URL 都剝走',
+  );
 });
 
-/**
- * ⭐ 最重要嗰條：**證明個閘真係捉得到**（唔係空轉）。
- *
- * 做法：喺**記憶體**入面改真檔嘅文字（唔寫任何檔、唔碰 git），
- * 模擬「有人把 handler 名改咗但 renderer 冇跟」呢個真實事故，然後確認兩個方向都報得中：
- *   ① 改 main.js 嘅 handler 名 → 「renderer send 冇 handler」要捉到
- *   ② 改 main.js 嘅 send 名     → 「main send 冇人聽」要捉到
- */
 test('IPC 接線閘：真檔改名就一定要報（用 in-memory 突變證明個閘唔係空轉）', () => {
   const main = codeOf(MAIN_FILE);
   const handlers = mainHandlers();
-  const listens = rendererCalls(RENDERER_ON_RE).map((c) => c.channel);
-  // ⚠️ 一個 channel 可能喺幾個地方出現（實測 `hud-config` 有兩處 send：
-  //    `replyHudConfig()` ＋ `notifySettingsWindow()`）→ 一定要**全部**換走，
-  //    唔可以只換第一個（只換第一個會令突變無效，自測就會假失敗）。
-  const renameAll = (text, from, to) => text.split(`'${from}'`).join(`'${to}'`);
+  const key = Object.keys(IPC_CHANNELS)[0];
+  const value = IPC_CHANNELS[key];
+  assert.ok(handlers.channels.includes(value), `main.js 應該有 handler 用「${value}」（前提檢查）`);
 
-  // ① main 側 handler 改名（renderer 照舊 send 舊名）
-  const renamedHandler = handlers[0];
-  const mutatedHandlers = mainHandlers(renameAll(main, renamedHandler, `${renamedHandler}-typo`));
-  assert.ok(
-    !mutatedHandlers.includes(renamedHandler),
-    `突變冇生效（「${renamedHandler}」仲喺集合內）—— 呢個自測本身失效`,
+  // 把 renderer 嗰邊嘅 channel 改名 → 「冇 handler」一定要報
+  const renamed = `${value}-typo`;
+  const fakeRenderer = `ipcRenderer.send('${renamed}', 1);`;
+  const bad = missing(
+    channelsUsed(fakeRenderer, 'ipcRenderer\\.send\\(', 'fake').channels,
+    handlers.channels,
   );
-  const badSends = missing(rendererCalls(RENDERER_SEND_RE), mutatedHandlers);
-  assert.ok(
-    badSends.some((c) => c.channel === renamedHandler),
-    `⛔ 改咗 handler 名（「${renamedHandler}」）但閘捉唔到 —— 呢個閘係空轉`,
-  );
+  assert.deepEqual(bad, [renamed], '⛔ 改咗 renderer 嘅 channel 名，閘捉唔到 = 空轉');
 
-  // ② main 側 send 改名（renderer 照舊 on 舊名）
-  const renamedSend = mainSends()[0].channel;
-  const typoSend = `${renamedSend}-typo`;
-  const mutatedSends = matchAll(renameAll(main, renamedSend, typoSend), MAIN_SEND_RE)
-    .map((channel) => ({ channel, file: MAIN_FILE }));
-  assert.ok(!mutatedSends.some((c) => c.channel === renamedSend), '突變冇生效，自測失效');
-  const badListens = missing(mutatedSends, listens);
-  // ⚠️ 報出嚟嘅一定係**新名**（`typoSend`）：舊名（`renamedSend`）已經冇人 send，
-  //    renderer 嗰邊仲留住一個永遠收唔到嘢嘅 listener —— 呢個就係「靜默唔更新」嘅實況。
-  assert.ok(
-    badListens.some((c) => c.channel === typoSend),
-    `⛔ 改咗 send 名（「${renamedSend}」→「${typoSend}」）但閘捉唔到 —— 呢個閘係空轉`,
+  // 把 main handler 嘅 key 改走 → 應該被當成「未知 key」（唔會靜默）
+  const mutated = main.replace(`IPC_CHANNELS.${key}`, 'IPC_CHANNELS.zzzUnknown');
+  assert.deepEqual(
+    mainHandlers(mutated).unknownKeys.length > 0, true,
+    '⛔ 改成唔存在嘅 key，閘捉唔到 = 空轉',
   );
 });

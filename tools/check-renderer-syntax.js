@@ -43,21 +43,21 @@ const CLI_DIRS = process.argv.slice(2);
 
 /** 要驗嘅檔（順序 = 報告順序）。 */
 const HTML_FILES = ['electron/settings.html', 'electron/hud.html', 'electron/whatif.html', 'electron/capture.html'];
-/** 另外淨係驗語法嘅 Node 檔（ESM）。 */
-const JS_FILES = ['electron/main.js'];
+/** 另外淨係驗語法嘅 Node 檔（ESM ＋ 一個 CommonJS）——`.cjs` 要 `--check` 當 CJS 驗。 */
+const JS_FILES = ['electron/main.js', 'electron/ipc-channels.cjs'];
 /** 遞歸掃 `.js` 嘅目錄（有 CLI 參數就當係呼叫者指定嘅路徑）。 */
 const JS_DIRS = CLI_DIRS.length ? CLI_DIRS : ['src', 'tools'];
 
 let failed = 0;
 
-/** 遞歸搵出一個目錄入面所有 `.js`（跳過 node_modules 同 dot 目錄）。 */
+/** 遞歸搵出一個目錄入面所有 `.js`／`.cjs`（跳過 node_modules 同 dot 目錄）。 */
 function jsFilesUnder(dir) {
   const out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
     const full = join(dir, entry.name);
     if (entry.isDirectory()) out.push(...jsFilesUnder(full));
-    else if (entry.isFile() && entry.name.endsWith('.js')) out.push(full);
+    else if (entry.isFile() && (entry.name.endsWith('.js') || entry.name.endsWith('.cjs'))) out.push(full);
   }
   return out.sort();
 }
