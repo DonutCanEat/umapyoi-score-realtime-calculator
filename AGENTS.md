@@ -63,9 +63,9 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 | Phase 0 | 技能資料庫（1323 招）＋ 進化技能 override | ✅ |
 | Phase 1 | 畫面擷取（`npm start` 跑得通）| ✅ |
 | Phase 1 | **五維數字辨識（零校準）** | ✅ 兩條路都通：**畫面 A 面板條**（`statbar.js`）**13/13 全中**（1356→2560 五個解析度 ＋ 4 個實機失敗／金色格回歸 ＋ 4 個實機狀態樣本）＋ **負樣本 3/3 唔出數**（其他畫面唔准出數，見地雷 #30）；ステータス面板排法 **30/30**。✅ 已實機跑過（`npm start`，1920 窗），修好間歇性「讀唔清」（地雷 #25）同**金色格靜默讀錯**（地雷 #26）|
-| Phase 1 | HUD overlay ＋ 設定面板 | ✅ **可用**（透明置頂穿透；顯示評價点 + 五維逐格 + 技能分 `？／總分 ≥ X` ＋ 金色格提示 ＋ **ランク目標（仲差幾多分升級，C5）**）。**已做**：`hud-position.json` 存檔（env > 檔案 > 預設）、獨立**設定窗**（8 個數值 slider ＋ **8 個顯示選項**，改動即時生效）、**對位模式（`UMAPYOI_HUD_EDIT=1`）可以直接拖 HUD**（放手即反推 + 存檔）＋ 設定窗跟住更新（唔會「拖完撳儲存就彈返」）。✅ **2026-09-19 用戶實機驗過（原話：「而家 hud 冇問題」）**。⏸️ **唔做**：跟住遊戲視窗移動（**用戶 2026-09-19 決定** —— 可以用拖位擺去自己想擺嘅位，跟窗冇必要；見 §9 ①）。對位模式期間切換仍然要重開程式（⚠️ C5 加咗第 8 個顯示選項之後**未再實機睇過 HUD**）|
+| Phase 1 | HUD overlay ＋ 設定面板 | ✅ **可用**（透明置頂穿透；顯示評價点 + 五維逐格 + 技能分 `？／總分 ≥ X` ＋ 金色格提示 ＋ **ランク目標（仲差幾多分升級，C5）**）。**已做**：`hud-position.json` 存檔（env > 檔案 > 預設）、獨立**設定窗**（8 個數值 slider ＋ **8 個顯示選項**，改動即時生效）、**對位模式（`UMAPYOI_HUD_EDIT=1`）可以直接拖 HUD**（放手即反推 + 存檔）＋ 設定窗跟住更新（唔會「拖完撳儲存就彈返」）。✅ **2026-09-19 用戶實機驗過（原話：「而家 hud 冇問題」）**。⏸️ **唔做**：跟住遊戲視窗移動（**用戶 2026-09-19 決定** —— 可以用拖位擺去自己想擺嘅位，跟窗冇必要；見 §9 ①）。對位模式期間切換仍然要重開程式（✅ **2026-09-19 用戶實機驗過**：新嗰行「升級 … 差 …」正常顯示；原話「呢兩樣都ok」）|
 | Phase 2 | 技能 icon 識別（自動知學咗邊啲技能）| ⏸️ **暫停（用戶 2026-09-19 指示：暫時唔處理技能呢一 part）** —— 已經做好嘅部分見下面，隨時可以接返。原狀態：🚧 **兩步做好**：① 技能畫面欄／行偵測器（`skillscreen.js`，8 張實機圖全部搵到 7 行）；② **名稱框抽取**（112 個全部抽到）＋ **影像比對可行性已量化**（互相最佳配對中位數 **0.986**、撞分上限 **0.604** —— 見 `docs/skill-screen.md` §5）。⏳ 未做：接上**候選名單**（見 §9）|
-| Phase 3 | what-if 模擬（加一招加幾多分／Pt）、成長曲線 | 🚧 **C1 已做（核心＋窗；未實機驗）**：`src/umascore/whatif.js`（純函數）＋ `tools/whatif.js` CLI ＋ **獨立 what-if 窗**（`electron/whatif.html`，`UMAPYOI_NO_WHATIF=1` 唔開）＋ `src/umascore/aptitude.js`（適性規則**單一來源**）。⏳ 未做：成長曲線（C3）|
+| Phase 3 | what-if 模擬（加一招加幾多分／Pt）、成長曲線 | ✅ **C1 已做 ＋ 2026-09-19 用戶實機驗過（原話「呢兩樣都ok」）**：`src/umascore/whatif.js`（純函數）＋ `tools/whatif.js` CLI ＋ **獨立 what-if 窗**（`electron/whatif.html`，`UMAPYOI_NO_WHATIF=1` 唔開）＋ `src/umascore/aptitude.js`（適性規則**單一來源**）。⏳ 未做：成長曲線（C3）|
 | Phase 4 | 事件選項助手（已 mark，見 `docs/vision-design.md` §5.5）| 暫緩 |
 
 > **影像辨識里程碑（2026-09）**：由實機截圖直接讀出五維，
@@ -848,6 +848,7 @@ electron/whatif.html     窗（普通窗，唔碰 HUD 穿透）＋ `main.js` 三
   `ELECTRON_RUN_AS_NODE=1` → `npm start` 會用**純 Node** 跑 `main.js`
   （症狀：`does not provide an export named 'BrowserWindow'`）。呢個**唔係**本專案嘅 bug
   —— 要睇真窗就要用戶自己喺正常 shell 跑 `npm.cmd start`。
+  ✅ **2026-09-19 用戶實機驗過（原話「呢兩樣都ok」）**：what-if 窗開得到，搜尋／適性下拉／試算都正常。
 
 
 
@@ -1053,11 +1054,11 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 
 | # | 項目 | 內容 | 大細 |
 |---|---|---|---|
-| C1 | **what-if 模擬**（Phase 3 主菜）| ✅ **已做（2026-09-19；未實機驗）** | 「加呢招會加幾多分／要幾多 Pt」—— 技能名搜尋（標點無關）＋ 每類適性下拉 ＋ 即時試算。<br>　 ① 核心：`src/umascore/whatif.js`（`searchSkills()`／`whatIfAddSkill()`，純函數）＋ `src/umascore/aptitude.js`（適性規則**單一來源**，順手去重獨立審計 H1）；<br>　 ② CLI（headless 可驗）：`node tools/whatif.js --stats=1200,600,600,600,600 --skill=弧線的教授` → `+508 分 / 360 Pt / 8413 B+ → 8921 B+`（`--grades=距離:S` 可以改適性、`--json`、`--all`）；<br>　 ③ 窗：`electron/whatif.html`（普通窗；五維預設每 2 秒跟實機，一改就變手動輸入；`UMAPYOI_NO_WHATIF=1` 唔開）；<br>　 ④ 測試 36 條（`test/whatif.test.js` 29 ＋ `test/whatif-window.test.js` 7 接線閘）。<br>　 ⏳ 未做：實機驗（要開遊戲睇窗）；技能分仍然讀唔到 → what-if 只可以逐招加，唔可以累加「已學晒嘅技能」 | 中大 |
+| C1 | **what-if 模擬**（Phase 3 主菜）| ✅ **已做（2026-09-19；✅ 同日用戶實機驗過：窗開得到、搜尋／適性／試算正常）** | 「加呢招會加幾多分／要幾多 Pt」—— 技能名搜尋（標點無關）＋ 每類適性下拉 ＋ 即時試算。<br>　 ① 核心：`src/umascore/whatif.js`（`searchSkills()`／`whatIfAddSkill()`，純函數）＋ `src/umascore/aptitude.js`（適性規則**單一來源**，順手去重獨立審計 H1）；<br>　 ② CLI（headless 可驗）：`node tools/whatif.js --stats=1200,600,600,600,600 --skill=弧線的教授` → `+508 分 / 360 Pt / 8413 B+ → 8921 B+`（`--grades=距離:S` 可以改適性、`--json`、`--all`）；<br>　 ③ 窗：`electron/whatif.html`（普通窗；五維預設每 2 秒跟實機，一改就變手動輸入；`UMAPYOI_NO_WHATIF=1` 唔開）；<br>　 ④ 測試 36 條（`test/whatif.test.js` 29 ＋ `test/whatif-window.test.js` 7 接線閘）。<br>　 ⏳ 未做：技能分仍然讀唔到 → what-if 只可以逐招加，唔可以累加「已學晒嘅技能」 | 中大 |
 | C2 | **Pt／技能點畫面（畫面 C）** | 讀點技能畫面嘅 Pt 價格同「已獲得」（⚠️ 技能庫已經有 `skillPt`，所以 C1 出得到 Pt；C2 係「由畫面自動認得」） | 中 |
 | C3 | **成長曲線** | 記錄每次五維變化 → 畫圖（HUD 歷史） | 中 |
 | C4 | **訓練建議** | 邊個訓練加最多分（用 fans／屬性成長率） | 大 |
-| C5 | **ランク目標** | ✅ **已做（2026-09-19，`1309c78`）** | 「仲差幾多分到 UG」—— HUD summary 出「升級 UG3 差 66」（`evaluate()` 本身已經有 `nextRank`，只係一直冇人用）。新增顯示選項 `rankTarget`（8 個之一，預設開）；⚠️ 舊 `hud-position.json`（7 個 key）照讀得入（`validateDisplay()` 補預設，有回歸測試）。⚠️ 未實機睇過 HUD | 細 |
+| C5 | **ランク目標** | ✅ **已做（2026-09-19，`1309c78`）** | 「仲差幾多分到 UG」—— HUD summary 出「升級 UG3 差 66」（`evaluate()` 本身已經有 `nextRank`，只係一直冇人用）。新增顯示選項 `rankTarget`（8 個之一，預設開）；⚠️ 舊 `hud-position.json`（7 個 key）照讀得入（`validateDisplay()` 補預設，有回歸測試）。✅ **2026-09-19 用戶實機驗過**（HUD 新一行正常）| 細 |
 | C6 | **多語介面** | 繁中／日文／英文（技能庫已有簡體名欄位） | 中 |
 | C7 | **事件選項助手**（Phase 4，已 mark 暫緩） | 認事件 → 建議揀邊個選項（見 `docs/vision-design.md` §5.5） | 大 |
 
@@ -1077,5 +1078,5 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 2. **A1 ＋ A2 ＋ A4** HUD 拖位／設定面板／存檔（用戶明講想要；一半唔使開遊戲）
 3. **B1** HUD 跟遊戲視窗（同 A1 一套做最順）
 4. ~~C1 what-if 模擬（Phase 3 主菜）~~ ✅ **2026-09-19 已做**（核心＋CLI＋窗；見 §6.6）。
-   ⏳ **下一步**：實機開 `npm.cmd start` 睇 what-if 窗（沙盒注入 `ELECTRON_RUN_AS_NODE=1` → agent 呢邊開唔到真 Electron）。
+   ✅ **2026-09-19 用戶實機驗過**（窗開得到、搜尋／適性／試算正常）。⚠️ agent 沙盒仍然注入 `ELECTRON_RUN_AS_NODE=1` → 呢邊開唔到真 Electron，實機驗一律要靠用戶。
 5. **C3** 成長曲線／**C6** 多語介面（C2 已經有替代：技能庫嘅 `skillPt` 就係 Pt 價格）
