@@ -345,16 +345,25 @@ export function pickFiveBySpacing(numbers, options = {}) {
  * 嘅碎片（格線／高亮邊緣之類）。`readNumberTrimmed()` 係由右邊貪心收，
  * 一撞到低分就即刻停 → 成格報「?」，連左邊三個正確嘅數字都讀唔到。
  *
- * 判準：同一個數字入面，**所有字元高度一定一樣**（同一字型、同一行），
+ * 判準 ①（高度）：同一個數字入面，**所有字元高度一定一樣**（同一字型、同一行），
  * 所以矮過最高字元 55% 嘅一定唔係數字。
+ *
+ * 判準 ②（⭐ 闊度，2026-09-19 新實機樣本）：格與格之間嗰條**半透明虛線分隔線**
+ * 喺某啲主題色之下會落入橙棕墨色窗口（實測 `rgb(179,129,110)` → hue **17°**、lum 0.56，
+ * 同數字墨窗口 15–50°／<0.62 完全重疊；同一條線喺另一隻色之下係 hue 322° → 唔入窗口，
+ * 所以係**間歇性**嘅）。佢係 **1px 闊、同字元一樣高**嘅長條 → 高度判準捉唔到，
+ * 但佢會被當成一個「字元」→ 整格報「?」→ **一個畫面都讀唔到**（用戶 2026-09-19 實機報）。
+ * 真字元最窄嘅係「1」（實機面板條實測 6px；最細嘅實機窗 1356px 之下約 4px）
+ * → **闊 ≤2px 一定唔係數字**。
  */
 export function dropNonDigits(glyphs, options = {}) {
   if (!glyphs || glyphs.length <= 1) return glyphs ?? [];
   const ratio = options.minGlyphHeightRatio ?? 0.55;
+  const minWidth = options.minGlyphWidth ?? 3;
   const maxHeight = Math.max(...glyphs.map((g) => g.height));
   if (maxHeight < 6) return glyphs; // 太細就唔敢剔（可能係細字）
   const minHeight = Math.max(4, Math.round(maxHeight * ratio));
-  const kept = glyphs.filter((g) => g.height >= minHeight);
+  const kept = glyphs.filter((g) => g.height >= minHeight && g.width >= minWidth);
   return kept.length ? kept : glyphs;
 }
 

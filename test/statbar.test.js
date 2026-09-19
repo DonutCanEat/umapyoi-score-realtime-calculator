@@ -178,6 +178,23 @@ test('statbar dropNonDigits：剔走唔可能係數字嘅細碎片（2026-09-18 
   assert.ok(!kept.includes(glyphs[3]), '碎片要剔走');
 });
 
+test('statbar dropNonDigits：⭐ 1px 闊嘅格線碎片（2026-09-19 實機：成個畫面讀唔到）', () => {
+  // 實機實測（`shots/live/roi-theme-divider.png`）：遊戲主題色一轉，格與格之間嗰條
+  // 半透明虛線分隔線就落入橙棕墨窗口（hue 17°、lum 0.56），而且佢係 **1px 闊、同字元一樣高**
+  // → 高度判準完全捉唔到 → 被當成「216」嘅第 4 個字元 → 第 1 格報「?」→ 全部唔出數。
+  const glyphs = [
+    { width: 12, height: 18 }, // 2
+    { width: 6, height: 18 },  // 1
+    { width: 13, height: 18 }, // 6
+    { width: 1, height: 18 },  // ← 格線（同字元一樣高）
+  ];
+  const kept = dropNonDigits(glyphs);
+  assert.equal(kept.length, 3, '格線要剔走，剩返 216 三個字元');
+  assert.ok(!kept.some((g) => g.width === 1), '1px 闊一定唔係數字');
+  // 闊度門檻唔准調到傷及真字元：最細實機窗（1356px）之下「1」約 4px 闊
+  assert.equal(dropNonDigits([{ width: 13, height: 18 }, { width: 4, height: 13 }, { width: 6, height: 18 }]).length, 3);
+});
+
 test('statbar dropNonDigits：同樣高度就唔會誤剔', () => {
   const glyphs = [
     { width: 13, height: 18 },
