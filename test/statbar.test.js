@@ -11,7 +11,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { decodePng } from '../src/vision/png.js';
@@ -257,6 +257,53 @@ test('statbar expectedGlyphHeight：跟圖闊等比（實測 1356→12px、2560�
   const at = (frameWidth) => expectedGlyphHeight(frameWidth * 0.29);
   assert.ok(Math.abs(at(1356) - 12) < 1.5, `1356 闊應該 ~12px，實得 ${at(1356).toFixed(1)}`);
   assert.ok(Math.abs(at(2560) - 24) < 2, `2560 闊應該 ~24px，實得 ${at(2560).toFixed(1)}`);
+});
+
+/* ────────── 其他畫面唔准出數（B5：假陽性閘） ────────── */
+
+test('⭐ 回歸：支援卡列表（Lv 徽章）唔可以當成五維（2026-09-19 實機假陽性，地雷 #30）', () => {
+  // 實機 log 有一幀 `kind: ok` 讀到 `27/27/25/25/25`，但用戶當時真實數值係 700+。
+  // 真身係「支援卡列表」：5 張卡嘅 `Lv27／Lv27／Lv25／Lv25／Lv25` 徽章**啱啱好**
+  // 砌得出「5 個等距數字」→ 舊版（字高門檻 0.6）放佢過關 → **靜默報錯數**。
+  const png = `${ROOT}/shots/negatives/roi-neg-cardlist.png`;
+  // ⚠️ 唔准「冇檔就靜默 pass」——呢張係入咗 git 嘅永久負樣本（同 `roi-regress-gold.png` 同級）。
+  assert.ok(existsSync(png), `永久負樣本唔見咗（AGENTS 地雷 #30）：${png}`);
+  const img = decodePng(readFileSync(png));
+  const read = readStatBar({ data: img.data, width: img.width, height: img.height }, templates, { whole: true });
+  assert.equal(read.stats, null, `唔准出數，實得 ${read.stats ? read.stats.join('/') : ''}`);
+  assert.equal(read.notBar, true, `應該判「唔似面板條」，實得：${read.reason}`);
+});
+
+test('⭐ 負樣本庫：`shots/negatives/*.png` 全部唔准出數（新增檔案自動入閘）', () => {
+  const dir = `${ROOT}/shots/negatives`;
+  assert.ok(existsSync(dir), '負樣本資料夾唔見咗（AGENTS §3／地雷 #30）');
+  const files = readdirSync(dir).filter((f) => f.endsWith('.png')).sort();
+  assert.ok(files.length >= 3, `負樣本至少要有幾個（實得 ${files.length}）`);
+  for (const file of files) {
+    // 同 `diag-statbar.js` 一樣嘅規則：`roi-` 開頭 = 已經剪好嘅 ROI（renderer 傳過嚟嘅幀）
+    const whole = file.startsWith('roi-');
+    const img = decodePng(readFileSync(`${dir}/${file}`));
+    const read = readStatBar({ data: img.data, width: img.width, height: img.height }, templates, { whole });
+    assert.equal(read.stats, null, `${file} 唔准出數，實得 ${read.stats ? read.stats.join('/') : ''}（${read.reason}）`);
+  }
+});
+
+test('statbar「唔似面板條」字高門檻：0.64× 要拒（卡列表）／0.83× 要收（真面板可以細少少）', () => {
+  // 門檻 0.8 嘅兩邊都要釘住（實測：12 張真值圖 0.85–0.96、卡列表假陽性 0.64）。
+  // 1600 闊 → 預期字高 15.7px；畫 10px（=0.64×）同 13px（=0.83×）各一次。
+  const bad = readStatBar(makeStatBarImage({ width: 1600, valueHeight: 10, limitHeight: 6 }), templates);
+  assert.equal(bad.stats, null, `0.64× 唔應該出數，實得 ${bad.stats?.join('/')}`);
+  assert.equal(bad.notBar, true, `應該判「唔似面板條」，實得：${bad.reason}`);
+  const ok = readStatBar(makeStatBarImage({ width: 1600, valueHeight: 13, limitHeight: 8 }), templates);
+  assert.deepEqual(ok.stats, [226, 54, 139, 85, 102], `0.83× 應該照讀到，實得 ${ok.reason}`);
+});
+
+test('statbar：兩個「唔似面板條」門檻唔准放返鬆（實測數字見註釋）', () => {
+  // ⚠️ 呢兩個常數係**量出嚟**嘅安全邊界（改動之前一定要重量，唔准「感覺上有餘裕」）：
+  //    字高比：12 張真值圖 0.85–0.96；卡列表假陽性 0.64 → 0.8（比最低真值低 0.05）
+  //    上限行墨量：真值圖 164–1599；卡列表「上限行」只係卡片邊線 24 粒 → 60
+  assert.equal(DEFAULT_STATBAR_OPTIONS.minGlyphHeightRatio, 0.8);
+  assert.equal(DEFAULT_STATBAR_OPTIONS.minLimitsInk, 60);
 });
 
 /* ────────── 金色高亮（屬性 > 1200 → 長期金色，但**一樣要讀得準**） ────────── */

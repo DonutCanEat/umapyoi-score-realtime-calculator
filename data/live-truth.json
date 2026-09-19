@@ -1,5 +1,5 @@
 {
-  "note": "實機（畫面 A 育成主畫面）截圖嘅真值 —— 用嚟訓練字形模板同做驗收閘。每格格式係「大數值（上）＋ /上限（下、細字）」，本檔記錄嘅係**大數值**。",
+  "note": "實機（畫面 A 育成主畫面）截圖嘅真值 —— 用嚟訓練字形模板同做驗收閘。每格格式係「大數值（上）＋ /上限（下、細字）」，本檔記錄嘅係**大數值**。⚠️ 負樣本（唔准出數嘅其他畫面）放喺 `shots/negatives/`，唔喺呢個檔 —— 資料夾本身就係宣告（見 AGENTS 地雷 #30）。",
   "values": [226, 54, 139, 85, 102],
   "limits": [1946, 1600, 1600, 1500, 1450],
   "shots": [
@@ -11,13 +11,19 @@
     "roi-regress-frag.png",
     "roi-regress-marginal.png",
     "roi-regress-frag2.png",
-    "roi-regress-gold.png"
+    "roi-regress-gold.png",
+    "roi-live-264.png",
+    "roi-live-387.png",
+    "roi-live-1133.png"
   ],
   "perShot": {
     "roi-regress-frag.png": [727, 198, 361, 261, 272],
     "roi-regress-marginal.png": [727, 198, 361, 261, 272],
     "roi-regress-frag2.png": [737, 198, 361, 261, 300],
-    "roi-regress-gold.png": [1489, 543, 655, 624, 628]
+    "roi-regress-gold.png": [1489, 543, 655, 624, 628],
+    "roi-live-264.png": [264, 156, 168, 155, 157],
+    "roi-live-387.png": [387, 172, 192, 183, 205],
+    "roi-live-1133.png": [1133, 259, 462, 358, 420]
   },
   "expectHighlighted": ["roi-regress-gold.png"],  "notes": {
     "roi-regress-frag.png": "2026-09-18 實機失敗幀（第 5 格數字右邊有 3×4 碎片 → 由右邊貪心收即刻停 → 報「讀唔清」）。檔名 roi- 開頭 = 呢張圖**已經係 ROI**（renderer 剪好嘅面板條），唔使再定位。真值由同一時刻三幀成功讀數確認（727/198/361/261/272）。",
