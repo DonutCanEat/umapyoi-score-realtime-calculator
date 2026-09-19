@@ -19,6 +19,7 @@
  */
 
 import { buildInkMask } from './inkmask.js';
+import { columnCounts, rowCounts } from './projection.js';
 
 /**
  * 預設參數。
@@ -86,13 +87,8 @@ export function rowInkProfile(image, options = {}) {
   // ⭐ 遮罩窗半徑跟「量到嘅文字大細」（0.44 × 字高；實測 1140 尺度 = 11px）
   const radius = Math.max(2, Math.round(o.windowRadiusRel * unit));
   const mask = buildInkMask(image, { windowRadius: radius, lightFraction: o.lightFraction });
-  const counts = new Int32Array(image.height);
-  for (let y = 0; y < image.height; y += 1) {
-    let c = 0;
-    const base = y * image.width;
-    for (let x = 0; x < image.width; x += 1) c += mask[base + x];
-    counts[y] = c;
-  }
+  // ⚠️ 逐列墨量用共用投影（審計 M3）
+  const counts = rowCounts(mask, image.width, 0, image.height - 1);
   return {
     counts,
     mask,
@@ -112,13 +108,7 @@ export const SCALE_REFERENCE_UNIT = 25;
 function measureTextHeight(image, o) {
   const probe = Math.max(1, Math.round(o.probeRadius ?? 3));
   const mask = buildInkMask(image, { windowRadius: probe, lightFraction: o.lightFraction });
-  const counts = new Int32Array(image.height);
-  for (let y = 0; y < image.height; y += 1) {
-    let c = 0;
-    const base = y * image.width;
-    for (let x = 0; x < image.width; x += 1) c += mask[base + x];
-    counts[y] = c;
-  }
+  const counts = rowCounts(mask, image.width, 0, image.height - 1);
   const rows = findSkillRows(counts, image.width, image.height, { unit: SCALE_REFERENCE_UNIT });
   const hs = rows.map((r) => r.height).filter((h) => h > 0).sort((a, b) => a - b);
   if (hs.length < 3) {
@@ -207,11 +197,8 @@ export function findSkillRows(counts, width, height, options = {}) {
  */
 export function nameBoxInSpan(mask, width, y0, y1, span, options = {}) {
   const o = { ...DEFAULT_SKILLSCREEN_OPTIONS, ...options };
-  const cols = new Int32Array(span.x1 - span.x0 + 1);
-  for (let y = y0; y <= y1; y += 1) {
-    const base = y * width;
-    for (let c = 0; c < cols.length; c += 1) cols[c] += mask[base + span.x0 + c];
-  }
+  // ⚠️ 共用欄投影＋offset 直傳（審計 M3）：`cols[i]` 對應第 `span.x0 + i` 欄
+  const cols = columnCounts(mask, width, y0, y1, span.x0, span.x1);
   return nameBoxFromColumns(cols, span.x0, width, y0, y1, o);
 }
 
@@ -307,11 +294,8 @@ function nameBoxFromColumns(cols, offset, width, y0, y1, o) {
 }
 export function columnSpans(mask, width, y0, y1, options = {}) {
   const o = { ...DEFAULT_SKILLSCREEN_OPTIONS, ...options };
-  const cols = new Int32Array(width);
-  for (let y = y0; y <= y1; y += 1) {
-    const base = y * width;
-    for (let x = 0; x < width; x += 1) cols[x] += mask[base + x];
-  }
+  // ⚠️ 共用欄投影（審計 M3）
+  const cols = columnCounts(mask, width, y0, y1);
   const minCol = Math.max(1, Math.round((y1 - y0 + 1) * 0.04));
   const spans = [];
   let start = -1;

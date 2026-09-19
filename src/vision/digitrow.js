@@ -26,6 +26,7 @@
 
 import { buildInkMask, findTextLines, isDigitInk, maskRowCounts } from './inkmask.js';
 import { forEachCombination5 } from './combinations.js';
+import { columnCounts, countInk, rowCounts } from './projection.js';
 
 export { isDigitInk, buildInkMask, findTextLines, maskRowCounts };
 
@@ -40,11 +41,8 @@ export function columnsToGroups(mask, width, y0, y1, options = {}) {
   const minGap = options.minGap ?? 3;
   const minInk = options.minInk ?? 2;
 
-  const cols = new Int32Array(width);
-  for (let y = y0; y <= y1; y += 1) {
-    const base = y * width;
-    for (let x = 0; x < width; x += 1) cols[x] += mask[base + x];
-  }
+  // ⚠️ 投影係 `projection.js` 嘅共用實作（審計 M3；行為同以前逐位元一樣）
+  const cols = columnCounts(mask, width, y0, y1);
 
   const groups = [];
   let start = -1;
@@ -179,14 +177,11 @@ export function scoreNumberRow(numbers, y0, y1, options = {}) {
 export function denseBands(mask, width, line, options = {}) {
   const minRatio = options.bandRatio ?? 0.35;
   const maxHeight = options.maxBandHeight ?? 60;
-  const counts = [];
+  // ⚠️ 投影係共用實作（審計 M3）；`counts[i]` 對應第 `line.y0 + i` 行
+  const counts = rowCounts(mask, width, line.y0, line.y1);
   let peak = 0;
-  for (let y = line.y0; y <= line.y1; y += 1) {
-    let c = 0;
-    const base = y * width;
-    for (let x = 0; x < width; x += 1) c += mask[base + x];
-    counts.push(c);
-    if (c > peak) peak = c;
+  for (let i = 0; i < counts.length; i += 1) {
+    if (counts[i] > peak) peak = counts[i];
   }
   if (peak === 0) return [];
   const threshold = Math.max(2, peak * minRatio);
@@ -224,18 +219,12 @@ export function denseBands(mask, width, line, options = {}) {
  */
 export function tightenBand(mask, width, y0, y1, options = {}) {
   const ratio = options.tightenRatio ?? 0.25;
-  const counts = [];
-  let peakIndex = 0;
+  // ⚠️ 投影係共用實作（審計 M3）。`counts[i]` 對應第 `y0 + i` 行。
+  //    （舊版有個 `peakIndex` 但從來冇任何地方讀 → 已經刪走，行為不變。）
+  const counts = rowCounts(mask, width, y0, y1);
   let peak = -1;
-  for (let y = y0; y <= y1; y += 1) {
-    let c = 0;
-    const base = y * width;
-    for (let x = 0; x < width; x += 1) c += mask[base + x];
-    counts.push(c);
-    if (c > peak) {
-      peak = c;
-      peakIndex = counts.length - 1;
-    }
+  for (let i = 0; i < counts.length; i += 1) {
+    if (counts[i] > peak) peak = counts[i];
   }
   if (peak <= 0) return { y0, y1 };
   const threshold = Math.max(1, peak * ratio);
@@ -318,12 +307,8 @@ export function detectDigitRow(image, options = {}) {
   }
   for (const band of bands) {
     if (band.y1 < band.y0) continue;
-    let ink = 0;
-    for (let y = band.y0; y <= band.y1; y += 1) {
-      const base = y * width;
-      for (let x = 0; x < width; x += 1) ink += mask[base + x];
-    }
-    consider(band.y0, band.y1, ink);
+    // ⚠️ 框墨量用共用實作（審計 M3）：同一格帶唔應該有兩個唔同嘅數
+    consider(band.y0, band.y1, countInk(mask, width, band.y0, band.y1));
   }
   if (!best) return null;
 

@@ -29,6 +29,8 @@
  * 全圖 2.09M 像素約幾十 ms；實時管線收到嘅係 640px 縮圖，更加快。
  */
 
+import { rowCounts } from './projection.js';
+
 /**
  * 墨色判準嘅門檻（可調 —— `tools/tune-detect.js --hue` 會掃描呢幾個值量安全邊界）。
  *
@@ -230,17 +232,14 @@ export function buildInkMask(image, options = {}) {
   return mask;
 }
 
-/** 逐行墨點數（用遮罩）。 */
+/**
+ * 逐行墨點數（用遮罩）。
+ *
+ * ⚠️ 實作係 `projection.js` 嘅 `rowCounts()`（同 `skillscreen`／`digitrow` 共用一份，
+ * 見獨立審計 M3）；呢度保留舊簽名（收 `image` 而唔係 `width`）令舊呼叫者唔使改。
+ */
 export function maskRowCounts(image, mask) {
-  const { width, height } = image;
-  const counts = new Int32Array(height);
-  for (let y = 0; y < height; y += 1) {
-    const base = y * width;
-    let c = 0;
-    for (let x = 0; x < width; x += 1) c += mask[base + x];
-    counts[y] = c;
-  }
-  return counts;
+  return rowCounts(mask, image.width, 0, image.height - 1);
 }
 
 /**

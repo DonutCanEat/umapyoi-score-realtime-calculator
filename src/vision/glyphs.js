@@ -10,6 +10,7 @@
 
 import { buildInkMask } from './inkmask.js';
 import { cosineSimilarity, standardize } from './similarity.js';
+import { columnCounts } from './projection.js';
 
 /** 歸一化網格大細。 */
 export const GLYPH_W = 16;
@@ -31,12 +32,8 @@ export function extractGlyphs(image, mask, box, y0, y1) {
   // 所以用 1 而唔係按高度縮放（用 2 會令「169」黏成 2 個字元）。
   const minGap = 1;
 
-  // 1) 欄投影
-  const cols = new Int32Array(box.x1 - box.x0 + 1);
-  for (let y = y0; y <= y1; y += 1) {
-    const base = y * width + box.x0;
-    for (let c = 0; c < cols.length; c += 1) cols[c] += mask[base + c];
-  }
+  // 1) 欄投影（⚠️ 共用實作 —— `cols[i]` 對應第 `box.x0 + i` 欄，審計 M3）
+  const cols = columnCounts(mask, width, y0, y1, box.x0, box.x1);
 
   // 2) 切字元
   const spans = [];

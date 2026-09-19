@@ -24,6 +24,7 @@ import { pickGameSource } from '../src/capture/source.js';
 import { loadTemplates, readStats, StatTracker, scoreStats } from '../src/vision/reader.js';
 import { readStatBar, DEFAULT_STATBAR_OPTIONS } from '../src/vision/statbar.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
+import { columnCounts } from '../src/vision/projection.js';
 import { encodePng } from '../src/vision/pngwrite.js';
 import { STAT_LABELS, STAT_KEYS } from '../src/umascore/evaluate.js';
 import { parseStatInput, skillSearchItems, whatIfAddSkill } from '../src/umascore/whatif.js';
@@ -1024,11 +1025,8 @@ function dumpSkillPage(image, meta) {
     const first = rows[0];
     let widths = '—';
     if (first) {
-      const cols = new Int32Array(image.width);
-      for (let y = first.y0; y <= first.y1; y += 1) {
-        const base = y * image.width;
-        for (let x = 0; x < image.width; x += 1) cols[x] += mask[base + x];
-      }
+      // ⚠️ 用 `src/vision/projection.js` 嘅共用欄投影（審計 M3：以前呢度自己寫一份）
+      const cols = columnCounts(mask, image.width, first.y0, first.y1);
       widths = nameBoxesInRow(cols, image.width)
         .filter(Boolean)
         .map((b) => b.x1 - b.x0 + 1)

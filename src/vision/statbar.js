@@ -28,16 +28,8 @@ import { buildInkMask, findTextLines, pixelHue } from './inkmask.js';
 import { denseBands, tightenBand, columnsToGroups, groupsToNumbers } from './digitrow.js';
 import { extractGlyphs, readNumberBoxes } from './glyphs.js';
 import { forEachCombination5 } from './combinations.js';
-
-/** 帶入面嘅墨點數。 */
-function countInk(mask, width, y0, y1) {
-  let n = 0;
-  for (let y = y0; y <= y1; y += 1) {
-    const base = y * width;
-    for (let x = 0; x < width; x += 1) n += mask[base + x];
-  }
-  return n;
-}
+// ⚠️ `countInk` 已經改用 `projection.js` 嘅共用版（審計 M3：以前呢個檔自己寫一份）。
+import { columnCounts, countInk } from './projection.js';
 
 /**
  * 墨點像素嘅**色相分位數**（用嚟分「正常橙棕」同「金色高亮」）。
@@ -223,19 +215,23 @@ export function resampleImage(image, factor) {
   return { data: out, width, height };
 }
 
-/** 一條帶嘅墨量同橫向範圍。 */
+/**
+ * 一條帶嘅墨量同橫向範圍。
+ *
+ * ⚠️ 用共用欄投影（審計 M3）：呢條帶嘅墨量＝逐欄加總，而 `xMin`／`xMax` 就係
+ * 「第一欄／最後一欄有墨」——整數運算，同以前逐格數**逐位元一樣**。
+ * （舊寫法逐格掃一次同時做三件事；呢個版本掃一次欄投影，帶嘅數目好少，成本可以忽略。）
+ */
 function bandStats(mask, width, y0, y1) {
+  const cols = columnCounts(mask, width, y0, y1);
   let ink = 0;
   let xMin = -1;
   let xMax = -1;
-  for (let y = y0; y <= y1; y += 1) {
-    const base = y * width;
-    for (let x = 0; x < width; x += 1) {
-      if (!mask[base + x]) continue;
-      ink += 1;
-      if (xMin < 0 || x < xMin) xMin = x;
-      if (x > xMax) xMax = x;
-    }
+  for (let x = 0; x < cols.length; x += 1) {
+    if (!cols[x]) continue;
+    ink += cols[x];
+    if (xMin < 0) xMin = x;
+    xMax = x;
   }
   return { ink, xMin, xMax, spread: xMax < 0 ? 0 : (xMax - xMin + 1) / width };
 }

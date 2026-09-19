@@ -36,6 +36,7 @@
  * —— 之前用 240／384 都會**剪走右邊嘅字**（`VICTORY` 後面冇咗）。
  */
 import { cosineSimilarity, standardizeInPlace } from './similarity.js';
+import { columnCounts } from './projection.js';
 
 export const GRID_H = 40;
 export const GW = 480;
@@ -127,11 +128,8 @@ export function trimNameSegments(cols, boxWidth, scale = 1) {
 export function nameBoxFeature(image, mask, box, y0, y1, unit = 25) {
   const { x0, x1 } = box;
   const boxWidth = x1 - x0 + 1;
-  const cols = new Int32Array(boxWidth);
-  for (let y = y0; y <= y1; y += 1) {
-    const base = y * image.width;
-    for (let x = x0; x <= x1; x += 1) cols[x - x0] += mask[base + x];
-  }
+  // ⚠️ 共用欄投影＋offset 直傳（審計 M3）：`cols[i]` 對應第 `x0 + i` 欄
+  const cols = columnCounts(mask, image.width, y0, y1, x0, x1);
   const span = trimNameSegments(cols, boxWidth, unit / 25);
   if (!span) return null;
   const inkL = span.from;
@@ -207,11 +205,8 @@ export function nameBoxesOfPage(image, profile, ops) {
   const rows = ops.findSkillRows(counts, image.width, image.height, { unit });
   const out = [];
   rows.forEach((row, ri) => {
-    const cols = new Int32Array(image.width);
-    for (let y = row.y0; y <= row.y1; y += 1) {
-      const base = y * image.width;
-      for (let x = 0; x < image.width; x += 1) cols[x] += mask[base + x];
-    }
+    // ⚠️ 共用欄投影（審計 M3）
+    const cols = columnCounts(mask, image.width, row.y0, row.y1);
     const boxes = ops.nameBoxesInRow(cols, image.width);
     boxes.forEach((box, ci) => {
       if (!box) return;
