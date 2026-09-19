@@ -55,8 +55,7 @@ test('擷取凍結閘：capture.html 要支援「再叫一次 start」＋串流�
   assert.match(html, /video\.videoWidth\s*>\s*0/, '要有「有冇畫面」嘅判斷（停滯偵察用）');
 });
 
-test('擷取凍結閘：main.js 要收幀心跳＋超時自動重啟擷取（有上限）', () => {
-  const main = code('electron/main.js');
+test('擷取凍結閘：main.js 要收幀心跳＋超時自動重啟擷取（有上限）', () => {  const main = code('electron/main.js');
   assert.match(main, /lastFrameAt\s*=\s*Date\.now\(\)/, '每幀都要更新 lastFrameAt');
   assert.match(main, /function recoverCapture\(/, '要有救援函數');
   assert.match(main, /MAX_CAPTURE_RECOVERS/, '重試要有上限（唔准無限重啟）');
@@ -70,6 +69,24 @@ test('擷取凍結閘：main.js 要收幀心跳＋超時自動重啟擷取（有
     '⛔ 唔准用 once：renderer reload 之後就冇人再送 roi／start → 靜默冇幀',
   );
   assert.match(main, /webContents\.on\('did-finish-load'/, '要每次載入都重跑擷取啟動');
+});
+
+test('診斷掣閘：擷取窗要有「強制更新」同「寫入診斷 log」兩粒掣，而且真係接咗線', () => {
+  const html = code('electron/capture.html');
+  const main = code('electron/main.js');
+  // ⭐ 兩粒掣係用戶 2026-09-19 要求：「有時讀唔到」唔想再重開程式。
+  assert.match(html, /id="refresh"/, 'capture.html 要有「強制更新」掣');
+  assert.match(html, /id="snapshot"/, 'capture.html 要有「寫入診斷 log」掣');
+  assert.match(html, /IPC_CHANNELS\.refresh/, '強制更新掣要送 refresh channel');
+  assert.match(html, /IPC_CHANNELS\.snapshot/, '寫入診斷 log 掣要送 snapshot channel');
+  assert.match(html, /IPC_CHANNELS\.notice/, '要收 notice（掣嘅結果唔准靜默）');
+  // 主程序側：一定要有 handler，而且要共用同一條擷取啟動路（唔准各寫一份）
+  assert.match(main, /ipcMain\.on\(IPC_CHANNELS\.refresh/, 'main 要有 refresh handler');
+  assert.match(main, /ipcMain\.on\(IPC_CHANNELS\.snapshot/, 'main 要有 snapshot handler');
+  assert.match(main, /await beginCapture\(captureWin\)/, '強制更新要行同一條 beginCapture() 路');
+  assert.match(main, /writeDiagnosticSnapshot\(\)/, '要真係寫快照');
+  // 自動快照旗標（令「唔想撳掣」嘅情況都攞到現場，亦係閘自己嘅可驗證入口）
+  assert.match(main, /UMAPYOI_SNAPSHOT_AFTER/, '要有 UMAPYOI_SNAPSHOT_AFTER 自動快照');
   // 報錯路徑一定要接上救援（唔係齋 log）
   assert.match(
     main,

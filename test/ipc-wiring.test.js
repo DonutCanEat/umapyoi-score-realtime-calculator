@@ -168,7 +168,11 @@ test('ipc-channels：map 形狀（key lowerCamelCase、value 唯一、數量夠�
   // value 慣例：hud／whatif 前綴，或者擷取管線嗰幾個
   // ⚠️ `'hud'` 係**單字** channel（main → hud.html 推顯示狀態），係最早有嘅一條，
   //    冇 `hud-` 前綴 —— 唔准為咗「一致」而改名（要兩邊同時改，而且文件／診斷工具都提到）。
-  const pipeline = new Set(['frame', 'capture-error', 'no-source', 'roi', 'start', 'fps', 'crop', 'hud']);
+  // ⚠️ `refresh`／`snapshot`／`notice` 係 2026-09-19 加嘅擷取窗手動掣（單字、同其他管線一致）。
+  const pipeline = new Set([
+    'frame', 'capture-error', 'no-source', 'roi', 'start', 'fps', 'crop', 'hud',
+    'refresh', 'snapshot', 'notice',
+  ]);
   for (const [key, value] of Object.entries(IPC_CHANNELS)) {
     assert.ok(
       value.startsWith('hud-') || value.startsWith('whatif-') || pipeline.has(value),

@@ -35,6 +35,10 @@ const IPC_CHANNELS = Object.freeze({
   start: 'start',                 // main → renderer：開始擷取（帶 sourceId）
   fps: 'fps',                     // main → renderer：改幀率（連拍模式用 1fps）
   crop: 'crop',                   // main → renderer：再剪細（連拍模式）
+  // ⭐ 兩粒「手動掣」（2026-09-19 用戶要求，喺擷取窗）：
+  refresh: 'refresh',             // renderer → main：「強制更新」：重新揀來源 ＋ 重開擷取
+  snapshot: 'snapshot',           // renderer → main：「寫入診斷 log」：快照 ＋ 當時最後一幀 PNG
+  notice: 'notice',               // main → renderer：掣嘅結果／提示（顯示喺狀態列）
 
   // ── HUD overlay（`hud.html` ↔ main）──
   hud: 'hud',                     // main → renderer：HUD 顯示狀態（`hudState()` 嘅輸出）

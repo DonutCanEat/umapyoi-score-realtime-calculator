@@ -42,6 +42,8 @@ import { underWriteRoot, writeRootFor } from '../src/hud/write-root.js';
 // ⭐ 執行時 log 檔（A6 最小版）：打包版係 GUI 程式 → `console.log` 冇地方去，
 //    出事（例如「HUD 突然唔見」）之後用戶部機乜痕跡都冇 → 一定要寫檔。
 import { logFilePathFor, openLogFile } from '../src/hud/log-file.js';
+// ⭐ 「寫入診斷 log」掣用：快照嘅**格式化**部分（純函數，有測試）。
+import { formatSnapshot } from '../src/hud/snapshot.js';
 // ⭐ IPC channel 名嘅**唯一來源**：`electron/ipc-channels.cjs`（CommonJS —— 因為 4 個
 //    renderer 係 classic script，只可以 `require()`；見嗰個檔嘅檔頭）。
 //    ESM import CJS 用 default import 再解構（唔靠 cjs-module-lexer 嘅具名匯出偵測）。
@@ -1073,6 +1075,16 @@ let okDumps = 0;
  * 睇下有冇 HUD 嘅字入咗畫面就知。
  */
 const DUMP_EVERY = envNumber('UMAPYOI_DUMP_FRAMES', { fallback: 0, positive: true });
+
+/**
+ * `UMAPYOI_SNAPSHOT_AFTER=N`：開機 N 秒之後**自動**寫一次診斷快照
+ * （同擷取窗嗰粒「寫入診斷 log」掣寫嘅係同一個檔）。
+ *
+ * 為何要：① 用戶報告問題時，我叫佢按掣之前先要佢明白粒掣喺邊；有咗呢個旗標就一句
+ *        「用 `UMAPYOI_SNAPSHOT_AFTER=10` 開一次」就攞到現場；
+ *        ② 佢亦係我哋自己驗證成條快照路徑嘅方法（唔使做 UI 自動化去撳掣）。
+ */
+const SNAPSHOT_AFTER = envNumber('UMAPYOI_SNAPSHOT_AFTER', { fallback: 0, positive: true });
 let everyCount = 0;
 
 /**
@@ -1186,8 +1198,7 @@ function dumpSkillPage(image, meta) {
 }
 
 function dumpFrame(image, meta) {
-  if (dumpCount >= MAX_DUMPS) return null;
-  try {
+  if (dumpCount >= MAX_DUMPS) return null;  try {
     ensureDir(debugDir()); // ⚠️ 共用（審計 L3）
     const stamp = dumpStamp();
     const base = join(debugDir(), `${stamp}-${meta.kind}`);
@@ -1195,6 +1206,7 @@ function dumpFrame(image, meta) {
     writeFileSync(`${base}.raw`, bytes);
     writeFileSync(`${base}.json`, `${JSON.stringify({ ...meta, width: image.width, height: image.height }, null, 2)}\n`);
     dumpCount += 1;
+    lastDumpPath = `${base}.raw`;
     return `${base}.raw`;
   } catch (error) {
     console.error('[dump] 寫檔失敗：', error?.message ?? error);
@@ -1248,8 +1260,136 @@ function recoverCapture(why) {
   }
 }
 
-/** 每 5 秒檢查凍結、每分鐘報一次心跳。 */
-function startCaptureWatchdog() {
+/**
+ * 最近一次收到嘅幀（診斷快照用）＋ 最近一次讀取結果 ＋ 最近一個 dump 檔。
+ *
+ * ⚠️ 只留住**一個** image（唔係每幀 copy）：實機 ROI 559×98 ≈ 219 KB，冇壓力；
+ *    但全畫面模式（`UMAPYOI_SKILL_DUMP`）可以幾 MB —— 所以技能連拍模式唔記（見 frame handler）。
+ */
+let lastFrame = null;
+let lastReadSummary = null;
+let lastDumpPath = null;
+
+/**
+ * ⭐ 「寫入診斷 log」掣：將**而家嘅狀況**寫入檔（用戶 2026-09-19 要求）。
+ *
+ * 為何要：用戶報「有時讀唔到」嗰陣，我哋隔住個 keyboard 只可以靠估。
+ * 快照把「設定／環境變數／螢幕／揀咗邊個來源／收幀狀態／最近一次讀取結果／HUD 窗狀態」
+ * 加埋「當時收到嘅最後一幀」一次過寫落檔 → 事後查得到，唔使再猜。
+ */
+function writeDiagnosticSnapshot() {
+  const now = new Date();
+  const stamp = now.toISOString().replace(/[:.]/g, '-');
+  const dir = underWriteRoot(writeRoot().root, 'snapshots');
+  mkdirSync(dir, { recursive: true });
+  const logPath = join(dir, `${stamp}-snapshot.log`);
+  const pngPath = join(dir, `${stamp}-snapshot.png`);
+
+  const envRows = Object.keys(process.env)
+    .filter((key) => key.startsWith('UMAPYOI_'))
+    .sort()
+    .map((key) => [key, process.env[key]]);
+  const display = screen.getPrimaryDisplay();
+  const hudBounds = hudWindow && !hudWindow.isDestroyed() ? hudWindow.getBounds() : null;
+  let logTail = ['（讀唔到 log 檔）'];
+  try {
+    if (logFile?.path && existsSync(logFile.path)) {
+      logTail = readFileSync(logFile.path, 'utf8').split('\n').filter(Boolean).slice(-40);
+    }
+  } catch {
+    /* log 尾攞唔到唔緊要 */
+  }
+
+  const sections = [
+    {
+      title: '基本',
+      rows: [
+        ['app.isPackaged', app.isPackaged],
+        ['版本', app.getVersion()],
+        ['ROOT', ROOT],
+        ['寫入根目錄', writeRoot().root],
+        ['userData', app.getPath('userData')],
+        ['log 檔', logFile?.path ?? '（未開）'],
+      ],
+    },
+    {
+      title: 'HUD 設定',
+      rows: [
+        ['檔案', hudConfigPath ?? '（未載入）'],
+        ['為何用呢條路徑', hudConfigWhy ?? '—'],
+        ['layout', hudConfig?.layout ?? null],
+        ['display', hudConfig?.display ?? null],
+      ],
+    },
+    { title: '環境變數（UMAPYOI_*）', rows: envRows.length ? envRows : [['（冇 set）', '']] },
+    {
+      title: '螢幕',
+      rows: [
+        ['主螢幕工作區', `${display.workArea.x},${display.workArea.y} ${display.workArea.width}×${display.workArea.height}`],
+        ['scaleFactor', display.scaleFactor],
+        ['螢幕數', screen.getAllDisplays().length],
+        ['HUD 遊戲大細（由擷取幀量到）', `${hudGameSize.width}×${hudGameSize.height}`],
+      ],
+    },
+    {
+      title: '擷取狀態',
+      rows: [
+        ['揀咗嘅 sourceId', captureSourceId ?? '（未揀）'],
+        ['擷取窗', captureWin && !captureWin.isDestroyed()
+          ? `visible=${captureWin.isVisible()} crashed=${captureWin.webContents.isCrashed()}`
+          : '（唔存在）'],
+        ['最後一幀', lastFrameAt ? `${Math.round((Date.now() - lastFrameAt) / 1000)} 秒前` : '（從來冇）'],
+        ['最近 60 秒幀數', framesInWindow],
+        ['自動救援次數', `${recoverAttempts}/${MAX_CAPTURE_RECOVERS}`],
+        ['最後一幀大細', lastFrame ? `${lastFrame.image.width}×${lastFrame.image.height}（${lastFrame.meta.kind}）` : '（冇）'],
+        ['最近 dump 檔', lastDumpPath ?? '（冇）'],
+      ],
+    },
+    {
+      title: 'HUD 窗',
+      rows: [
+        ['bounds', hudBounds ? `${hudBounds.x},${hudBounds.y} ${hudBounds.width}×${hudBounds.height}` : '（唔存在）'],
+        ['visible / alwaysOnTop', hudWindow && !hudWindow.isDestroyed()
+          ? `${hudWindow.isVisible()} / ${hudWindow.isAlwaysOnTop()}`
+          : '—'],
+        ['renderer 死過', hudRendererGone],
+      ],
+    },
+    {
+      title: '最近一次讀取',
+      rows: lastReadSummary
+        ? [
+          ['結果', lastReadSummary.kind],
+          ['時間', `${Math.round((Date.now() - lastReadSummary.at) / 1000)} 秒前`],
+          ['五維', lastReadSummary.stats ? lastReadSummary.stats.join('/') : '—'],
+          ['信心', lastReadSummary.confidence ?? '—'],
+          ['原因', lastReadSummary.reason ?? '—'],
+          ['候選', lastReadSummary.candidates ?? '—'],
+        ]
+        : [['（未收過幀）', '']],
+    },
+    { title: '最近 log（最後 40 行）', rows: [['', logTail.join('\n')]] },
+  ];
+
+  writeFileSync(
+    logPath,
+    formatSnapshot({ kind: app.isPackaged ? 'packaged' : 'dev', version: app.getVersion() }, sections, now),
+    'utf8',
+  );
+
+  let wrotePng = false;
+  if (lastFrame?.image) {
+    try {
+      writeFileSync(pngPath, encodePng(lastFrame.image));
+      wrotePng = true;
+    } catch (error) {
+      console.error(`[快照] ⚠️ 寫 PNG 失敗：${error?.message ?? error}`);
+    }
+  }
+  return { log: logPath, png: wrotePng ? pngPath : null };
+}
+
+/** 每 5 秒檢查凍結、每分鐘報一次心跳。 */function startCaptureWatchdog() {
   setInterval(() => {
     if (!captureSourceId || !lastFrameAt) return;
     const since = Date.now() - lastFrameAt;
@@ -1410,6 +1550,18 @@ app.whenReady().then(async () => {
 
   const win = createCaptureWindow();
   startCaptureWatchdog(); // ⭐ 收幀心跳 ＋ 凍結自動救援（見上面註解）
+  startHudTickers();      // ⭐ HUD 新鮮度／拖位 watchdog／DPI（見下面註解）
+  if (SNAPSHOT_AFTER > 0) {
+    console.log(`[快照] 已設定 UMAPYOI_SNAPSHOT_AFTER=${SNAPSHOT_AFTER} → ${SNAPSHOT_AFTER} 秒後自動寫一次診斷快照`);
+    setTimeout(() => {
+      try {
+        const { log, png } = writeDiagnosticSnapshot();
+        console.log(`[快照] ✅ 自動快照：${log}${png ? `（＋ ${png}）` : '（冇幀）'}`);
+      } catch (error) {
+        console.error(`[快照] ⚠️ 自動快照失敗：${error?.message ?? error}`);
+      }
+    }, SNAPSHOT_AFTER * 1000).unref?.();
+  }
   // HUD：透明置頂、穿透點擊（見 AGENTS §6.4）。
   // 唔想要可以 `UMAPYOI_NO_HUD=1 npm start` —— ⚠️ 咁樣**兩個窗都唔開**（淨係要 console log 嗰陣用）。
   // ⚠️ 一定用 `envFlag()`（只認 1／true）：`UMAPYOI_NO_HUD=0` 以前會**閂咗 HUD**（'0' 係 truthy）。
@@ -1440,8 +1592,23 @@ app.whenReady().then(async () => {
   //    冇 ROI（會退回 640px 縮圖，見地雷 #22）而且**冇擷取** → 主程序靜默收唔到幀。
   //    `on` 令每次載入都重跑「揀來源 → 送 ROI → 開擷取」，配合 `startCaptureWatchdog()`
   //    就冇咗「一次意外之後永遠唔會好返」呢個洞。
-  win.webContents.on('did-finish-load', async () => {
-    const { hit, sources } = await findGameSource();
+  win.webContents.on('did-finish-load', () => {
+    beginCapture(win);
+  });
+});
+
+/**
+ * 「揀遊戲視窗 → 送 ROI → 開始擷取」。
+ *
+ * ⭐ 兩個入口都行呢條路（唔可以各寫一份）：
+ *   ① `did-finish-load`（首次開窗／renderer reload）
+ *   ② 擷取窗嘅「**強制更新**」掣（用戶 2026-09-19 要求）—— 唔使閂程式再開
+ *
+ * ⚠️ 一定要可以重複叫：`capture.html` 收到 `start` 會先拆舊串流再開新（見嗰邊嘅註解），
+ *    所以呢度唔需要（亦唔准）自己判斷「係唔係第一次」。
+ */
+async function beginCapture(win) {
+  const { hit, sources } = await findGameSource();
     console.log('[來源] 見到嘅視窗：');
     for (const s of sources) {
       // ⚠️ 每一個候選都要交代（分數／點解排除）—— 揀錯嘅時候呢份清單就係唯一線索。
@@ -1502,7 +1669,16 @@ app.whenReady().then(async () => {
       console.log('   ⑥ 冇開 HUD、亦唔會讀五維（呢個模式只係收圖）');
       console.log('');
     }
-  });
+}
+
+/**
+ * 開窗之後嘅常駐 timer／事件：HUD 新鮮度（500ms）＋ 拖位 watchdog（300ms）＋ DPI 變化。
+ *
+ * ⚠️ 呢啲原本直接寫喺 `whenReady()` 入面；2026-09-19 抽出嚟係為咗令「擷取啟動」
+ * （`beginCapture()`）可以係一個獨立函數（`did-finish-load` 同「強制更新」掣共用），
+ * 唔使將成個 `whenReady` body 搬嚟搬去。
+ */
+function startHudTickers() {
 
   // HUD 嘅「新鮮度」要自己行：讀唔到嘅時候唔會再有 frame 事件推佢，
   // 所以每 500ms 檢查一次，令 HUD 可以自己由 `ok` 轉 `stale`（而唔係永遠顯示即時值）。
@@ -1540,7 +1716,7 @@ app.whenReady().then(async () => {
       console.log('        下一步：node tools/skillpages-to-library.js');
     });
   }
-});
+}
 
 /**
  * Renderer 每一幀傳過嚟嘅面板條 → 喺 Node 側讀五維 → 計評價分。
@@ -1562,6 +1738,9 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
   if (Object.keys(templates).length === 0) return;
 
   const image = { data: new Uint8ClampedArray(buffer), width, height };
+  // ⭐ 留住最後一幀（診斷快照會連佢一齊寫 PNG）——只喺正常（剪咗 ROI）路徑做：
+  //    技能連拍模式一幀幾 MB，冇必要留住。
+  lastFrame = { image, meta: { kind: 'frame', width, height, fullWidth, fullHeight, cropped } };
   // HUD 對位：第一次收到幀就知遊戲視窗實際大細（thumbnailSize 唔可靠）。
   if (hudWindow && fullWidth && fullHeight && hudGameSize.width !== fullWidth) {
     hudGameSize = { width: fullWidth, height: fullHeight };
@@ -1587,6 +1766,14 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
   if (!read.stats) {
     // 讀唔到（轉場／唔喺ステータス畫面）→ 照樣推 null，等投票緩衝自然清走
     tracker.push(null);
+    // ⭐ 診斷快照要知「最近一次讀到咩／點解讀唔到」（唔理下面 log 有冇節流）。
+    lastReadSummary = {
+      kind: read.notBar ? 'notBar（唔見面板條）' : read.highlighted ? 'skip（金色格跳過）' : 'fail（讀唔清）',
+      reason: read.reason ?? '',
+      candidates: read.candidates ?? null,
+      notBar: Boolean(read.notBar),
+      at: Date.now(),
+    };
     const now = Date.now();
     // 三種「唔出數」：
     //   ① 金色格（屬性 > 1200，長期金色）—— 唔應該再出現（有 `goldLightFraction` 專用遮罩，
@@ -1626,6 +1813,15 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
   }
 
   const { stable, stats, changed } = tracker.push(read.stats);
+  lastReadSummary = {
+    kind: 'ok（讀到）',
+    stats: read.stats,
+    confidence: read.confidence,
+    reason: '',
+    candidates: null,
+    notBar: false,
+    at: Date.now(),
+  };
   if (!stable) return;
 
   const score = scoreStats(stats);
@@ -1660,6 +1856,56 @@ ipcMain.on(IPC_CHANNELS.captureError, (_event, message) => {
   console.error('[擷取失敗]', message);
   // ⭐ 真失敗（唔係轉場）→ 即刻試救：重新叫 renderer 開一次擷取（有次數上限）。
   recoverCapture(`renderer 報錯：${message}`);
+});
+
+/** 喺擷取窗嘅狀態列回一句（成功／失敗都要講，唔准靜默）。 */
+function notifyCapture(text) {
+  if (!captureWin || captureWin.isDestroyed()) return;
+  try {
+    captureWin.webContents.send(IPC_CHANNELS.notice, text);
+  } catch (error) {
+    console.error(`[擷取] ⚠️ 回覆擷取窗失敗：${error?.message ?? error}`);
+  }
+}
+
+/**
+ * ⭐ **強制更新**（擷取窗嗰粒掣，用戶 2026-09-19 要求）。
+ *
+ * 做咩：重新揀一次遊戲視窗（用戶可能換咗窗／改過大細）→ 重送 ROI → 重新開擷取。
+ * 同 `did-finish-load` 行**同一條路**（`beginCapture()`），所以唔會出現「兩套行為」。
+ */
+ipcMain.on(IPC_CHANNELS.refresh, async () => {
+  console.log('[擷取] 🔄 用戶按「強制更新」→ 重新揀來源 ＋ 重新開始擷取');
+  recoverAttempts = 0; // 手動更新等於「重新開始」→ 自動救援嘅次數歸零
+  lastRecoverAt = 0;
+  try {
+    await beginCapture(captureWin);
+    notifyCapture('✅ 已強制更新（重新揀來源 ＋ 重開擷取）。如果畫面唔喺ステータス面板，仍然會顯示「唔見面板條」。');
+  } catch (error) {
+    const message = error?.message ?? String(error);
+    console.error(`[擷取] ⚠️ 強制更新失敗：${message}`);
+    notifyCapture(`⛔ 強制更新失敗：${message}`);
+  }
+});
+
+/**
+ * ⭐ **寫入診斷 log**（擷取窗嗰粒掣，用戶 2026-09-19 要求）。
+ *
+ * 寫兩個檔（同一個時間戳）：
+ *   ① `snapshots/<stamp>-snapshot.log`：設定／環境變數／螢幕／擷取狀態／最近讀數／HUD 窗／log 尾
+ *   ② `snapshots/<stamp>-snapshot.png`：**當時收到嘅最後一幀**（冇幀就唔寫）
+ * 目的：用戶報「讀唔到」嗰一刻，我哋唔使再靠估 —— 有現場。
+ */
+ipcMain.on(IPC_CHANNELS.snapshot, () => {
+  try {
+    const { log, png } = writeDiagnosticSnapshot();
+    console.log(`[快照] ✅ 已寫入：${log}${png ? `（＋ ${png}）` : '（冇幀，所以冇 PNG）'}`);
+    notifyCapture(`✅ 已寫入診斷 log：\n${log}${png ? `\n${png}` : ''}`);
+  } catch (error) {
+    const message = error?.message ?? String(error);
+    console.error(`[快照] ⚠️ 寫入失敗：${message}`);
+    notifyCapture(`⛔ 寫入失敗：${message}`);
+  }
 });
 
 // ─────────────────── HUD 設定窗 ↔ 主程序（`electron/settings.html`）───────────────────

@@ -70,6 +70,10 @@ src/hud/
                   #    formatLogLine()／shouldRotate()／openLogFile()。⚠️ 為何要：打包版係
                   #    GUI 程式 → `console.log` 冇地方去（實測 redirect stdout 都係空）→
                   #    「HUD 突然唔見」之類嘅事故完全冇現場。寫唔到唔准令程式爆
+  snapshot.js     # ⭐ 診斷快照嘅**純格式化**（`formatSnapshot()`／`describeValue()`）：
+                  #    擷取窗「寫入診斷 log」掣（同 `UMAPYOI_SNAPSHOT_AFTER`）用。
+                  #    ⚠️ 呢個函數**唔准 throw**（循環引用／undefined／Error 都要頂得住）——
+                  #       用戶按掣係想攞資料，唔係想再製造一個錯誤
   history.js      # ⭐ C3 成長曲線核心（純函數，可 node --test）：pushSample()（**只記真變化**、
                   #    有上限 MAX_HISTORY=240、NaN 唔准入）／sparklinePoints()（100×22 折線座標；
                   #    `max === min` 畫中間橫線，**唔准除 0 出 NaN**）／historySummary()／historyView()
@@ -82,6 +86,11 @@ electron/
                   #    → evaluate() → console log ＋ **推落 HUD**（見 §6.4）
                   #    另有：HUD 設定窗管理、滑鼠穿透 funnel（setHudInteractive）、拖位 IPC
   capture.html    # 擷取 renderer：getUserMedia → **1:1 剪面板 ROI**（冇 ROI 就退回 640px 縮圖）
+                  #    ⭐ 兩粒手動掣（用戶 2026-09-19 要求）：「強制更新」（送 `refresh` →
+                  #    重新揀來源 ＋ 重開擷取）同「寫入診斷 log」（送 `snapshot` → 快照＋最後一幀 PNG）；
+                  #    掣嘅結果經 `notice` 顯示喺狀態列（唔准靜默）
+                  #    ⚠️ `start` handler **不准早退**：主程序靠再叫一次 start 去救「凍結」
+                  #    ⚠️ 串流 track ended／3 秒冇畫面都要報 `capture-error`
   hud.html        # HUD overlay renderer：透明無邊框，只畫主程序推落嚟嘅 view（＋對位模式拖位
                   #    ＋ C3 成長曲線嘅 SVG polyline —— **只畫唔計**，座標由 `src/hud/history.js` 嚟）
   settings.html   # ⭐ HUD 設定窗（**普通視窗**，classic script）：8 個數值 slider ＋ 9 個顯示選項
@@ -124,6 +133,9 @@ test/
   log-file.test.js    # ⭐ 執行時 log 檔（5 條）：一行格式（ISO ＋ [level]）／路徑決策／
                       #    輪替門檻（到上限先輪替、唔合法數值唔輪替）／真檔 append ＋ 輪替成 `.1`／
                       #    寫唔到唔准爆
+  snapshot.test.js    # ⭐ 診斷快照格式化（3 條）：第一行可 grep 嘅標記 ＋ ISO 時間／
+                      #    section 次序同縮排／壞資料（undefined／Error／循環引用／缺欄位）
+                      #    一律唔准 throw
   hud-settings-html.test.js # ⭐ 「設定窗 ↔ config.js 欄位對齊」：**真係由 `electron/settings.html` 抽**
                       #    `DISPLAY_FIELDS`／`NUM_FIELDS` 再同 `HUD_DISPLAY_KEYS`／layout 欄位比對
                       #    （之前呢兩份清單係人手抄嘅，加一格／少一格冇人知）

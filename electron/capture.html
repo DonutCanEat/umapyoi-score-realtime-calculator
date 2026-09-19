@@ -9,10 +9,16 @@
       #wrap { display: flex; flex-direction: column; height: 100%; }
       #bar { padding: 8px 12px; background: #1c1c1c; border-bottom: 1px solid #333; }
       #bar b { color: #7ee081; }
+      #bar button { margin-left: 8px; padding: 4px 10px; font: inherit;
+        background: #2b2b2b; color: #eee; border: 1px solid #555; border-radius: 4px; cursor: pointer; }
+      #bar button:hover { background: #3a3a3a; }
+      #bar button:active { background: #4a4a4a; }
       #stage { flex: 1; overflow: hidden; display: flex; align-items: center; justify-content: center; }
       video, canvas { max-width: 100%; max-height: 100%; }
       canvas { display: none; }
       #hint { padding: 6px 12px; color: #888; }
+      #notice { padding: 0 12px 6px; color: #ffd479; white-space: pre-wrap; }
+      #notice:empty { display: none; }
     </style>
   </head>
   <body>
@@ -20,7 +26,11 @@
       <div id="bar">
         狀態：<b id="status">等待主程序…</b>
         <span id="hint"></span>
+        <!-- ⭐ 兩粒手動掣（用戶 2026-09-19 要求）：讀唔到數／好似卡住嗰陣唔使重開程式 -->
+        <button id="refresh" title="重新揀遊戲視窗 ＋ 重新開始擷取（讀唔到數或者好似卡住嗰陣按）">強制更新</button>
+        <button id="snapshot" title="將而家嘅狀況寫入 log 檔（連當時收到嘅最後一幀 PNG）">寫入診斷 log</button>
       </div>
+      <div id="notice"></div>
       <div id="stage"><video id="v" autoplay muted playsinline></video></div>
     </div>
     <canvas id="c"></canvas>
@@ -37,6 +47,25 @@
       const canvas = document.getElementById('c');
       const statusEl = document.getElementById('status');
       const hintEl = document.getElementById('hint');
+      const noticeEl = document.getElementById('notice');
+
+      // ─────────── 兩粒手動掣（用戶 2026-09-19 要求）───────────
+      // ① 強制更新：主程序會重新揀遊戲視窗、重送 ROI、重新開始擷取
+      //    （＝唔使閂程式再開；專治「凍結／揀錯來源／改過遊戲視窗大細」）。
+      // ② 寫入診斷 log：主程序會將而家嘅狀況（設定／來源／最近讀數／HUD 窗／log 尾）
+      //    ＋ 當時收到嘅最後一幀 PNG 寫落檔，方便事後查。
+      document.getElementById('refresh').addEventListener('click', () => {
+        noticeEl.textContent = '⏳ 強制更新中…（重新揀來源 ＋ 重開擷取）';
+        ipcRenderer.send(IPC_CHANNELS.refresh);
+      });
+      document.getElementById('snapshot').addEventListener('click', () => {
+        noticeEl.textContent = '⏳ 寫入診斷 log 中…';
+        ipcRenderer.send(IPC_CHANNELS.snapshot);
+      });
+      // 主程序做完之後會回一句（成功／失敗都要講，唔准靜默）。
+      ipcRenderer.on(IPC_CHANNELS.notice, (_event, text) => {
+        noticeEl.textContent = String(text ?? '');
+      });
 
       // 目標幀率。幀間投票唔需要太快，5fps 已經足夠，而且唔會搶遊戲嘅 GPU。
       // 主程序可以經 IPC 改（技能畫面連拍模式用 1fps：一幀 4–6MB，冇必要密）。

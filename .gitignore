@@ -21,3 +21,6 @@ hud-position.json.tmp
 
 # D2 �E�_�]�]�@���ʤ䴩��ơA���J git�^
 diagnostics/
+
+# 診斷快照（擷取窗『寫入診斷 log』掣／UMAPYOI_SNAPSHOT_AFTER 產生）—— runtime 一次性支援資料
+snapshots/
