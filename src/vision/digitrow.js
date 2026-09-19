@@ -26,7 +26,7 @@
 
 import { buildInkMask, findTextLines, isDigitInk, maskRowCounts } from './inkmask.js';
 import { forEachCombination5 } from './combinations.js';
-import { columnCounts, countInk, rowCounts } from './projection.js';
+import { columnCounts, countInk, densestRun, rowCounts, runSpans } from './projection.js';
 
 export { isDigitInk, buildInkMask, findTextLines, maskRowCounts };
 
@@ -41,29 +41,12 @@ export function columnsToGroups(mask, width, y0, y1, options = {}) {
   const minGap = options.minGap ?? 3;
   const minInk = options.minInk ?? 2;
 
-  // ⚠️ 投影係 `projection.js` 嘅共用實作（審計 M3；行為同以前逐位元一樣）
+  // ⚠️ 投影同切段都係 `projection.js` 嘅共用實作（審計 M3；行為同以前逐位元一樣）：
+  //    `trimTrailingGap: true` ＝ 以前嗰句「尾段 `x1 = width - 1 - gap`」
   const cols = columnCounts(mask, width, y0, y1);
-
-  const groups = [];
-  let start = -1;
-  let gap = 0;
-  let ink = 0;
-  for (let x = 0; x < width; x += 1) {
-    if (cols[x] >= minInk) {
-      if (start < 0) { start = x; ink = 0; }
-      gap = 0;
-      ink += cols[x];
-    } else if (start >= 0) {
-      gap += 1;
-      if (gap >= minGap) {
-        groups.push({ x0: start, x1: x - gap, ink });
-        start = -1;
-        gap = 0;
-      }
-    }
-  }
-  if (start >= 0) groups.push({ x0: start, x1: width - 1 - gap, ink });
-  return groups.filter((g) => g.x1 >= g.x0);
+  return runSpans(cols, { minValue: minInk, gapTolerance: minGap, trimTrailingGap: true })
+    .map((run) => ({ x0: run.from, x1: run.to, ink: run.ink }))
+    .filter((g) => g.x1 >= g.x0);
 }
 
 /**
@@ -186,20 +169,12 @@ export function denseBands(mask, width, line, options = {}) {
   if (peak === 0) return [];
   const threshold = Math.max(2, peak * minRatio);
 
-  const bands = [];
-  let start = -1;
-  for (let i = 0; i < counts.length; i += 1) {
-    const dense = counts[i] >= threshold;
-    if (dense && start < 0) start = i;
-    if ((!dense || i === counts.length - 1) && start >= 0) {
-      const end = dense ? i : i - 1;
-      const y0 = line.y0 + start;
-      const y1 = line.y0 + end;
-      if (y1 - y0 + 1 <= maxHeight) bands.push({ y0, y1, height: y1 - y0 + 1 });
-      start = -1;
-    }
-  }
-  return bands;
+  // ⚠️ 切段用共用實作（審計 M3）：容忍度 1（一唔夠密就切開）。
+  //    以前嘅手寫版有個 `i === counts.length - 1` 特例（最後一行夠密都要收段）——
+  //    `runSpans()` 嘅尾段處理（`trimTrailingGap: false`）已經等價。
+  return runSpans(counts, { minValue: threshold, gapTolerance: 1 })
+    .map((run) => ({ y0: line.y0 + run.from, y1: line.y0 + run.to, height: run.to - run.from + 1 }))
+    .filter((band) => band.height <= maxHeight);
 }
 
 /**
@@ -232,27 +207,10 @@ export function tightenBand(mask, width, y0, y1, options = {}) {
   // 揀「墨量最多」嘅連續段，而唔係「包含第一條峰值行」嗰段。
   // 原因：一枝獨秀嘅單行（例如邊框線）都可能有全帶最高嘅墨量，
   // 揀佢會得出只有一兩行嘅帶（實測踩過）。同墨量就揀較長、再揀較前。
-  let best = null;
-  let start = -1;
-  for (let i = 0; i <= counts.length; i += 1) {
-    const dense = i < counts.length && counts[i] >= threshold;
-    if (dense && start < 0) start = i;
-    if (!dense && start >= 0) {
-      let ink = 0;
-      for (let k = start; k < i; k += 1) ink += counts[k];
-      const run = { start, end: i - 1, ink, length: i - start };
-      if (
-        !best ||
-        run.ink > best.ink ||
-        (run.ink === best.ink && run.length > best.length)
-      ) {
-        best = run;
-      }
-      start = -1;
-    }
-  }
+  // ⚠️ 規則住喺 `projection.densestRun()`（審計 M3；同以前手寫版同一條規則）
+  const best = densestRun(counts, threshold);
   if (!best) return { y0, y1 };
-  return { y0: y0 + best.start, y1: y0 + best.end };
+  return { y0: y0 + best.from, y1: y0 + best.to };
 }
 
 /**

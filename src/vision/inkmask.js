@@ -29,7 +29,7 @@
  * 全圖 2.09M 像素約幾十 ms；實時管線收到嘅係 640px 縮圖，更加快。
  */
 
-import { rowCounts } from './projection.js';
+import { rowCounts, runSpans } from './projection.js';
 
 /**
  * 墨色判準嘅門檻（可調 —— `tools/tune-detect.js --hue` 會掃描呢幾個值量安全邊界）。
@@ -253,18 +253,13 @@ export function maskRowCounts(image, mask) {
 export function findTextLines(image, mask, options = {}) {
   const minRowInk = options.minRowInk ?? 3;
   const counts = maskRowCounts(image, mask);
-  const lines = [];
-  let y = 0;
-  while (y < counts.length) {
-    if (counts[y] < minRowInk) { y += 1; continue; }
-    let y1 = y;
-    let ink = counts[y];
-    while (y1 + 1 < counts.length && counts[y1 + 1] >= minRowInk) {
-      y1 += 1;
-      ink += counts[y1];
-    }
-    lines.push({ y0: y, y1, height: y1 - y + 1, ink });
-    y = y1 + 1;
-  }
-  return lines;
+  // ⚠️ 切段用共用實作（審計 M3）：容忍度 1 ＝「一遇到唔夠墨嘅行就切開」
+  //    （同以前嘅 while 版本一樣）；`ink` 只計夠墨嗰啲行。
+  return runSpans(counts, { minValue: minRowInk, gapTolerance: 1 })
+    .map((run) => ({
+      y0: run.from,
+      y1: run.to,
+      height: run.to - run.from + 1,
+      ink: run.ink,
+    }));
 }

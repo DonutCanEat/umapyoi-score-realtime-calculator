@@ -20,6 +20,12 @@
  *
  * ## 實測（`node tools/diag-namematch.js`，8 張實機圖 × 14 格）
  *
+ * ⚠️ **2026-09-19 重跑（M3 重構時做 A/B 對照）**：同一個工具而家報
+ *    **33 對**、`n=112 p50 0.974`、假陰性門檻 0.70 → 152/264（57.6%）、
+ *    相似度 ≥ 0.9 有 75 對。下面嗰組數字係**較早**量嘅（樣本集／偵測細節改過就會郁）——
+ *    **刻意留住做歷史紀錄**，但引用之前一定要自己跑一次工具。
+ *    兩者嘅**結論一致**：同名分佈高、唔同招撞分低、瓶頸係「唔唯一」。
+ *
  * - **互相最佳配對**（唔需要真值）：34 對，min **0.727**、p25 0.943、**中位數 0.986**、max 1.000
  * - **唔同招撞分上限 0.604**（`node tools/diag-nameocl.js`）→ 形狀夠分辨
  * - 同一招跨圖（同列同欄幾何對齊，幾乎肯定同一招）：中位數 0.716、門檻 0.70 有 61% 過
@@ -36,7 +42,7 @@
  * —— 之前用 240／384 都會**剪走右邊嘅字**（`VICTORY` 後面冇咗）。
  */
 import { cosineSimilarity, standardizeInPlace } from './similarity.js';
-import { columnCounts } from './projection.js';
+import { columnCounts, runSpans } from './projection.js';
 
 export const GRID_H = 40;
 export const GW = 480;
@@ -69,30 +75,15 @@ export const SKILLNAME_MAYBE = 0.65;
  * @returns {{from:number,to:number}|null} 名喺框內嘅相對欄範圍（含頭含尾）
  */
 export function trimNameSegments(cols, boxWidth, scale = 1) {
-  const segs = [];
   // ⚠️ 段間隙**唔跟尺度縮**：實測同一個字內部嘅筆劃空隙都有 3–6px，
   //    段間隙一細過 10px 就會喺字內部亂切 → 名框被切碎（相似度中位 0.986 → 0.861）。
   //    掉轉頭，icon／名／Lv 之間嘅空隙喺任何尺度都遠大過 10px（因為嗰啲係「唔同嘅嘢」）。
   const gapNeed = NAME_LEVEL_GAP;
   const edgeTol = 5;
-  let start = -1;
-  let gap = 0;
-  for (let i = 0; i < cols.length; i += 1) {
-    if (cols[i] > 0) {
-      if (start < 0) start = i;
-      gap = 0;
-      continue;
-    }
-    if (start >= 0) {
-      gap += 1;
-      if (gap >= gapNeed) {
-        segs.push({ from: start, to: i - gap });
-        start = -1;
-        gap = 0;
-      }
-    }
-  }
-  if (start >= 0) segs.push({ from: start, to: cols.length - 1 - gap });
+  // ⚠️ 切段用共用實作（審計 M3）：`trimTrailingGap: true` ＝ 以前嗰句
+  //    「尾段 `to = cols.length - 1 - gap`」
+  const segs = runSpans(cols, { minValue: 1, gapTolerance: gapNeed, trimTrailingGap: true })
+    .map((run) => ({ from: run.from, to: run.to }));
   if (!segs.length) return null;
 
   const maxPrefix = Math.max(6, Math.round(boxWidth * 0.22));

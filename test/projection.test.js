@@ -12,7 +12,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { columnCounts, countInk, rowCounts } from '../src/vision/projection.js';
+import { columnCounts, countInk, densestRun, rowCounts, runSpans } from '../src/vision/projection.js';
 
 /** 用一個冇 random 嘅 LCG 砌一個「有紋理」嘅遮罩（測試要可重現）。 */
 function pseudoMask(width, height, seed = 12345) {
@@ -132,4 +132,142 @@ test('projection：countInk 邊界單行／單格都要準（inclusive）', () =
   assert.equal(countInk(mask, width, 0, 3), 3, '全圖');
   assert.equal(columnCounts(mask, width, 1, 1, 5, 5)[0], 1, '單欄單行 = 1');
   assert.equal(rowCounts(mask, width, 1, 1)[0], 2, '單行 = 2');
+});
+
+// ─────────────────────────── runSpans（連續段掃描）───────────────────────────
+//
+// 為何要測：呢支函數接手咗以前 9 個手寫版本（`columnsToGroups`／`nameBoxesInRow`／
+// `columnSpans`／`trimNameSegments`／`findTextLines`／`findSkillRows`／`denseBands`）。
+// 佢最易寫錯嘅係三樣：① 「段與段之間忍幾多個 gap」嘅 inclusive 邊界；
+// ② 段嘅 `to` 一定係最後一個**夠墨**嘅索引；③ **尾段規則**（削唔削尾部 gap）。
+
+/** 天真實作：先搵「夠墨」嘅索引群，再按 gap < tolerance 合併（同 `runSpans` 完全獨立）。 */
+function naiveRuns(values, minValue, gapTolerance, trimTrailingGap) {
+  const on = [];
+  for (let i = 0; i < values.length; i += 1) if (values[i] >= minValue) on.push(i);
+  if (!on.length) return [];
+  const groups = [[on[0], on[0]]];
+  for (let k = 1; k < on.length; k += 1) {
+    const gap = on[k] - on[k - 1] - 1;
+    const last = groups[groups.length - 1];
+    if (gap < gapTolerance) last[1] = on[k];
+    else groups.push([on[k], on[k]]);
+  }
+  return groups.map(([from, to], idx) => {
+    let ink = 0;
+    // ⚠️ ink 只計**夠墨**嗰啲索引（`trim=false` 之下 `to` 可能包含尾部 gap，
+    //    嗰啲唔可以計入 —— 呢個就係天真實作第一次寫錯嘅位）
+    for (let i = from; i <= to; i += 1) if (values[i] >= minValue) ink += values[i];
+    const isLast = idx === groups.length - 1;
+    // 尾段：只有「改到陣列尾都未收段」（＝尾嗰啲 off 值少過 gapTolerance）先要處理
+    const trailingOff = values.length - 1 - to;
+    let end = to;
+    if (isLast && trailingOff < gapTolerance) {
+      end = trimTrailingGap ? to - trailingOff : values.length - 1;
+    }
+    return { from, to: end, ink };
+  });
+}
+
+test('runSpans：基本切段、gap 容忍、`to` 一定係最後一個夠墨嘅索引', () => {
+  const values = [0, 1, 1, 0, 0, 0, 1, 1, 1, 0];
+  // gapTolerance 1 → 一有 gap 就收段
+  assert.deepEqual(
+    runSpans(values, { gapTolerance: 1 }).map((r) => [r.from, r.to]),
+    [[1, 2], [6, 8]],
+  );
+  // gapTolerance 3 → 中間 3 個 0 會被吸收，但 `to` 仍然係最後一個 1（唔會變 5）
+  // ⚠️ 尾段默認 `trimTrailingGap: false` → 尾嗰個 0 會被算入 `to`（＝原本
+  //    `nameBoxesInRow`／`columnSpans` 嘅 `x1 = width - 1` 行為，一字不差）
+  const three = runSpans(values, { gapTolerance: 3 });
+  assert.deepEqual(three.map((r) => [r.from, r.to]), [[1, 2], [6, 9]]);
+  assert.deepEqual(three.map((r) => r.ink), [2, 3], 'ink 只計夠墨嗰啲索引（尾嗰個 0 唔計）');
+  // 同一個輸入但 `trimTrailingGap: true` → 削走尾部 gap（＝原本 `columnsToGroups` 行為）
+  assert.deepEqual(
+    runSpans(values, { gapTolerance: 3, trimTrailingGap: true }).map((r) => [r.from, r.to]),
+    [[1, 2], [6, 8]],
+  );
+});
+
+test('runSpans：`minValue` 係 inclusive（等於門檻要算入）', () => {
+  const values = [1, 2, 3, 2, 1, 0];
+  assert.deepEqual(runSpans(values, { minValue: 2 }).map((r) => [r.from, r.to]), [[1, 3]]);
+  assert.deepEqual(runSpans(values, { minValue: 3 }).map((r) => [r.from, r.to]), [[2, 2]]);
+  assert.deepEqual(runSpans(values, { minValue: 99 }), [], '冇一段夠門檻 → 空');
+  assert.deepEqual(runSpans([], {}), [], '空輸入 → 空');
+});
+
+test('runSpans：尾段規則係明示參數（`trimTrailingGap`），兩個做法都真係有人用', () => {
+  // 尾段係「一段 + 2 個 gap」，而 gapTolerance 3 → 迴圈內未收，會落到尾段處理
+  const values = [1, 1, 0, 0];
+  const trim = runSpans(values, { minValue: 1, gapTolerance: 3, trimTrailingGap: true });
+  const keep = runSpans(values, { minValue: 1, gapTolerance: 3, trimTrailingGap: false });
+  assert.deepEqual(trim.map((r) => r.to), [1], 'trim：削走尾部嗰 2 個 gap');
+  assert.deepEqual(keep.map((r) => r.to), [3], '唔 trim：`to` 去到陣列尾');
+  assert.equal(trim[0].ink, 2, '兩邊 ink 一樣（gap 唔計）');
+  assert.equal(keep[0].ink, 2);
+
+  // ⚠️ gapTolerance 1 之下兩者等價（尾段有 gap 就一定已經喺迴圈內收咗）
+  for (const v of [[1, 1, 0, 0], [1, 1, 1], [0, 1, 1, 0], [1, 0, 1, 1]]) {
+    assert.deepEqual(
+      runSpans(v, { gapTolerance: 1, trimTrailingGap: true }),
+      runSpans(v, { gapTolerance: 1, trimTrailingGap: false }),
+      `gapTolerance 1 之下唔應該有分別：${v}`,
+    );
+  }
+
+  // 最後一欄／行仍然夠墨 → 兩種模式都去到最尾
+  assert.deepEqual(runSpans([0, 1, 1, 1], { trimTrailingGap: true }).map((r) => r.to), [3]);
+});
+
+test('runSpans：同天真實作交叉核對（多組門檻／容忍度／尾段規則）', () => {
+  const width = 60;
+  const values = [];
+  let s = 7;
+  for (let i = 0; i < width; i += 1) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    values.push(s % 12); // 0..11，會有連續 0 亦有連續非 0
+  }
+  for (const minValue of [1, 3, 6, 9]) {
+    for (const gapTolerance of [1, 2, 3, 5, 10]) {
+      for (const trimTrailingGap of [false, true]) {
+        const got = runSpans(values, { minValue, gapTolerance, trimTrailingGap });
+        const want = naiveRuns(values, minValue, gapTolerance, trimTrailingGap);
+        const label = `min=${minValue} gap=${gapTolerance} trim=${trimTrailingGap}`;
+        assert.equal(got.length, want.length, `${label}：段數唔同（${JSON.stringify(got)} vs ${JSON.stringify(want)}）`);
+        for (let i = 0; i < got.length; i += 1) {
+          assert.equal(got[i].from, want[i].from, `${label}：第 ${i} 段 from`);
+          assert.equal(got[i].to, want[i].to, `${label}：第 ${i} 段 to`);
+          assert.equal(got[i].ink, want[i].ink, `${label}：第 ${i} 段 ink`);
+        }
+      }
+    }
+  }
+  // Int32Array（真實呼叫者傳嘅型別）一樣用得；順手釘死「容忍度」嘅 inclusive 邊界
+  const typed = runSpans(Int32Array.from([0, 5, 5, 0, 5]), { minValue: 5, gapTolerance: 2 });
+  assert.deepEqual(typed.map((r) => [r.from, r.to]), [[1, 4]], '容忍度 2 → 1 個 gap 會被吸收（變一段）');
+  assert.deepEqual(typed.map((r) => r.ink), [15]);
+  const strict = runSpans(Int32Array.from([0, 5, 5, 0, 5]), { minValue: 5, gapTolerance: 1 });
+  assert.deepEqual(strict.map((r) => [r.from, r.to]), [[1, 2], [4, 4]], '容忍度 1 → 一遇到 gap 就切開');
+});
+
+// ─────────────────────────── densestRun（揀墨量最多嘅一段）───────────────────────────
+
+test('densestRun：先比 ink、打同比長度、再打同取最先', () => {
+  // 兩段同 ink（各 6）→ 長者勝（第 2 段長 3 > 第 1 段長 2）
+  assert.deepEqual(
+    densestRun([0, 3, 3, 0, 2, 2, 2, 0], 2),
+    { from: 4, to: 6, ink: 6, length: 3 },
+  );
+  // 同 ink 同長度 → 取最先嗰段
+  assert.deepEqual(
+    densestRun([0, 2, 2, 0, 2, 2, 0], 2),
+    { from: 1, to: 2, ink: 4, length: 2 },
+  );
+  // 一枝獨秀嘅高墨量單行勝出（pitfalls #18 嘅情境：邊框線）
+  assert.deepEqual(
+    densestRun([0, 2, 2, 2, 0, 9, 0, 2, 2], 2),
+    { from: 5, to: 5, ink: 9, length: 1 },
+  );
+  assert.equal(densestRun([0, 0, 0], 1), null, '冇一段夠門檻 → null');
 });

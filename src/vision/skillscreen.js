@@ -19,7 +19,7 @@
  */
 
 import { buildInkMask } from './inkmask.js';
-import { columnCounts, rowCounts } from './projection.js';
+import { columnCounts, rowCounts, runSpans } from './projection.js';
 
 /**
  * 預設參數。
@@ -138,17 +138,9 @@ export function findSkillRows(counts, width, height, options = {}) {
   const maxH = Math.max(4, Math.round(height * o.maxRowHeight));
   // ⭐ 「最低幾高先算一列」＝ 半個字高（唔係寫死 8px）
   const minH = Math.max(2, Math.round(unit * 0.6));
-  // ① 連續夠墨嘅列段
-  const raw = [];
-  let y = 0;
-  while (y < counts.length) {
-    if (counts[y] < minInk) { y += 1; continue; }
-    let y1 = y;
-    let ink = counts[y];
-    while (y1 + 1 < counts.length && counts[y1 + 1] >= minInk) { y1 += 1; ink += counts[y1]; }
-    raw.push({ y0: y, y1, ink });
-    y = y1 + 1;
-  }
+  // ① 連續夠墨嘅列段（⚠️ 共用切段實作，審計 M3：容忍度 1 ＝ 一唔夠墨就切開）
+  const raw = runSpans(counts, { minValue: minInk, gapTolerance: 1 })
+    .map((run) => ({ y0: run.from, y1: run.to, ink: run.ink }));
 
   // ② 太高嘅段（兩三列黏埋）→ 用「列墨量最低點」切開
   const out = [];
@@ -214,22 +206,10 @@ export function nameBoxesInRow(cols, width, options = {}) {
   const o = { ...DEFAULT_SKILLSCREEN_OPTIONS, ...options };
   const minCol = 1;
   const gapMax = Math.max(2, Math.round(width * o.clusterGap));
-  const spans = [];
-  let start = -1;
-  let gap = 0;
-  for (let x = 0; x < cols.length; x += 1) {
-    if (cols[x] >= minCol) {
-      if (start < 0) start = x;
-      gap = 0;
-    } else if (start >= 0) {
-      gap += 1;
-      if (gap >= gapMax) {
-        spans.push({ x0: start, x1: x - gap });
-        start = -1;
-      }
-    }
-  }
-  if (start >= 0) spans.push({ x0: start, x1: width - 1 });
+  // ⚠️ 共用切段實作（審計 M3）：`trimTrailingGap: false` ＝ 以前嗰句
+  //    「尾段 `x1 = width - 1`」（唔削尾部 gap —— 同 `columnsToGroups` 唔同，係刻意嘅）
+  const spans = runSpans(cols, { minValue: minCol, gapTolerance: gapMax })
+    .map((run) => ({ x0: run.from, x1: run.to }));
 
   // 分兩欄：兩欄之間嘅大空隙（實測 x ≈ 0.33–0.43×圖闊 之間乜都冇）
   const mid = width * o.columnSplit;
@@ -297,28 +277,11 @@ export function columnSpans(mask, width, y0, y1, options = {}) {
   // ⚠️ 共用欄投影（審計 M3）
   const cols = columnCounts(mask, width, y0, y1);
   const minCol = Math.max(1, Math.round((y1 - y0 + 1) * 0.04));
-  const spans = [];
-  let start = -1;
-  let gap = 0;
   // 欄與欄之間嘅空隙：實測兩欄之間有一條明顯空白 → 用圖闊 2% 做門檻
   const gapMax = Math.max(2, Math.round(width * 0.02));
-  for (let x = 0; x < width; x += 1) {
-    if (cols[x] >= minCol) {
-      if (start < 0) start = x;
-      gap = 0;
-    } else if (start >= 0) {
-      gap += 1;
-      if (gap >= gapMax) {
-        spans.push({ x0: start, x1: x - gap, ink: 0 });
-        start = -1;
-      }
-    }
-  }
-  if (start >= 0) spans.push({ x0: start, x1: width - 1, ink: 0 });
-  for (const s of spans) {
-    let ink = 0;
-    for (let x = s.x0; x <= s.x1; x += 1) ink += cols[x];
-    s.ink = ink;
-  }
+  // ⚠️ 共用切段實作（審計 M3）：`trimTrailingGap: false`（同以前一樣，唔削尾段 gap）。
+  //    `ink` 以前係「段入面所有欄加埋」→ 同 `runSpans()` 嘅 ink 一樣（整數加法）。
+  const spans = runSpans(cols, { minValue: minCol, gapTolerance: gapMax })
+    .map((run) => ({ x0: run.from, x1: run.to, ink: run.ink }));
   return spans.filter((s) => s.x1 > s.x0);
 }

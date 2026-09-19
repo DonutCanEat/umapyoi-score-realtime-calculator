@@ -82,3 +82,73 @@ export function countInk(mask, width, y0, y1) {
   }
   return n;
 }
+
+/**
+ * 由一串數值切出「連續段」（＝連續有足夠墨嘅行／欄）。
+ *
+ * 語意（**逐字對應**以前 9 個手寫版本嘅行為，唔係重新設計）：
+ *   - 一段 ＝ 連續「`values[i] >= minValue`」嘅索引
+ *   - 段與段之間最多忍 `gapTolerance` 個唔夠墨嘅索引（＝以前嘅 `minGap`／`gapMax`／`gapNeed`）
+ *   - 段嘅 `to`（含）永遠係**最後一個夠墨嘅索引**（中間嘅 gap 唔計）
+ *   - `ink` ＝ 段入面**夠墨**嗰啲索引嘅值加埋（gap 嗰啲唔計）—— 以前有啲版本計、有啲唔計，
+ *     一律照計（唔要就唔好讀）
+ *
+ * ⚠️ **尾段規則係明示參數**（唔可以靠慣例）：如果行到最尾都未收段（＝尾嗰啲仍然夠墨，
+ *    或者尾嗰啲係 gap 但未夠 `gapTolerance`）：
+ *      - `trimTrailingGap: true` → `to = 尾 - gap`（削走尾部嗰幾個 gap 索引）
+ *      - `trimTrailingGap: false` → `to = 尾`（**唔削**）
+ *    實測兩個做法都真係有人用（`columnsToGroups`／`trimNameSegments` 用 true；
+ *    `nameBoxesInRow`／`columnSpans`／`findTextLines`／`denseBands` 用 false）——
+ *    ⚠️ 當 `gapTolerance === 1` 時兩者**等價**（尾段有 gap 就一定已經喺迴圈內收咗）。
+ *
+ * @param {Int32Array|number[]} values 逐行／逐欄嘅墨量
+ * @param {{minValue?:number, gapTolerance?:number, trimTrailingGap?:boolean}} [options]
+ * @returns {Array<{from:number, to:number, ink:number}>} `from`／`to` 都係 inclusive 索引
+ */
+export function runSpans(values, { minValue = 1, gapTolerance = 1, trimTrailingGap = false } = {}) {
+  const runs = [];
+  let start = -1;
+  let gap = 0;
+  let ink = 0;
+  for (let i = 0; i < values.length; i += 1) {
+    if (values[i] >= minValue) {
+      if (start < 0) { start = i; ink = 0; }
+      gap = 0;
+      ink += values[i];
+    } else if (start >= 0) {
+      gap += 1;
+      if (gap >= gapTolerance) {
+        runs.push({ from: start, to: i - gap, ink });
+        start = -1;
+        gap = 0;
+      }
+    }
+  }
+  if (start >= 0) {
+    runs.push({ from: start, to: values.length - 1 - (trimTrailingGap ? gap : 0), ink });
+  }
+  return runs;
+}
+
+/**
+ * 由一串數值揀「墨量最多」嘅連續段（`tightenBand()` 用）。
+ *
+ * 規則（同原本手寫版一樣）：先比 `ink`，打同比**長度**（長者勝），再打同就**取最先**（索引細者勝）。
+ * ⚠️ 「長者勝」唔可以省：實測一枝獨秀嘅單行（例如邊框線）都可能係最高墨量，
+ *    冇呢條就會收窄成一兩行（pitfalls #18）。
+ *
+ * @param {Int32Array|number[]} values
+ * @param {number} minValue 段嘅最低值（＝峰值 × `tightenRatio`）
+ * @returns {{from:number, to:number, ink:number, length:number}|null}
+ */
+export function densestRun(values, minValue) {
+  const runs = runSpans(values, { minValue, gapTolerance: 1 });
+  let best = null;
+  for (const run of runs) {
+    const length = run.to - run.from + 1;
+    if (!best || run.ink > best.ink || (run.ink === best.ink && length > best.length)) {
+      best = { from: run.from, to: run.to, ink: run.ink, length };
+    }
+  }
+  return best;
+}
