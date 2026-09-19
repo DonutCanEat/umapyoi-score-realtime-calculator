@@ -29,11 +29,14 @@
  *     "size": { "w": 0.212, "h": 0.255 }
  *   },
  *   "display": { "total": true, "stats": true, "statScore": true,
- *                "skillScore": true, "goldMark": true, "note": true, "edit": true }
+ *                "skillScore": true, "rankTarget": true,
+ *                "goldMark": true, "note": true, "edit": true }
  * }
  * ```
  *
  * 兩節都係**選填**（缺 → 用預設；分節之內缺欄位一樣補預設），
+ * ⚠️ 所以**舊檔（未有 `rankTarget` 之前寫嘅）照樣讀得入** —— 缺嘅 display key
+ * 一律補「預設開」（見 `validateDisplay()`），加新顯示選項唔可以令舊設定檔開唔到程式。
  * 但**有寫嘅欄位一定要合法**，而且**唔准有唔認識嘅 key**（打錯字要即刻出聲，
  * 唔可以靜默失效 —— 例如 `dispaly`）。
  *
@@ -79,6 +82,7 @@ export const HUD_CONFIG_FILENAME = 'hud-position.json';
  * | `stats`      | `lines[].key === 'stat0'…'stat4'`    | 五維逐格（速度／持久／力量／毅力／智力）|
  * | `statScore`  | `summary[].key === 'stat'`           | 五維分 |
  * | `skillScore` | `summary[].key === 'skill'`          | 技能分（未讀到 = `？／總分 ≥ X`）|
+ * | `rankTarget` | `summary[].key === 'nextRank'`       | ランク目標（仲差幾多分升級；C5）|
  * | `goldMark`   | `statbar.readStatBar()` 回嘅 `highlighted` | 金色格標示（屬性 > 1200）|
  * | `note`       | `note`（ランク／過期提示）            | 狀態一行 |
  * | `edit`       | `edit`（對位模式 `UMAPYOI_HUD_EDIT=1`）| 範圍／偏移一行 |
@@ -88,6 +92,7 @@ export const HUD_DISPLAY_KEYS = Object.freeze([
   'stats',
   'statScore',
   'skillScore',
+  'rankTarget',
   'goldMark',
   'note',
   'edit',
@@ -451,7 +456,7 @@ function validateFraction(where, raw) {
 }
 
 /**
- * ⭐ `display` **一定要七個 key 齊全**（缺任何一個 → throw，訊息講明缺邊個）。
+ * ⭐ `display` **一定要全部 key 齊全**（缺任何一個 → throw，訊息講明缺邊個）。
  *
  * ## 為何要呢個咁嚴格嘅閘（獨立審計發現嘅「靜默重設」）
  *
@@ -460,21 +465,23 @@ function validateFraction(where, raw) {
  * `display: {}`（**空物件**）會**過閘** → `hudState()` 當全部開 →
  * **用戶今次 session 明明閂咗嘅選項被靜默重設成「開」**（用戶睇唔出係邊一步）。
  *
- * 所以「用戶／程式交一份完整設定」呢條路一定要驗齊 7 個 key ——
+ * 所以「用戶／程式交一份完整設定」呢條路一定要驗齊**所有** key ——
  * 而「唔傳 `display`」係另一件事（`validateConfig()` 會補齊預設，唔經呢度）。
+ * ⚠️ 個數用 `HUD_DISPLAY_KEYS.length` 動態計（加顯示選項就唔會漏改訊息）。
  *
  * @param {unknown} display
  * @returns {Record<string,boolean>} 同一個 object（唔改嘢；純粹係檢查）
  */
 export function assertFullDisplay(display) {
+  const n = HUD_DISPLAY_KEYS.length;
   if (!isPlainObject(display)) {
-    throw new Error(`HUD 設定 display 要係物件（7 個 boolean），實得 ${describe(display)}`);
+    throw new Error(`HUD 設定 display 要係物件（${n} 個 boolean），實得 ${describe(display)}`);
   }
   const missing = HUD_DISPLAY_KEYS.filter((key) => !Object.hasOwn(display, key));
   if (missing.length) {
     throw new Error(
       `HUD 設定 display 唔完整：缺 ${missing.join('、')}` +
-      `（7 個顯示選項 ${HUD_DISPLAY_KEYS.join('／')} 一個都唔可以少 ——` +
+      `（${n} 個顯示選項 ${HUD_DISPLAY_KEYS.join('／')} 一個都唔可以少 ——` +
       ` 缺 key 會被 hudState() 當「開」→ 用戶閂咗嘅選項被靜默重設）。` +
       ` 實得 ${describe(display)}`,
     );

@@ -82,7 +82,7 @@ let hudGameSize = { width: 0, height: 0 };
 /**
  * HUD 設定（`{layout, display}`）—— 由 `src/hud/config.js` 解析（**環境變數 > 檔案 > 預設**）。
  *
- * ⚠️ 唔再係「淨係 layout」：顯示選項（7 個 boolean）同位置係同一份設定，
+ * ⚠️ 唔再係「淨係 layout」：顯示選項（`HUD_DISPLAY_KEYS` 嗰幾個 boolean）同位置係同一份設定，
  * 兩者都要經同一個 `resolveHudConfig()` 出去，唔可以各自讀一次（會走樣）。
  */
 let hudConfig = null;
@@ -440,7 +440,7 @@ function applyHudConfig(config, { why = '', fromUi = false } = {}) {
       `缺咗／唔啱型別：${missing.join('、')}（實得 ${JSON.stringify(config)}）`,
     );
   }
-  // ⭐ 7 個 display key 齊全（`assertFullDisplay()` 會逐個點名缺咗邊個）。
+  // ⭐ 全部 display key 齊全（`assertFullDisplay()` 會逐個點名缺咗邊個）。
   assertFullDisplay(config.display);
   hudConfig = config;
   placeHud(hudGameSize);

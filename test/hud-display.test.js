@@ -139,8 +139,61 @@ test('金色格：真實粒度係「一個整體 boolean」—— gold 照傳，
   assert.equal(hudState({ score: SCORE, stats: STATS }).gold, false);
 });
 
+// ───────────────── C5：ランク目標（`nextRank`）─────────────────
+//
+// ⚠️ 三個輸入狀態要分清楚（呢個就係最容易走樣嘅位）：
+//    `nextRank` = 物件 → 「升級 UG 差 7800」
+//    `nextRank` = null → 已經最高ランク → 「UA 已到頂」（**唔係**唔顯示）
+//    `nextRank` = undefined（舊呼叫）→ **一行都唔加**（加功能唔可以改變舊行為）
+
+const SCORE_NEXT = {
+  total: 32334,
+  rank: 'UE2',
+  statScore: 30000,
+  nextRank: { rank: 'UE3', gap: 66, threshold: 32400 },
+};
+
+test('ランク目標：有 nextRank 就出「升級 X 差 N」，數值同 nextRank 一致', () => {
+  const s = hudState({ score: SCORE_NEXT, stats: STATS, updatedAt: 1000, now: 1200 });
+  assert.deepEqual(s.summary.map((x) => x.key), ['stat', 'skill', 'nextRank']);
+  const item = s.summary.find((x) => x.key === 'nextRank');
+  assert.equal(item.value, 'UE3 差 66');
+  assert.match(item.label, /升級/);
+});
+
+test('ランク目標：已經最高ランク（nextRank = null）要老實講「已到頂」，唔係靜默唔出', () => {
+  const s = hudState({
+    score: { total: 55200, rank: 'UA', statScore: 55200, nextRank: null },
+    stats: STATS,
+  });
+  const item = s.summary.find((x) => x.key === 'nextRank');
+  assert.ok(item, 'nextRank = null 係「冇下一個ランク」嘅意思，唔可以當「冇資料」');
+  assert.equal(item.value, 'UA 已到頂');
+});
+
+test('ランク目標：舊呼叫冇 nextRank 欄位 → 一行都唔加（同加呢個功能之前一模一樣）', () => {
+  const s = hudState({ score: SCORE, stats: STATS, updatedAt: 1000, now: 1200 });
+  assert.equal(s.summary.find((x) => x.key === 'nextRank'), undefined);
+  assert.deepEqual(s.summary.map((x) => x.key), ['stat', 'skill']);
+
+  // 冇分數（none 態）一樣唔會有
+  const none = hudState({ score: null });
+  assert.equal(none.summary.find((x) => x.key === 'nextRank'), undefined);
+});
+
+test('ランク目標：閂 rankTarget → 只少呢一行，其他 summary 照舊', () => {
+  const off = hudState({
+    score: SCORE_NEXT, stats: STATS, display: allOff({ rankTarget: false }),
+  });
+  assert.deepEqual(off.summary.map((x) => x.key), ['stat', 'skill']);
+  assert.equal(off.total, 32334, '閂顯示唔等於冇分數');
+});
+
 test('顯示選項 key 清單要同 config.js 嘅 HUD_DISPLAY_KEYS 對齊（兩邊走樣 = 設定窗閂錯嘢）', () => {
   assert.deepEqual([...HUD_DISPLAY_KEY_NAMES], [...HUD_DISPLAY_KEYS]);
   assert.deepEqual(Object.keys(DEFAULT_HUD_DISPLAY).sort(), [...HUD_DISPLAY_KEY_NAMES].sort());
-  assert.equal(HUD_DISPLAY_KEY_NAMES.length, 7);
+  // ⚠️ 呢個數字係故意寫死嘅：加／減顯示選項一定要**同時**改設定窗（`DISPLAY_FIELDS`）
+  //    同 `HUD_DISPLAY_KEYS`，測試會即刻提你（8 = C5 加咗 `rankTarget`）。
+  assert.equal(HUD_DISPLAY_KEY_NAMES.length, 8);
+  assert.equal(DEFAULT_HUD_DISPLAY.rankTarget, true, '新選項預設要開（＝同今日 HUD 一樣）');
 });

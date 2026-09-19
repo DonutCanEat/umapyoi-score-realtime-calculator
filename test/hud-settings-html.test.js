@@ -1,7 +1,7 @@
 /**
  * **設定窗 ↔ `config.js` 欄位對齊**嘅測試（`electron/settings.html`，實作上係零測試覆蓋）。
  *
- * 為何要（呢個係「零覆蓋靜默位」）：`electron/settings.html` 有 7 個 display checkbox
+ * 為何要（呢個係「零覆蓋靜默位」）：`electron/settings.html` 有全部 display checkbox
  * 同 8 個數值控件。呢兩份清單係**抄** `src/hud/config.js` 嘅（`HUD_DISPLAY_KEYS`
  * ＋ `layout.x／y／size／offset`），中間冇任何自動閘 —— 所以：
  *
@@ -143,7 +143,7 @@ test('設定窗：8 個數值欄位（x0／x1／y0／y1／dx／dy／w／h）要�
   assert.equal(keys.length, 8, `數值欄位要啱啱好 8 個，實得 ${keys.length} 個：${keys}`);
 });
 
-test('設定窗：7 個 display ＋ 8 個數值欄位以外，HTML 唔可以再加「冇人對應」嘅欄位', () => {
+test('設定窗：全部 display ＋ 8 個數值欄位以外，HTML 唔可以再加「冇人對應」嘅欄位', () => {
   const keys = [...displayKeysFromHtml(), ...numKeysFromHtml()];
   assert.equal(keys.length, HUD_DISPLAY_KEYS.length + 8,
     `設定窗欄位總數要係 ${HUD_DISPLAY_KEYS.length} + 8，實得 ${keys.length}：${keys}`);

@@ -339,7 +339,7 @@ export function layoutFromEnv(env = {}) {
  * 顯示選項 key（對應 `src/hud/config.js` 嘅 `HUD_DISPLAY_KEYS`）。
  *
  * ⚠️ 呢度**唔 import** `config.js`：反過來 `config.js` 已經 import 咗呢個檔
- * （循環 import 會令模組初始化次序變得脆弱），而且呢度只需要「知有邊 7 個 key」
+ * （循環 import 會令模組初始化次序變得脆弱），而且呢度只需要「知有邊幾個 key」
  * —— 而真正嘅判斷係「明明寫住 `false` 就唔出」，其餘（`undefined`／冇傳）一律當開，
  * 咁就保證**舊呼叫（唔傳 `display`）行為 100% 唔變**。
  *
@@ -349,6 +349,7 @@ export function layoutFromEnv(env = {}) {
  * | `stats`      | `lines[].key === 'stat0'…'stat4'` |
  * | `statScore`  | `summary[].key === 'stat'` |
  * | `skillScore` | `summary[].key === 'skill'` |
+ * | `rankTarget` | `summary[].key === 'nextRank'`（C5：仲差幾多分升級）|
  * | `goldMark`   | `gold`（金色格提示，屬性 > 1200）|
  * | `note`       | `note` |
  * | `edit`       | `edit` |
@@ -358,6 +359,7 @@ export const HUD_DISPLAY_KEY_NAMES = Object.freeze([
   'stats',
   'statScore',
   'skillScore',
+  'rankTarget',
   'goldMark',
   'note',
   'edit',
@@ -409,7 +411,8 @@ function shown(display, key) {
  * 要升級成逐格就要 `statbar.js` 額外回傳每格嘅色相判斷（未做）。
  *
  * @param {{
- *   score?: {total:number, rank:string, statScore:number, skillScore?:number|null}|null,
+ *   score?: {total:number, rank:string, statScore:number, skillScore?:number|null,
+ *            nextRank?:{rank:string,gap:number,threshold:number}|null}|null,
  *   stats?: number[]|null,
  *   updatedAt?: number,
  *   now?: number,
@@ -470,6 +473,21 @@ export function hudState({
     summary.push(skills === null
       ? { key: 'skill', label: '技能分', value: `？／總分 ≥ ${score.total}` }
       : { key: 'skill', label: '技能分', value: String(skills) });
+  }
+
+  // ⭐ C5「ランク目標」：仲差幾多分升級（`evaluate()` 已經回 `nextRank`，唔使自己再查表）。
+  //
+  // ⚠️ 顯示條件係「`nextRank` **唔係 undefined**」而唔係「truthy」：
+  //    `null` 係一個**有意義嘅值**（已到最高ランク UA，冇下一個），要老實講「已到頂」；
+  //    `undefined` 就係「呢個呼叫者根本冇提供呢個資料」（舊呼叫／舊測試）→ **一行都唔加**，
+  //    咁加呢個功能就唔會改變任何舊行為。
+  if (shown(display, 'rankTarget') && score.nextRank !== undefined) {
+    const next = score.nextRank;
+    summary.push({
+      key: 'nextRank',
+      label: '升級',
+      value: next ? `${next.rank} 差 ${next.gap}` : `${score.rank} 已到頂`,
+    });
   }
 
   // 逐格五維（有 stats 就出，唔夠 5 個就唔出，免得顯示半截資料）

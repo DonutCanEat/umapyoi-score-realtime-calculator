@@ -173,6 +173,26 @@ test('hud-config loadConfig：分節／欄位可以只寫一部分，其餘補�
   assert.deepEqual(Object.keys(cfg.layout).sort(), ['offset', 'size', 'x', 'y'], '回嘅係完整形狀');
 });
 
+test('⭐ C5 回歸：舊設定檔（未有 `rankTarget` 嗰陣寫嘅）一定要讀得入，新選項補「開」', () => {
+  // 為何要呢條：加顯示選項最容易出嘅災難係「用戶個 hud-position.json 開唔到程式」——
+  // `applyHudConfig()` 有 `assertFullDisplay()`（缺 key 就 throw）。
+  // 舊檔一定缺新 key，所以一定要靠 `validateDisplay()` 補齊（而唔係 throw）。
+  const path = freshPath('legacy-rank-target.json');
+  const legacyKeys = HUD_DISPLAY_KEYS.filter((k) => k !== 'rankTarget');
+  writeRaw(path, JSON.stringify({
+    layout: { x: [0.1, 0.3], y: [0.1, 0.3] },
+    display: Object.fromEntries(legacyKeys.map((k) => [k, k !== 'goldMark'])),
+  }));
+
+  const cfg = loadConfig({ filePath: path }); // 唔准 throw
+  assert.equal(cfg.display.rankTarget, true, '舊檔冇寫嘅新選項要補「預設開」（＝同加之前嘅外觀一樣）');
+  assert.equal(cfg.display.goldMark, false, '舊檔明明寫咗 false 就要留住');
+  assert.equal(cfg.display.total, true);
+  // 補齊之後一定要過到 `applyHudConfig()` 嗰個閘（咁先算真正「開得到程式」）
+  assert.equal(assertFullDisplay(cfg.display), cfg.display);
+  assert.deepEqual(Object.keys(cfg.display).sort(), [...HUD_DISPLAY_KEYS].sort(), '回嘅係完整 8 個 key');
+});
+
 // ── ⭐ onWarn 鏈路（檔案路徑）：設定檔引起嘅警告都一定要經 caller ──
 //
 // 為何要呢兩條測試（獨立審計實測嘅缺口）：`loadConfig()` 以前叫 `validateConfig(raw)`
@@ -816,11 +836,11 @@ test('hud-config saveConfig：validate 唔過就 throw，而且**唔會**寫壞�
 //    `main.js` import `electron` 入唔到 `node --test`。`main.js` 嘅 `applyHudConfig()`
 //    只係喺原本嘅 `missing` 檢查之後多叫一句 `assertFullDisplay(config.display)`。
 
-test('assertFullDisplay：7 個 key 齊全就過（預設形狀／全開／全閂／混合都要過）', () => {
+test('assertFullDisplay：全部 key 齊全就過（預設形狀／全開／全閂／混合都要過）', () => {
   const cases = [
     ['出廠預設', { ...DEFAULT_HUD_DISPLAY }],
     ['全閂', Object.fromEntries(HUD_DISPLAY_KEYS.map((k) => [k, false]))],
-    ['混合 ＋ 多餘 key 都唔理（只驗 7 個）', { ...DEFAULT_HUD_DISPLAY, total: false, edit: false }],
+    ['混合 ＋ 多餘 key 都唔理（只驗實際嗰幾個）', { ...DEFAULT_HUD_DISPLAY, total: false, edit: false }],
   ];
   for (const [name, display] of cases) {
     assert.equal(assertFullDisplay(display), display, `${name}：要回同一個 object（唔改嘢）`);
@@ -832,7 +852,11 @@ test('assertFullDisplay：7 個 key 齊全就過（預設形狀／全開／全�
 
 test('assertFullDisplay：空物件／缺任何一個 key → throw，而且訊息要**點名**缺邊個', () => {
   // ⭐ 呢個就係審計實測嗰個個案：`display: {}` 以前會過閘 → 全部被當開（靜默重設）
-  assert.throws(() => assertFullDisplay({}), /缺 total、stats、statScore、skillScore、goldMark、note、edit/);
+  // ⚠️ 期望字串由 `HUD_DISPLAY_KEYS` 砌（加顯示選項唔使改測試，但仍然擋到「一個都冇」）。
+  assert.throws(
+    () => assertFullDisplay({}),
+    new RegExp(`缺 ${HUD_DISPLAY_KEYS.join('、')}`),
+  );
 
   // 逐個 key 抽走 → 一定要 throw，而且訊息要提嗰個 key
   for (const key of HUD_DISPLAY_KEYS) {
@@ -849,7 +873,16 @@ test('assertFullDisplay：空物件／缺任何一個 key → throw，而且訊�
     assert.ok(err.message.includes('靜默重設'), `訊息要講明後果：${err.message}`);
   }
   // 只寫一個 key（最常見嘅「手砌一半」）一樣要擋
-  assert.throws(() => assertFullDisplay({ total: false }), /缺 stats、statScore、skillScore、goldMark、note、edit/);
+  // ⚠️ 期望字串**由 `HUD_DISPLAY_KEYS` 砌**（唔好寫死）：加顯示選項唔應該要改呢條測試。
+  const missingAfterTotal = HUD_DISPLAY_KEYS.filter((k) => k !== 'total');
+  const errPartial = (() => {
+    try {
+      assertFullDisplay({ total: false });
+      return null;
+    } catch (e) { return e; }
+  })();
+  assert.ok(errPartial, '只寫一個 key 一定要 throw');
+  assert.ok(errPartial.message.includes(`缺 ${missingAfterTotal.join('、')}`), errPartial.message);
 });
 
 test('assertFullDisplay：唔係物件（undefined／null／陣列／字串）一律 throw（唔准靜默當全開）', () => {
