@@ -68,7 +68,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 |---|---|---|
 | Phase 0 | 評價分運算核心 | ✅ **誤差 = 0**（**5 條**實機樣本全部吻合；第 5 條 `05-東海帝皇-超越地平線-UD1.json` 係**第一次用遊戲自己顯示嘅評價点**做真值 —— 35,050 ＝ 五維 26,702 ＋ 技能 8,348）|
 | Phase 0 | 技能資料庫（1323 招）＋ 進化技能 override | ✅ |
-| Phase 1 | 畫面擷取（`npm start` 跑得通）| ✅ |
+| Phase 1 | 畫面擷取（`npm start` 跑得通）| ✅ ⚠️ **2026-09-19 修好「擷取會靜默凍結」**（用戶報「一開頭 detect 到，去到一半就固定咗，之後十分鐘都話唔見面板條」）：擷取迴圈係 renderer 嘅 rAF 驅動 → ① 視窗被完全遮住時 Chromium 會暫停 rAF；② 串流一斷 `videoWidth` 變 0 就永遠 `return`。兩者都令主程序**一幀都收唔到而完全冇 log**（HUD 只會一直顯示「唔見面板條 N 秒」）。修法：`backgroundThrottling:false`（`web-preferences.js`）＋ `capture.html` 支援重新 `start`／報告 track ended 同停滯 ＋ `main.js` 收幀心跳（每分鐘）同 15 秒凍結自動重啟（上限 5 次）＋ `did-finish-load` 由 `once` 改 `on`（reload 後要重送 ROI／start）|
 | Phase 1 | **五維數字辨識（零校準）** | ✅ 兩條路都通：**畫面 A 面板條**（`statbar.js`）**15/15 全中**（1356→2560 五個解析度 ＋ 1929×1085 新樣本 ＋ 4 個實機失敗／金色格回歸 ＋ 4 個實機狀態樣本 ＋ ⭐ `roi-theme-divider.png` 格線入墨窗口回歸）＋ **負樣本 6/6 唔出數**（其他畫面唔准出數，見地雷 #30 —— 包括**培育結束確認**嘅「能力值」／「技能」tab 同**賽馬娘詳情**面板）；ステータス面板排法 **30/30**。✅ 已實機跑過（`npm start`，1920 窗），修好間歇性「讀唔清」（地雷 #25）、**金色格靜默讀錯**（地雷 #26）同**格線入墨窗口搞到成個畫面唔出數**（地雷 #31）|
 | Phase 1 | HUD overlay ＋ 設定面板 | ✅ **可用**（透明置頂穿透；顯示評價点 + 五維逐格 + 技能分 `？／總分 ≥ X` ＋ 金色格提示 ＋ **ランク目標（仲差幾多分升級，C5）** ＋ **成長曲線（C3，SVG 折線）**）。**已做**：`hud-position.json` 存檔（env > 檔案 > 預設）、獨立**設定窗**（8 個數值 slider ＋ **9 個顯示選項**，改動即時生效）、**對位模式（`UMAPYOI_HUD_EDIT=1`）可以直接拖 HUD**（放手即反推 + 存檔）＋ 設定窗跟住更新（唔會「拖完撳儲存就彈返」）。✅ **2026-09-19 用戶實機驗過（原話：「而家 hud 冇問題」）**。⏸️ **唔做**：跟住遊戲視窗移動（**用戶 2026-09-19 決定** —— 可以用拖位擺去自己想擺嘅位，跟窗冇必要；見 §9 ①）。對位模式期間切換仍然要重開程式（✅ **2026-09-19 用戶實機驗過**：新嗰行「升級 … 差 …」正常顯示；原話「呢兩樣都ok」）|
 | Phase 2 | 技能 icon 識別（自動知學咗邊啲技能）| ⏸️ **暫停（用戶 2026-09-19 指示：暫時唔處理技能呢一 part）** —— 已經做好嘅部分見下面，隨時可以接返。原狀態：🚧 **兩步做好**：① 技能畫面欄／行偵測器（`skillscreen.js`，8 張實機圖全部搵到 7 行）；② **名稱框抽取**（112 個全部抽到）＋ **影像比對可行性已量化**（互相最佳配對中位數 **0.986**、撞分上限 **0.604** —— 見 `docs/skill-screen.md` §5）。⏳ 未做：接上**候選名單**（見 §9）|
@@ -133,7 +133,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（339 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（342 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ electron/main.js
                                      #    ＋ src/**（31 檔）＋ tools/**（34 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
@@ -305,7 +305,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **339 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **342 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 15/15**、**負樣本 6/6 唔出數**），全部都要中
@@ -337,7 +337,7 @@ src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔�
                 #   env-flag.js（環境變數唯一讀法）／history.js（C3 成長曲線核心）
 electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／ipc-channels.cjs（channel 名唯一來源）／
                 #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 339 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+test/           # 342 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
 tools/          # 32 個 CLI：診斷／建模板／對答案／what-if／advice／診斷包／renderer 實載閘…（見 §2）
 data/           # skill-db-tw.json（1323 招）／glyph-templates.json／live-truth.json／ground-truth/
                 #   ⚠️ runtime 只讀頭兩個 → **打包白名單要有佢哋**（見 `docs/packaging.md` §5）
@@ -476,15 +476,15 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **339 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **342 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
    （歷史：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js` 要求 repo 根
-   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹係 **339／0**
+   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹係 **342／0**
    （2026-09-19 幾次核對：H1 之後乾淨 HEAD **327／0** vs 工作樹 **328／0**；
    A9 加 5 條 `write-root` 測試 → 333；地雷 #31 加 1 條 → 334；
-   日誌檔加 5 條 `log-file` 測試 → **339**，查法一樣：`git archive` 出乾淨樹跑一次）。
+   日誌檔加 5 條 `log-file` 測試 → 339；擷取凍結加 3 條 → **342**，查法一樣：`git archive` 出乾淨樹跑一次）。
    ⚠️ **唔准**用 `skip`／`if (!existsSync(...)) return;` 迴避 —— 咁樣只係把「驗唔到」
    變成「靜默通過」。要用嘅話就**自己控制環境**（例如 `os.tmpdir()` ＋ `process.chdir()`）。
    ⚠️ 涉及 cwd 嘅測試一定要**同步** ＋ `finally` 還原（`--test-isolation=none` 之下

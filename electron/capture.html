@@ -96,12 +96,35 @@
           : '';
       });
 
+      /**
+       * 開始擷取（可以重複叫：主程序偵測到「凍結」就會再叫一次）。
+       *
+       * ⚠️ 以前 `if (started) return;` **永遠唔會重新擷取** —— 串流一斷（遊戲窗閂咗／
+       * 螢幕鎖咗／driver reset）就**靜默死**：`video.videoWidth` 變 0 →
+       * 下面嘅 loop 每次都 `return` → 一幀都唔再送，主程序只見到「冇新幀」。
+       * 所以而家：再收到 start 就先拆舊串流再開新（＋ 明確報告失敗原因）。
+       */
+      let stream = null;
+      let currentSourceId = null;
+      let stallReported = false;
+
+      function stopStream() {
+        if (stream) {
+          for (const track of stream.getTracks()) track.stop();
+          stream = null;
+        }
+        video.srcObject = null;
+        started = false;
+      }
+
       ipcRenderer.on(IPC_CHANNELS.start, async (_event, sourceId) => {
-        if (started) return;
+        currentSourceId = sourceId;
+        stopStream();
         started = true;
+        stallReported = false;
         try {
           statusEl.textContent = '擷取中…';
-          const stream = await navigator.mediaDevices.getUserMedia({
+          stream = await navigator.mediaDevices.getUserMedia({
             audio: false,
             video: {
               mandatory: {
@@ -113,6 +136,12 @@
               },
             },
           });
+          // ⚠️ 串流一斷就要即刻講（唔可以等主程序自己發現「冇幀」）—— 呢個係真失敗，唔係轉場。
+          for (const track of stream.getTracks()) {
+            track.addEventListener('ended', () => {
+              ipcRenderer.send(IPC_CHANNELS.captureError, '擷取串流已結束（track ended）');
+            });
+          }
           video.srcObject = stream;
           await video.play();
           statusEl.textContent = '擷取中';
@@ -123,6 +152,22 @@
           ipcRenderer.send(IPC_CHANNELS.captureError, String(error));
         }
       });
+
+      // ⭐ 停滯偵察：開咗擷取但係好耐都冇畫面（videoWidth 0）＝ 串流死咗／未起。
+      //    只報告一次，避免洗版；真正嘅重試由主程序決定（佢有次數上限）。
+      setInterval(() => {
+        if (!started) return;
+        if (video.videoWidth > 0) {
+          stallReported = false;
+          return;
+        }
+        if (stallReported) return;
+        stallReported = true;
+        ipcRenderer.send(
+          IPC_CHANNELS.captureError,
+          `擷取停滯：已經開始擷取但 3 秒內冇畫面（sourceId=${currentSourceId}）`,
+        );
+      }, 3000);
 
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
 

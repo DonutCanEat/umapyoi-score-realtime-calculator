@@ -1202,6 +1202,75 @@ function dumpFrame(image, meta) {
   }
 }
 
+/**
+ * ⭐ 擷取「凍結」嘅監察 ＋ 自動救援（2026-09-19 加）。
+ *
+ * 為何要（用戶實機報「一開頭 detect 到，去到一半就固定咗，之後十分鐘都話唔見面板條」）：
+ * 擷取係 renderer 嘅 `requestAnimationFrame` 迴圈驅動（見 `capture.html`）。一旦
+ *   ① 視窗被其他窗**完全遮住**（Chromium 會暫停 rAF）—— 已經用
+ *      `backgroundThrottling: false` 處理（見 `web-preferences.js`）；
+ *   ② 或者串流斷咗（遊戲窗閂咗／螢幕鎖咗／driver reset）→ `video.videoWidth` 變 0 →
+ *      迴圈每次都 `return`；
+ * 主程序就**一幀都收唔到**，而且係**完全靜默**：HUD 只會一直顯示「唔見面板條 N 秒 →
+ * 顯示上一個穩定值」，log 亦唔會再出（因為 log 係喺處理每一幀嗰陣印）。
+ *
+ * 所以呢度做三件事：
+ *   ① `lastFrameAt` 追蹤最後一幀嘅時間；> 15 秒冇幀 → 大聲警告；
+ *   ② 自動叫 renderer 重新開擷取（有次數上限、有節流，唔會無限重試）；
+ *   ③ 每分鐘一行**心跳**（收咗幾多幀）—— 將來同類問題一眼睇得出。
+ */
+let captureWin = null;
+let captureSourceId = null;
+let lastFrameAt = 0;
+let framesInWindow = 0;
+let recoverAttempts = 0;
+let lastRecoverAt = 0;
+let heartbeatTick = 0;
+const MAX_CAPTURE_RECOVERS = 5;
+const FRAME_FREEZE_MS = 15000;
+
+/** 試救：叫 renderer 重新開始擷取（同一條 sourceId）。 */
+function recoverCapture(why) {
+  if (!captureWin || captureWin.isDestroyed() || !captureSourceId) return;
+  if (Date.now() - lastRecoverAt < 10000) return; // 節流：10 秒內唔重複試
+  if (recoverAttempts >= MAX_CAPTURE_RECOVERS) {
+    console.error(`[擷取] ⛔ 已經重試 ${recoverAttempts} 次都收唔到幀（${why}）→ 唔再自動試，請重開程式。`);
+    return;
+  }
+  recoverAttempts += 1;
+  lastRecoverAt = Date.now();
+  lastFrameAt = Date.now(); // 畀新一輪時間（唔係嘅話 5 秒後又話凍結）
+  console.warn(`[擷取] ⚠️ ${why} → 重新啟動擷取（第 ${recoverAttempts}/${MAX_CAPTURE_RECOVERS} 次）`);
+  try {
+    captureWin.webContents.send(IPC_CHANNELS.start, captureSourceId);
+  } catch (error) {
+    console.error(`[擷取] ⚠️ 重啟失敗：${error?.message ?? error}`);
+  }
+}
+
+/** 每 5 秒檢查凍結、每分鐘報一次心跳。 */
+function startCaptureWatchdog() {
+  setInterval(() => {
+    if (!captureSourceId || !lastFrameAt) return;
+    const since = Date.now() - lastFrameAt;
+    if (since > FRAME_FREEZE_MS) recoverCapture(`已經 ${Math.round(since / 1000)} 秒冇收到幀`);
+  }, 5000);
+  setInterval(() => {
+    heartbeatTick += 1;
+    const since = lastFrameAt ? Math.round((Date.now() - lastFrameAt) / 1000) : null;
+    if (framesInWindow === 0) {
+      console.warn(
+        `[擷取] ⚠️ 心跳：最近 60 秒**一幀都收唔到**（最後一幀：`
+        + `${since === null ? '從來冇' : `${since} 秒前`}）—— 擷取可能凍結咗`,
+      );
+      recoverCapture('60 秒冇收到任何幀');
+    } else if (heartbeatTick % 5 === 0) {
+      console.log(`[擷取] 心跳：最近 60 秒收到 ${framesInWindow} 幀（最後一幀 ${since ?? '—'} 秒前）`);
+    }
+    framesInWindow = 0;
+  }, 60000);
+}
+
 function createCaptureWindow() {
   const win = new BrowserWindow({
     width: 960,
@@ -1222,6 +1291,7 @@ function createCaptureWindow() {
     console.log('[收工] 擷取窗被閂 → app.quit()（⚠️ 呢個係刻意設計：閂擷取窗就等於收工）');
     app.quit();
   });
+  captureWin = win;
   return win;
 }
 
@@ -1339,6 +1409,7 @@ app.whenReady().then(async () => {
   }
 
   const win = createCaptureWindow();
+  startCaptureWatchdog(); // ⭐ 收幀心跳 ＋ 凍結自動救援（見上面註解）
   // HUD：透明置頂、穿透點擊（見 AGENTS §6.4）。
   // 唔想要可以 `UMAPYOI_NO_HUD=1 npm start` —— ⚠️ 咁樣**兩個窗都唔開**（淨係要 console log 嗰陣用）。
   // ⚠️ 一定用 `envFlag()`（只認 1／true）：`UMAPYOI_NO_HUD=0` 以前會**閂咗 HUD**（'0' 係 truthy）。
@@ -1364,7 +1435,12 @@ app.whenReady().then(async () => {
     }
   }
 
-  win.webContents.once('did-finish-load', async () => {
+  // ⚠️ 用 `on` 而唔係 `once`（2026-09-19 改）：renderer 一 crash／reload，
+  //    `capture.html` 就係一個**全新頁面** —— `roi`／`start` 都唔會再有人送 →
+  //    冇 ROI（會退回 640px 縮圖，見地雷 #22）而且**冇擷取** → 主程序靜默收唔到幀。
+  //    `on` 令每次載入都重跑「揀來源 → 送 ROI → 開擷取」，配合 `startCaptureWatchdog()`
+  //    就冇咗「一次意外之後永遠唔會好返」呢個洞。
+  win.webContents.on('did-finish-load', async () => {
     const { hit, sources } = await findGameSource();
     console.log('[來源] 見到嘅視窗：');
     for (const s of sources) {
@@ -1401,6 +1477,10 @@ app.whenReady().then(async () => {
         aspect: DEFAULT_STATBAR_OPTIONS.aspect,
       });
     win.webContents.send(IPC_CHANNELS.start, hit.id);
+    captureSourceId = hit.id;
+    lastFrameAt = Date.now();
+    framesInWindow = 0;
+    recoverAttempts = 0; // 開得成新一輪 → 重試次數歸零
     if (SKILL_DUMP) {
       win.webContents.send(IPC_CHANNELS.fps, envNumber('UMAPYOI_CAPTURE_FPS', { fallback: 1, positive: true }));
       if (SKILL_CROP) win.webContents.send(IPC_CHANNELS.crop, SKILL_CROP);
@@ -1468,6 +1548,9 @@ app.whenReady().then(async () => {
 ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
   const { width, height, fullWidth, fullHeight, buffer, cropped } = frame;
   if (!width || !height) return;
+  // ⭐ 心跳用（見 `startCaptureWatchdog()`）：有幀到就代表擷取仲生。
+  lastFrameAt = Date.now();
+  framesInWindow += 1;
 
   // ⭐ 技能連拍模式：唔做五維辨識，只逐幀存「新頁面」（見 SKILL_DUMP 註解）。
   if (SKILL_DUMP) {
@@ -1575,6 +1658,8 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
 
 ipcMain.on(IPC_CHANNELS.captureError, (_event, message) => {
   console.error('[擷取失敗]', message);
+  // ⭐ 真失敗（唔係轉場）→ 即刻試救：重新叫 renderer 開一次擷取（有次數上限）。
+  recoverCapture(`renderer 報錯：${message}`);
 });
 
 // ─────────────────── HUD 設定窗 ↔ 主程序（`electron/settings.html`）───────────────────
