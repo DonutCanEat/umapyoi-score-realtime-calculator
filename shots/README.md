@@ -5,7 +5,7 @@
 
 | 資料夾 | 入唔入 git | 係咩 | 加檔嘅效果 |
 |---|---|---|---|
-| `gt/` | ✅ **要** | ステータス面板排法嘅真值截圖（uma1–uma4，各 p1／p2 ＋ `-top`／`-skills`）| 加檔唔會自動入閘；要 `read-stats.js --gt=…` 手動對 |
+| `gt/` | ✅ **要** | ステータス面板排法嘅真值截圖（uma1–uma4，各 p1／p2 ＋ `-top`／`-skills`）＋ `uma5-detail-s{1,2}.png`（第 5 條 ground truth「賽馬娘詳情」技能清單捲動證據）| 加檔唔會自動入閘；要 `read-stats.js --gt=…` 手動對 |
 | `live/` | ✅ **要** | ⭐ **實機育成主畫面**：`live-*.png`（6 個解析度 1356→2560，其中 `live-1929x1085.png` 係 2026-09-19 用戶提供嘅新數值 168/131/143/123/130）＋ `roi-live-*.png`（成功幀，已剪 ROI，**檔名尾 = 速度值**） | 加檔要**同時**入 `data/live-truth.json`（`shots` 清單 ＋ 必要時 `perShot`），否則唔算真值 |
 | `live/roi-regress-*.png` | ✅ **要** | ⭐ **實機失敗幀**（已剪 ROI）＝ 永久回歸案例（地雷 #25 碎片、#26 金色格、marginal） | 加檔＝多一條回歸；`diag-statbar --read` 會覆核 |
 | `negatives/` | ✅ **要** | ⭐ **負樣本**：其他畫面（支援卡列表／插畫／1 條帶／**培育結束確認**嘅能力值＋技能 tab…）—— **每一幀都唔准出數**。⚠️ 命名規則同 `live/` 一樣：`roi-` 開頭 = 已經剪好嘅 ROI；`neg-*.png`（例如 `neg-result-ability.png`）＝**整個遊戲視窗**（會行相對 ROI 定位） | **加檔就自動入四個閘**（`npm test`／`diag-statbar --read`／`build-glyph-templates --verify`／`replay-dumps`），唔使改 code（地雷 #30）|

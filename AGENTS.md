@@ -66,7 +66,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 | 階段 | 內容 | 狀態 |
 |---|---|---|
-| Phase 0 | 評價分運算核心 | ✅ **誤差 = 0**（4 條實機樣本全部吻合）|
+| Phase 0 | 評價分運算核心 | ✅ **誤差 = 0**（**5 條**實機樣本全部吻合；第 5 條 `05-東海帝皇-超越地平線-UD1.json` 係**第一次用遊戲自己顯示嘅評價点**做真值 —— 35,050 ＝ 五維 26,702 ＋ 技能 8,348）|
 | Phase 0 | 技能資料庫（1323 招）＋ 進化技能 override | ✅ |
 | Phase 1 | 畫面擷取（`npm start` 跑得通）| ✅ |
 | Phase 1 | **五維數字辨識（零校準）** | ✅ 兩條路都通：**畫面 A 面板條**（`statbar.js`）**14/14 全中**（1356→2560 五個解析度 ＋ 1929×1085 新樣本 ＋ 4 個實機失敗／金色格回歸 ＋ 4 個實機狀態樣本）＋ **負樣本 6/6 唔出數**（其他畫面唔准出數，見地雷 #30 —— 包括**培育結束確認**嘅「能力值」／「技能」tab 同**賽馬娘詳情**面板）；ステータス面板排法 **30/30**。✅ 已實機跑過（`npm start`，1920 窗），修好間歇性「讀唔清」（地雷 #25）同**金色格靜默讀錯**（地雷 #26）|
@@ -210,7 +210,7 @@ node tools/whatif.js --stats=... --skill=弧線的教授 --json           # 餵�
 node tools/fetch-skill-db.js               # 由 bwiki 拎技能庫（有 cache）
 node tools/fetch-skill-db.js --refresh     # 強制重抓
 node tools/fill-ground-truth.js            # 用技能庫自動填 ground truth
-node tools/fit-score.js                    # 對答案（應該 4/4、總誤差 0）
+node tools/fit-score.js                    # 對答案（應該 5/5、總誤差 0）
 node tools/breakdown.js                    # 逐招明細表（肉眼核對用）
 
 # ── Phase 1（影像辨識）──
@@ -262,7 +262,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 
 **驗收標準**（全部都要）：
 1. `npm.cmd test` 全過（現時 **267 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
-2. `node tools/fit-score.js` 顯示 `可以計誤差 4/4　完全命中 4/4　總絕對誤差 0`
+2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 14/14**、**負樣本 6/6 唔出數**），全部都要中
    ⚠️ 負樣本（`shots/negatives/`）有任何一幀讀到數 → **唔會寫檔**（同其他失敗一樣）
@@ -334,8 +334,10 @@ oval > 0 → 再加 oval 部分；最後 floor
 ### 4.2 ランク表
 
 `RANK_THRESHOLDS`，由 `G`（0）到 `UA`（55200），包括 `UG/UF/UE/UD/UC/UB` 各 1–9。
-已用 4 條實機樣本驗證：
-`20589→UG2`、`28211→UF8`、`32334→UE2`、`36575→UD3`。
+已用 **5 條**實機樣本驗證（全部由遊戲顯示嘅分／ランク反查）：
+`20589→UG2`、`28211→UF8`、`30134→UE2`、`36575→UD3`，同埋
+⭐ **`35050→UD1`（2026-09-19 用戶提供嘅「賽馬娘詳情」面板自己顯示嘅評價点 ＋ 徽章）**。
+⚠️ 舊文件寫嘅「32334→UE2」係**已作廢嘅 UE6 紀錄**嘅數（見 `02-西野花…UE2.json` 嘅 note）。
 
 ### 4.3 技能
 
@@ -436,7 +438,7 @@ oval > 0 → 再加 oval 部分；最後 floor
    變成「靜默通過」。要用嘅話就**自己控制環境**（例如 `os.tmpdir()` ＋ `process.chdir()`）。
    ⚠️ 涉及 cwd 嘅測試一定要**同步** ＋ `finally` 還原（`--test-isolation=none` 之下
    所有測試共用一個 process，`chdir` 係全域狀態）。
-2. `node tools/fit-score.js` — 必須 `完全命中 4/4　總絕對誤差 0`
+2. `node tools/fit-score.js` — 必須 `完全命中 5/5　總絕對誤差 0`
 3. 如果改咗五維／技能／ランク相關嘅嘢，`node tools/breakdown.js` 逐招核對一次
 4. **如果改咗影像相關嘅嘢**：
    - `node tools/build-glyph-templates.js --exclude=uma2 --verify` → **30/30（面板截圖）

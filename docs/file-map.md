@@ -178,7 +178,7 @@ data/
   skill-name-lib/        # ⭐ 技能名影像庫（index.json ＋ img/*.png；個名未配）
   skill-name-labels.json # ⚠️ 我第一次人手標註嘅 112 格（**已知有錯位**，唔要當真值）
   calc-page-tw.html      # bwiki 頁面 cache
-  ground-truth/*.json    # 4 條培育完成紀錄（誤差 0 嘅證據）
+  ground-truth/*.json    # 5 條培育完成紀錄（誤差 0 嘅證據；05 = 第一次用遊戲顯示嘅分）
 
 shots/
   gt/*.png               # ステータス面板排法（30/30 嘅證據）
