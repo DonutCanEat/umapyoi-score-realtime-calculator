@@ -24,6 +24,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodePng } from '../src/vision/png.js';
+import { cosineSimilarity, standardize } from '../src/vision/similarity.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -149,19 +150,10 @@ function normalize(image, box, y0, y1, mask) {
   return { vec: blur, width: bw, height: bh, ratio: bw / bh, tight: { inkL, inkR, inkT, inkB } };
 }
 
-function standardize(v) {
-  let mean = 0;
-  for (const x of v) mean += x;
-  mean /= v.length;
-  const o = new Float32Array(v.length);
-  let norm = 0;
-  for (let i = 0; i < v.length; i += 1) { o[i] = v[i] - mean; norm += o[i] * o[i]; }
-  norm = Math.sqrt(norm) || 1;
-  for (let i = 0; i < o.length; i += 1) o[i] /= norm;
-  return o;
-}
-
-const sim = (a, b) => { let d = 0; for (let i = 0; i < a.length; i += 1) d += a[i] * b[i]; return d; };
+// ⚠️ `standardize()` 同相似度以前喺呢個檔自己寫一套（同 `src/vision/similarity.js`
+//    逐字一樣）→ 已改用共用實作（獨立審計 M8）。`sim` 係檔內短名，保留做別名，
+//    下面幾十處唔使改。
+const sim = cosineSimilarity;
 
 // ── 逐張圖抽名框，再按標註配上去 ──
 const shots = [...new Set(LABELS.labels.map((l) => l.shot))];

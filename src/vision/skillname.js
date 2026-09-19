@@ -35,6 +35,8 @@
  * ⚠️ 闊度一定夠：實測最長嘅名連 `Lv`／`★` 徽章嘅框去到 **446px**（`Lv5 ★★★ VICTORY SHOT!`）
  * —— 之前用 240／384 都會**剪走右邊嘅字**（`VICTORY` 後面冇咗）。
  */
+import { cosineSimilarity, standardizeInPlace } from './similarity.js';
+
 export const GRID_H = 40;
 export const GW = 480;
 
@@ -159,9 +161,8 @@ export function nameBoxFeature(image, mask, box, y0, y1, unit = 25) {
     }
   }
 
-  // 輕微模糊（抗 1 像素位移；同一串字唔會每次落喺完全相同嘅整數格）＋ 去均值 ＋ 單位化
+  // 輕微模糊（抗 1 像素位移；同一串字唔會每次落喺完全相同嘅整數格）
   const out = new Float32Array(GW * GRID_H);
-  let mean = 0;
   for (let gy = 0; gy < GRID_H; gy += 1) {
     for (let gx = 0; gx < GW; gx += 1) {
       let s = 0;
@@ -175,22 +176,18 @@ export function nameBoxFeature(image, mask, box, y0, y1, unit = 25) {
         }
       }
       out[gy * GW + gx] = s;
-      mean += s;
     }
   }
-  mean /= out.length;
-  let norm = 0;
-  for (let i = 0; i < out.length; i += 1) { out[i] -= mean; norm += out[i] * out[i]; }
-  norm = Math.sqrt(norm) || 1;
-  for (let i = 0; i < out.length; i += 1) out[i] /= norm;
+  // 去均值 ＋ L2 單位化：實作喺 `similarity.js`（同 `glyphs.js`／`tools/diag-skillnames.js`
+  // 共用**同一份**，見獨立審計 M8）。⚠️ 用原地版本：`out` 係啱啱砌出嚟嘅 buffer，
+  // 唔需要再複製一份；加總次序同以前一樣（row-major 0..length-1）→ 數值逐位元一樣。
+  standardizeInPlace(out);
   return { vec: out, bw, bh, inkL, inkR, inkT, inkB };
 }
 
 /** 兩個特徵嘅相似度（已去均值＋單位化 → 內積就係相關系數，範圍 −1..1）。 */
 export function nameSimilarity(a, b) {
-  let d = 0;
-  for (let i = 0; i < a.length; i += 1) d += a[i] * b[i];
-  return d;
+  return cosineSimilarity(a, b);
 }
 
 /**

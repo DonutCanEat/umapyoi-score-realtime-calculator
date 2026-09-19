@@ -9,6 +9,7 @@
  */
 
 import { buildInkMask } from './inkmask.js';
+import { cosineSimilarity, standardize } from './similarity.js';
 
 /** 歸一化網格大細。 */
 export const GLYPH_W = 16;
@@ -112,27 +113,19 @@ export function normalizeGlyph(image, mask, x, y, w, h) {
   return out;
 }
 
-/** 去均值 + L2 歸一化（令比對唔受粗細影響）。 */
-export function standardize(glyph) {
-  let mean = 0;
-  for (let i = 0; i < glyph.length; i += 1) mean += glyph[i];
-  mean /= glyph.length;
-  const out = new Float32Array(glyph.length);
-  let norm = 0;
-  for (let i = 0; i < glyph.length; i += 1) {
-    out[i] = glyph[i] - mean;
-    norm += out[i] * out[i];
-  }
-  norm = Math.sqrt(norm) || 1;
-  for (let i = 0; i < glyph.length; i += 1) out[i] /= norm;
-  return out;
-}
+/**
+ * 去均值 + L2 歸一化（令比對唔受粗細影響）。
+ *
+ * ⚠️ 實作搬咗去 `similarity.js`（同 `skillname.js`／`tools/diag-skillnames.js`
+ *    共用**同一份**，見獨立審計 M8）；呢度保留同名 re-export，舊呼叫者（含
+ *    `tools/build-glyph-templates.js`／`tools/tune-detect.js`／`test/*`）唔使改。
+ *    ⚠️ 回傳**新**陣列（唔改動輸入）—— 建模板嗰陣同一個 `bitmap` 會餵幾次。
+ */
+export { standardize };
 
 /** 兩個已 standardize 嘅字形做 cosine 相似度（等同 NCC）。 */
 export function similarity(a, b) {
-  let dot = 0;
-  for (let i = 0; i < a.length; i += 1) dot += a[i] * b[i];
-  return dot;
+  return cosineSimilarity(a, b);
 }
 
 /**
