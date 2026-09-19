@@ -967,7 +967,7 @@ let everyCount = 0;
  *   ③ 新一頁就寫 **PNG**（唔寫 .raw —— 一頁 4–6MB，95 頁會爆硬碟）。
  * 同時印「偵測到 N 列技能／名框墨跡闊度」做進度顯示，用戶睇得到自己有冇翻漏頁。
  */
-const SKILL_DUMP = Boolean(process.env.UMAPYOI_SKILL_DUMP);
+const SKILL_DUMP = envFlag('UMAPYOI_SKILL_DUMP');
 const SKILL_DIR = join(ROOT, 'shots', 'skill-dump');
 const SKILL_MAX = envNumber('UMAPYOI_SKILL_MAX', { fallback: 400, positive: true });
 

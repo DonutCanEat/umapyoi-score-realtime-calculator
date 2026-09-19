@@ -54,13 +54,17 @@
 6. **原子寫冇 `fsync`**（`saveHudConfigFile()` = 寫 `.tmp` ＋ `renameSync`）：停電／硬斷電
    可能留低半截 JSON。可接受嘅理由：`loadConfig()` 會**大聲 throw**，而且**唔會覆寫**壞檔
    （改用預設 ＋ 設定窗出紅色橫額）—— 但唔係「零風險」。
-7. **同一類 truthiness 問題仲有 `UMAPYOI_SKILL_DUMP`（未修，唔喺今次範圍）**：
-   `SKILL_DUMP = Boolean(process.env.UMAPYOI_SKILL_DUMP)` → `UMAPYOI_SKILL_DUMP=0`
-   一樣會**開咗**連拍模式。要修就照 `envFlag()` 嗰套（`main.js`；函數而家喺
-   `src/hud/env-flag.js`，改一行就得）。數字型旗標
-   （`UMAPYOI_DUMP_FRAMES`／`_SKILL_MAX`）用 `Number(...)`，唔屬呢類。
-   （`UMAPYOI_NO_HUD`／`UMAPYOI_NO_SETTINGS`／`UMAPYOI_HUD_EDIT` **已修** → `envFlag()`，
-   見 §2。）
+7. ✅ **已修（2026-09-19，獨立審計 M1）—— 唔可以再當「技術債」**：
+   同一類 truthiness 問題嘅最後一個 —— `UMAPYOI_SKILL_DUMP`。
+   舊寫法 `SKILL_DUMP = Boolean(process.env.UMAPYOI_SKILL_DUMP)` → `UMAPYOI_SKILL_DUMP=0`
+   一樣會**開咗**連拍模式（`'0'` 係非空字串 = truthy）。
+   而家同其他旗標一樣經 `envFlag('UMAPYOI_SKILL_DUMP')`（`src/hud/env-flag.js`）：
+   只認 `1`／`true`（大小寫唔敏感、前後空白忽略），`0`／`false`／空字串／冇 set = 閂，
+   其他值 = 閂 **＋ 警告**。
+   ⚠️ **行為改動（刻意）**：`UMAPYOI_SKILL_DUMP=0` 由「開」變「閂」—— 同 AGENTS §2 寫嘅語意一致。
+   數字型旗標（`UMAPYOI_DUMP_FRAMES`／`_SKILL_MAX`／`_CAPTURE_FPS`）用 `envNumber()`
+   （唔合法 → 警告 ＋ 用預設；`positive: true` 令 `=0` 一樣當唔合法 → 同舊 `||` 行為等價），
+   唔屬呢一類。
 8. ✅ **已修（2026-09-19）—— 唔可以再當「技術債」**：`validateConfig()` 嘅不變式檢查
    （「`x[1]` 一定要等於 `x[0] + size.w`，唔係就 throw」）令 **AGENTS §2 列出嘅六行環境變數
    一齊用會 throw → `main.js` catch → `app.exit(1)` → 完全開唔到程式**（獨立審計實跑證實）。

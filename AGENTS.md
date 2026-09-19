@@ -132,7 +132,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（267 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（294 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ renderer inline script 語法閘（四個 HTML ＋ main.js；見 §8 4b）
 node tools/collect-diagnostics.js    # ⭐ D2 一鍵診斷包 → diagnostics/diag-<時間>/report.md
 node tools/collect-diagnostics.js --run-gates   # 順手跑齊 5 個閘並把尾部輸出寫落報告（慢）
@@ -254,14 +254,19 @@ node tools/diag-namematch.js --dump           # ⭐ 唔需要真值嘅可行性�
 
 # ── Phase 2：收圖 → 建技能名影像庫 ──
 #   UMAPYOI_SKILL_DUMP=1 npm.cmd start   ⭐ 連拍模式：1:1 整個內容區、逐頁存 PNG（同一頁自動略過）
+#      ⚠️ 呢個都係「開關旗標」（2026-09-19 起）：經 `envFlag()` 讀 → 只認 1／true，
+#         `=0`／`=false`／空字串／冇 set 都係**閂**（以前 `Boolean(...)` → `=0` 竟然會開咗，
+#         已經修；見 `docs/known-issues.md` §9.1 第 7 條）
 #   UMAPYOI_SKILL_MAX=400                最多存幾頁（預設 400）
 #   UMAPYOI_CAPTURE_FPS=1                連拍幀率（預設 1；一幀 4–6MB，唔需要密）
+#   ⚠️ `_SKILL_MAX`／`_CAPTURE_FPS`／`UMAPYOI_DUMP_FRAMES` 係**數字**旋鈕 → 經 `envNumber()` 讀
+#      （唔合法／非正數 → 大聲警告 ＋ 用預設，唔准靜默；實作：`src/hud/env-flag.js`）
 node tools/build-skill-library.js             # ⭐ 逐頁抽名框 → 跨頁去重 → data/skill-name-lib/
 node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最可疑排前面）
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **267 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **294 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 14/14**、**負樣本 6/6 唔出數**），全部都要中
@@ -291,7 +296,7 @@ src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔�
                 #   env-flag.js（環境變數唯一讀法）／history.js（C3 成長曲線核心）
 electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／capture.html／hud.html／
                 #   settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 267 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+test/           # 294 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
 tools/          # 32 個 CLI：診斷／建模板／對答案／what-if／advice／診斷包…（見 §2）
 data/           # skill-db-tw.json（1323 招）／glyph-templates.json／live-truth.json／ground-truth/
 shots/          # ⭐ 證據庫 —— **每個目錄係咩睇 `shots/README.md`**（邊啲入 git／加檔入邊個閘）
@@ -428,12 +433,12 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **267 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **294 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
    （歷史：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js` 要求 repo 根
-   有 `hud-position.json`），修好之後兩邊一樣；而家兩邊都係 **267／0**）。
+   有 `hud-position.json`），修好之後兩邊一樣；而家兩邊都係 **294／0**）。
    ⚠️ **唔准**用 `skip`／`if (!existsSync(...)) return;` 迴避 —— 咁樣只係把「驗唔到」
    變成「靜默通過」。要用嘅話就**自己控制環境**（例如 `os.tmpdir()` ＋ `process.chdir()`）。
    ⚠️ 涉及 cwd 嘅測試一定要**同步** ＋ `finally` 還原（`--test-isolation=none` 之下
