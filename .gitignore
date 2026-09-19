@@ -18,3 +18,6 @@ shots/skill-dump/
 # （`.tmp` 係主程序原子寫入嘅中間檔：寫檔途中死咗會剩低，一樣唔入 git。）
 hud-position.json
 hud-position.json.tmp
+
+# D2 �E�_�]�]�@���ʤ䴩��ơA���J git�^
+diagnostics/

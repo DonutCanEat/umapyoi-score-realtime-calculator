@@ -127,6 +127,10 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
 npm.cmd test              # 單元測試（267 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ renderer inline script 語法閘（四個 HTML ＋ main.js；見 §8 4b）
+node tools/collect-diagnostics.js    # ⭐ D2 一鍵診斷包 → diagnostics/diag-<時間>/report.md
+node tools/collect-diagnostics.js --run-gates   # 順手跑齊 5 個閘並把尾部輸出寫落報告（慢）
+node tools/collect-diagnostics.js --with-dumps  # 連最近 5 個 dump 幀一齊複製落 files/
+                                    # ⚠️ `diagnostics/` 唔入 git（一次性支援資料）
 
 # HUD 相關開關（環境變數）
 #   ⚠️ **四個**旗標（UMAPYOI_NO_HUD／UMAPYOI_NO_SETTINGS／UMAPYOI_NO_WHATIF／UMAPYOI_HUD_EDIT）
@@ -426,6 +430,10 @@ tools/
   replay-dumps.js        # ⭐ 重播 `shots/live-debug/*.raw`（驗證「讀唔清」修正，見地雷 #25）
   raw-to-png.js          # dump 幀（.raw ＋ .json）轉 PNG，畀上面兩個工具讀
   diag-shots.js          # 列出所有截圖尺寸
+  collect-diagnostics.js # ⭐ D2 一鍵診斷包：環境（Node／Electron／UMAPYOI_*）／Git 狀態／
+                         #    `hud-position.json` 內容／影像資料數量／最近 dump meta；
+                         #    `--run-gates` 跑齊 5 個閘、`--with-dumps` 抄 dump 幀。
+                         #    ⚠️ 任何一項收集唔到都要照寫（標明原因），唔准爆
   check-renderer-syntax.js # ⭐ renderer inline script 嘅**語法閘**（抽出 `<script>` 再 `node --check`）——
                          #    四個 HTML 入唔到 `node --test`（classic script ＋ DOM），打錯一個字
                          #    就係「HUD 靜默唔郁」而冇錯誤訊息 → 呢個係最低成本嘅防線（見 §8 4b）
@@ -1108,7 +1116,7 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 | # | 項目 | 為何 | 大細 |
 |---|---|---|---|
 | D1 | **獨立「讀圖」CLI** | 唔開 Electron 就讀任何截圖 → 方便用戶交圖畀 agent 查 | 細 |
-| D2 | **一鍵診斷包** | 收集環境／log／dump 幀 → 方便回報問題 | 細 |
+| D2 | ~~**一鍵診斷包**~~ ✅ **已做（2026-09-19）** | `tools/collect-diagnostics.js` → `diagnostics/diag-<時間戳>/report.md`：① 環境（Node／Electron／`UMAPYOI_*` 逐個值）② Git HEAD ＋ 未 commit 清單 ③ `hud-position.json` 真實內容（＋複製一份入 `files/`）④ `shots/*` 各目錄數量／大細、`live-truth.json`／`glyph-templates.json` 摘要 ⑤ 最近 dump meta ⑥ `--run-gates` 跑 5 個閘、`--with-dumps` 抄 dump。⚠️ **收集唔到唔准爆**（沙盒／權限之下 `git` spawn 會 EPERM → 報告照寫「收集唔到：…」）；⚠️ `diagnostics/` 已入 `.gitignore` | 細 |
 | D3 | **HUD 主題／樣式** | 跟遊戲風格、半透明度、避免遮住重要 UI | 細 |
 | D4 | **`AGENTS.md` 精簡** | 而家好長（地雷 26 條），可以做索引／分章 | 細 |
 | D5 | ~~**技能分「區間」顯示**~~ ✅ **已做（2026-09-19）** | `hudState()` 收 `skillRead: {count, points}` → 技能分未讀齊但認到 N 招嗰陣出「`≥ P（已讀 N 招）`」（`≥` 一定要有：未認到嘅招可能仲有）。⚠️ 呢個係**接駁位**：技能識別（Phase 2）**而家暫停**，所以 `main.js` 傳 `null`，HUD 行為同以前一個字都唔變（有 6 條測試專門守「唔傳就唔准變」）。Phase 2 接通之後喺 `pushHud()` 換成真數據就得，HUD 唔使改 | 細 |
