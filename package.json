@@ -11,9 +11,41 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test --test-isolation=none test/*.test.js",
-    "calc": "node src/cli.js"
+    "calc": "node src/cli.js",
+    "pack:win": "electron-builder --win portable --publish never"
+  },
+  "build": {
+    "appId": "tw.umapyoi.score-realtime-calculator",
+    "productName": "UmapyoiScoreRealtimeCalculator",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "data/glyph-templates.json",
+      "data/skill-db-tw.json",
+      "package.json"
+    ],
+    "asar": true,
+    "electronDist": "node_modules/electron/dist",
+    "npmRebuild": false,
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "UmapyoiScoreRealtimeCalculator-${version}-portable.exe"
+    }
   },
   "devDependencies": {
-    "electron": "^44.4.1"
+    "electron": "^44.4.1",
+    "electron-builder": "^26.15.3"
   }
 }

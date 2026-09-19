@@ -36,6 +36,9 @@ import { envFlag, envIsSet, envNumber } from '../src/hud/env-flag.js';
 // ⭐ 四個窗共用嘅 `webPreferences`（**唯一一份**）——見獨立審計 M2 同嗰個檔嘅註釋。
 import { APP_WEB_PREFERENCES } from './web-preferences.js';
 import { MAX_HISTORY, pushSample } from '../src/hud/history.js';
+// ⭐ 「dump／連拍要寫邊」嘅決策（A9 打包）：打包之後 `ROOT` 係唯讀 asar，
+//    寫入會 throw ENOTDIR/EROFS → 同「設定檔位置」一樣要集中一個決策（`src/hud/write-root.js`）。
+import { underWriteRoot, writeRootFor } from '../src/hud/write-root.js';
 // ⭐ IPC channel 名嘅**唯一來源**：`electron/ipc-channels.cjs`（CommonJS —— 因為 4 個
 //    renderer 係 classic script，只可以 `require()`；見嗰個檔嘅檔頭）。
 //    ESM import CJS 用 default import 再解構（唔靠 cjs-module-lexer 嘅具名匯出偵測）。
@@ -44,6 +47,38 @@ const { IPC_CHANNELS } = ipcChannels;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
+
+/**
+ * ⭐ 執行時**寫入**（dump 幀／連拍 PNG）嘅根目錄。
+ *
+ * ⚠️ 為何唔可以直接用 `ROOT`（A9 打包揭發）：打包之後 `ROOT` ＝ `…/resources/app.asar`
+ * → `mkdirSync()` 一定 throw（asar 唯讀）→ 一次「讀唔清」就令成個程式爆。
+ * 開發模式照舊 = 專案根（`shots/live-debug` 睇得到、`tools/raw-to-png.js` 直接用）。
+ *
+ * ⚠️ 用 lazy 函數而唔係 module 頂層 const：`app.getPath('userData')` 要喺 Electron
+ * 準備好之後問最穩陣（而且呢個值只喺真正要寫檔嗰陣才需要）。
+ */
+let writeRootCache = null;
+function writeRoot() {
+  if (!writeRootCache) {
+    writeRootCache = writeRootFor({
+      isPackaged: app.isPackaged,
+      rootDir: ROOT,
+      userDataDir: app.getPath('userData'),
+    });
+  }
+  return writeRootCache;
+}
+
+/** dump 幀嘅目錄（開發 = `<專案根>/shots/live-debug`；打包 = `<userData>/shots/live-debug`）。 */
+function debugDir() {
+  return underWriteRoot(writeRoot().root, 'shots', 'live-debug');
+}
+
+/** 技能連拍 PNG 嘅目錄（同上規則）。 */
+function skillDumpDir() {
+  return underWriteRoot(writeRoot().root, 'shots', 'skill-dump');
+}
 
 /**
  * ⚠️ 遊戲視窗標題關鍵字同「點揀來源」而家喺 `src/capture/source.js`（純函數、有測試）。
@@ -936,7 +971,6 @@ function resetHudView(why) {
  * 只 dump 頭 N 幀，唔會無限量寫落磁碟；寫成 `.raw`（RGBA）＋ `.json`（meta），
  * 用 `node tools/raw-to-png.js shots/live-debug` 轉 PNG 之後就可以用現成工具睇。
  */
-const DEBUG_DIR = join(ROOT, 'shots', 'live-debug');
 const MAX_DUMPS = 40;
 let dumpCount = 0;
 let okDumps = 0;
@@ -967,7 +1001,6 @@ let everyCount = 0;
  * 同時印「偵測到 N 列技能／名框墨跡闊度」做進度顯示，用戶睇得到自己有冇翻漏頁。
  */
 const SKILL_DUMP = envFlag('UMAPYOI_SKILL_DUMP');
-const SKILL_DIR = join(ROOT, 'shots', 'skill-dump');
 const SKILL_MAX = envNumber('UMAPYOI_SKILL_MAX', { fallback: 400, positive: true });
 
 /**
@@ -1035,9 +1068,9 @@ function dumpSkillPage(image, meta) {
       skillSkipped += 1;
       return null;
     }
-    ensureDir(SKILL_DIR); // ⚠️ 共用（審計 L3）
+    ensureDir(skillDumpDir()); // ⚠️ 共用（審計 L3）
     const name = `page-${String(skillPages).padStart(4, '0')}.png`;
-    writeFileSync(join(SKILL_DIR, name), encodePng(image));
+    writeFileSync(join(skillDumpDir(), name), encodePng(image));
     skillSignatures.push(sig);
     skillPages += 1;
     // 進度顯示：列數 + 首列名框墨跡闊度 —— 用戶可以憑呢行知自己有冇翻漏
@@ -1066,9 +1099,9 @@ function dumpSkillPage(image, meta) {
 function dumpFrame(image, meta) {
   if (dumpCount >= MAX_DUMPS) return null;
   try {
-    ensureDir(DEBUG_DIR); // ⚠️ 共用（審計 L3）
+    ensureDir(debugDir()); // ⚠️ 共用（審計 L3）
     const stamp = dumpStamp();
-    const base = join(DEBUG_DIR, `${stamp}-${meta.kind}`);
+    const base = join(debugDir(), `${stamp}-${meta.kind}`);
     const bytes = Buffer.from(image.data.buffer, image.data.byteOffset, image.width * image.height * 4);
     writeFileSync(`${base}.raw`, bytes);
     writeFileSync(`${base}.json`, `${JSON.stringify({ ...meta, width: image.width, height: image.height }, null, 2)}\n`);
@@ -1292,7 +1325,7 @@ app.whenReady().then(async () => {
       } else {
         console.log('   ③ 傳整個內容區（UMAPYOI_DUMP_CROP=0,0,1,1）');
       }
-      console.log('   ④ 存去 shots/skill-dump/（每頁一個 PNG）');
+      console.log(`   ④ 存去 ${skillDumpDir()}（每頁一個 PNG）`);
       console.log('   ⑤ 翻完就 Ctrl+C；之後跑 node tools/build-skill-library.js');
       console.log('   ⑥ 冇開 HUD、亦唔會讀五維（呢個模式只係收圖）');
       console.log('');
