@@ -162,7 +162,9 @@ node_modules\.bin\electron.cmd tools\verify-renderer-load.js
                                     #       會漏）→ 先 `Remove-Item Env:\ELECTRON_RUN_AS_NODE`，
                                     #       唔然 electron.exe 會用 Node 模式跑（`import … from
                                     #       'electron'` 即刻爆／攞到 npm shim）
-npm.cmd run pack:win                # ⭐ A9 打包：electron-builder → portable 單檔 exe
+npm.cmd run pack:win                # ⭐ A9 打包：**經 `tools/pack-win.js`** → electron-builder
+                                    #    （wrapper 嘅作用：`electronDist` 有先用、冇就交返
+                                    #     electron-builder 自己下載 —— 見 `docs/packaging.md` §3.3）
                                     #    → dist/UmapyoiScoreRealtimeCalculator-<版>-portable.exe
                                     #    （實測 0.1.0 = **95.7 MB**；`dist/` 唔入 git）
                                     #    ⚠️ 打包版 `ROOT` ＝ 唯讀 app.asar → 設定檔同 dump 位置
