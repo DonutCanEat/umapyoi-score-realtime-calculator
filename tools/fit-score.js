@@ -15,6 +15,7 @@ import { join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { analyzeSamples, getProfile, SEGMENT_COUNT, SEGMENT_SIZE } from '../src/umascore/index.js';
+import { lpad, pad } from './lib/width.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DEFAULT_DIR = join(ROOT, 'data', 'ground-truth');
@@ -69,21 +70,9 @@ if (samples.length === 0) {
 
 const report = analyzeSamples(samples, { profile });
 
-/** 中文／全形字喺終端佔 2 格，用 padEnd 會對唔齊，所以要自己算顯示闊度。 */
-const WIDE = /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6\u25CB\u25CE\u30FB]/;
-function displayWidth(text) {
-  let width = 0;
-  for (const ch of String(text)) width += WIDE.test(ch) ? 2 : 1;
-  return width;
-}
-const pad = (text, width) => {
-  const s = String(text);
-  return s + ' '.repeat(Math.max(0, width - displayWidth(s)));
-};
-const lpad = (text, width) => {
-  const s = String(text);
-  return ' '.repeat(Math.max(0, width - displayWidth(s))) + s;
-};
+// 中文／全形字喺終端佔 2 格，用 padEnd 會對唔齊 → 顯示闊度同補空格工具
+// 已抽去 `tools/lib/width.js`（同 `breakdown.js` 共用**一份**，見獨立審計 M9）。
+// ⚠️ 呢個報表係驗收證據（要顯示「完全命中 5/5　總絕對誤差 0」），輸出唔可以走位。
 
 console.log(`版本 profile：${profile.label}    樣本數：${report.count}`);
 console.log('');

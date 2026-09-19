@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { evaluate, uniqueSkillPoints, normalSkillPoints, APTITUDE_COEFFICIENT } from '../src/umascore/index.js';
+import { pad } from './lib/width.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GT_DIR = join(ROOT, 'data', 'ground-truth');
@@ -22,12 +23,9 @@ const args = process.argv.slice(2);
 const combosOnly = args.includes('--combos');
 const filter = args.find((a) => !a.startsWith('--'));
 
-const pad = (t, w) => {
-  const s = String(t);
-  let width = 0;
-  for (const ch of s) width += /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE6F\uFF00-\uFF60\u25CB\u25CE\u30FB]/.test(ch) ? 2 : 1;
-  return s + ' '.repeat(Math.max(0, w - width));
-};
+// 中文／全形字佔 2 格 → 補空格工具住喺 `tools/lib/width.js`
+// （同 `fit-score.js` 共用**一份**，見獨立審計 M9）。
+// `num()` 係數字欄，用 `padStart` 就夠（ASCII）。
 const num = (t, w) => String(t).padStart(w, ' ');
 
 for (const file of readdirSync(GT_DIR).filter((f) => f.endsWith('.json') && (!filter || f.includes(filter)))) {
