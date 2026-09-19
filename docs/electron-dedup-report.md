@@ -1,9 +1,10 @@
 # Electron 去重审计报告
 
-> 版本：**2026-09-19 v3（v2 重核 ＋ 執行紀錄）**
+> 版本：**2026-09-19 v4（執行紀錄：M3 完成）**
 > - 基準：commit `8febf94`（重核時 267 測試、`fit-score` 5/5 誤差 0）
-> - 執行後：**303 測試全過**（新增 36 條閘）、`fit-score` 5/5 誤差 0、
->   `--verify` 30/30＋實機 14/14＋負樣本 6/6、`diag-statbar --read` 14/14＋6/6、`replay-dumps` 退步 0
+> - 執行後：**312 測試全過**（新增 45 條閘；267 → 312）、`fit-score` 5/5 誤差 0、
+>   `--verify` 30/30＋實機 14/14＋負樣本 6/6、`diag-statbar --read` 14/14＋6/6、
+>   `replay-dumps` 退步 0、`diag-hue --assert` ✓、`diag-skills --all` 8×(7 列)
 > - ⚠️ v1 報告係對住舊樹寫嘅：當時嘅 **H1（適性規則雙實作）已經修好**
 >   （`src/umascore/aptitude.js`；`anchor.js`／`panel.js` 亦已清走）
 > - ⚠️ v2 嘅簇編號**已經改變過一次**，閱讀舊 commit message 嘅時候以「簇標題」為準（唔好靠編號）。
@@ -15,7 +16,7 @@
   **shared** `src/{hud,vision,umascore,capture}`＋`src/cli.js`／**tools** 32 個 CLI／**test** 23 檔
 - 排除：`node_modules/`、`.git/`、各快取、`diagnostics/`、`shots/**/*.png`（證據庫）、`data/*.json`（生成物）
 - 文件約數：**85 個原始檔**（main 1、renderer 4、shared 25、tools 32、test 23）
-- 簇數：high **3** / med **9** / low **3** —— **已修 11 簇，剩 4 簇未做**
+- 簇數：high **3** / med **9** / low **3** —— **已修 12 簇（H1／H3 只做咗關鍵一步）、剩 3 簇未做**（M6／L2／L3）
 
 ## Top 问题（現況）
 
@@ -26,7 +27,7 @@
 | H3 | 16:9 內容框推算三處 ＋ `roi.aspect` 傳咗冇人讀 | ✅ **已接線**（renderer 跟主程序）｜⏳ 抽 `contentBox()` 未做 |
 | M1 | 環境變數讀法三個半實作 | ✅ **已修**（`envNumber()`／`envIsSet()`）＋ `UMAPYOI_SKILL_DUMP` 一齊修 |
 | M2 | 四個 `BrowserWindow` 工廠重複 `webPreferences` | ✅ **已修**（`electron/web-preferences.js` ＋防漂移閘） |
-| M3 | 逐列／逐欄墨量投影同「連續段掃描」9 處變體 | ⏳ **未做**（最大工程，見下） |
+| M3 | 逐列／逐欄墨量投影同「連續段掃描」9 處變體 | ✅ **已修**（`src/vision/projection.js`：投影 ＋ `runSpans()`／`densestRun()`） |
 | M4 | `pickBestFive()` / `pickFiveBySpacing()` 組合搜尋寫兩次 | ✅ **已修**（`src/vision/combinations.js`） |
 | M5 | 設定檔寫入路徑兩套（原子性唔一致） | ✅ **已修**（`saveConfig({ atomic: true })`） |
 | M6 | tools CLI 參數解析 5 種寫法、25+ 檔 | ⏳ **未做** |
@@ -53,21 +54,11 @@
 | `9a64211` | H2 | `glyphs.readNumberBoxes()`；兩個 reader 共用（失敗訊息由 callback 砌，措辭逐字保留），新增 5 條閘 | 299/299、30/30＋14/14＋6/6、5/5、14/14＋6/6、退步 0 |
 | `f969b7d` | L1 | `src/hud/util.js`（`describe`／`isPlainObject`／`clampNumber`／`finiteOr`） | 299/299、語法閘 ✓、fit-score 5/5 |
 | `bbd78c7` | M2 | `electron/web-preferences.js`（凍結常數）＋ 4 個窗共用＋防漂移閘（剝註釋） | 303/303、語法閘 ✓ |
+| `26b6d6d` | 順手修 | `tools/diag-skills.js` 補返 `scale` 解構（**HEAD 已經爆** `ReferenceError`，唔係 `--gray` 嘅用法全中） | `--all` → 8 張圖全部 **7 列** |
+| （M3-①） | M3 | `src/vision/projection.js`：`rowCounts`／`columnCounts`／`countInk`；9 處手寫投影收斂（含 `statbar.bandStats` 改用欄投影、`tightenBand` 刪死碼 `peakIndex`、`main.js` 收圖進度） | 307/307、30/30＋14/14＋6/6、5/5、14/14＋6/6、色相閘、退步 0、`diag-skills --all` 8×7 列 |
+| `b299bb0` | M3 | `runSpans(values,{minValue,gapTolerance,trimTrailingGap})`／`densestRun()`；7 處手寫切段收斂。**A/B 對照證明逐位元等價**（stash 回 HEAD 跑 `diag-namematch`／`diag-namepairs` → 數字完全一樣） | 312/312、全套閘 + fit-score 5/5 誤差 0 |
 
 ## 仍然未做嘅簇（附位置／建議／工作量）
-
-### M3 · nearDuplicate · 投影同「連續段掃描」9 處變體（最大工程）
-
-- 位置：列投影 —— `inkmask.maskRowCounts()`、`skillscreen.rowInkProfile()`／`measureTextHeight()`、
-  `digitrow.denseBands()`／`tightenBand()`／`detectDigitRow()` 內墨量迴圈、`statbar.countInk()`／`bandStats()`；
-  欄投影 —— `digitrow.columnsToGroups()`、`glyphs.extractGlyphs()`、`skillscreen.nameBoxInSpan()`／`columnSpans()`、
-  `skillname.nameBoxFeature()`／`nameBoxesOfPage()`、`main.js dumpSkillPage()`；
-  段掃描 —— `findTextLines`／`findSkillRows`／`denseBands`／`tightenBand`／`columnsToGroups`／
-  `nameBoxesInRow`／`columnSpans`／`trimNameSegments`／`nameBoxFromColumns`
-- 建議模組：`src/vision/projection.js` → `rowCounts()`／`columnCounts()`／`runSpans(values,{minValue,minGap})`／`densestRun()`
-- 工作量：**M（要拆兩個 commit）**｜風險：none，但**每一個門檻都係實測安全邊界**（pitfalls #14／#18／#21／#26）→ 只可以抽「完全等價」嘅部分，唔准「順手調成一致」
-- 建議做法：① 先抽投影（逐位元一樣，最安全）＋ `main.js` 嗰處順手改用；② 再抽 `runSpans()`，逐個呼叫點保留原本參數同 ink 語意；③ `tightenBand()` 嘅「揀墨量最多嘅連續段」係特例，唔好強行歸一
-- 驗收：§8 全套（303 test／30/30＋14/14＋6/6／5/5／14/14＋6/6／色相閘／退步 0／`diag-skills --all` 7 列）
 
 ### M6 · nearDuplicate · tools CLI 參數解析 5 種寫法、25+ 檔
 
@@ -106,8 +97,21 @@
    `nodeIntegration:true + contextIsolation:false` → 唔剝就會「用註釋冒充實作」而**假 pass**／**假 fail**。
    `test/ipc-wiring.test.js` 同 `test/electron-window-prefs.test.js` 都有剝註釋＋自測。
 4. **`UMAPYOI_SKILL_DUMP` 係 known-issues §9.1 第 7 條記住嘅最後一個 truthiness 坑** → 已修（見上表）。
-5. **`docs/` 嘅測試數目會漂**：`AGENTS.md` 三處寫「267 個測試」→ 已經改成 303。
+5. **`docs/` 嘅測試數目會漂**：`AGENTS.md` 三處寫「267 個測試」→ 已經改成 312。
    ⚠️ 將來加測試要順手更新（呢個係文檔同步，唔係 code）。
+6. **`tools/diag-skills.js` 喺 HEAD 已經壞咗**（`ReferenceError: scale is not defined`）：
+   非 `--gray` 嘅用法（包括 AGENTS §2 寫住嘅 `--all`）全部即爆 → 已修（`26b6d6d`）。
+   ⚠️ 呢類「工具自己壞咗但冇測試」嘅位，正正係最需要**接線閘**嘅地方。
+7. **`skillname.js` 檔頭嗰組實測數字（34 對、中位數 0.986）已經過時**：今日重跑係
+   **33 對、p50 0.974、≥0.9 有 75 對**。⚠️ 但**唔可以**當成「重構改壞咗」——
+   已用 A/B（stash 回 HEAD）證明兩邊**數字完全一樣**；差異係樣本集／偵測細節之前改過。
+   已喺檔頭加日期註記，講明引用前要自己跑一次。
+8. ⚠️ **教訓：`tools/build-skill-library.js` 冇乾跑模式**（一跑就覆寫
+   `data/skill-name-lib/` 80 個追蹤檔 ＋ 由 `shots/skill-dump/` 生成一大堆新 PNG）。
+   今次為咗「睇下 Phase 2 條路會唔會爆」而誤跑，要即刻
+   `git checkout -- data/skill-name-lib` ＋ `git clean -f -- data/skill-name-lib` 還原。
+   → 已經喺 AGENTS §2 嗰行加咗警告。**下次要驗 Phase 2 路，用 `diag-namematch`／
+   `diag-namepairs`（唯讀）就夠，唔好跑 build。**
 
 ## 不建议动的项
 
@@ -124,11 +128,12 @@
 
 ## 建议落地顺序（剩餘部分）
 
-1. **M3**（投影 → 段掃描，兩個 commit，跑足影像閘）
-2. **M6**（tools CLI 參數，一個工具一個 commit，逐字保留 CLI 介面）
-3. **L2**（test fixture builder，只抽砌 buffer 嗰步）
-4. **L3**（dump 小工具，檔內重構）
-5. 可選：H1 第二步（`.cjs` channel map）、H3 第二步（`content-box.js`）
+1. **M6**（tools CLI 參數，一個工具一個 commit，逐字保留 CLI 介面）
+2. **L2**（test fixture builder，只抽砌 buffer 嗰步）
+3. **L3**（dump 小工具，檔內重構）
+4. 可選：H1 第二步（`.cjs` channel map）、H3 第二步（`content-box.js`）
+   ⚠️ **唔應該做**：`tools/diag-skillnames.js` 自己一套特徵抽取（見新發現 1）——
+   佢讀嘅標註已知有錯位，為佢改共用模組唔值得。
 
 ## 备注
 
@@ -138,7 +143,7 @@
   但欄位保持選填 → 舊 main 照用後備值）、`frame.cropped`；將來收成共用 model 時
   **所有欄位一律 optional ＋ 有預設**（要向後兼容「新 main ＋ 舊 renderer」同「舊 main ＋ 新 renderer」）。
 - 本專案**冇 preload**：如果將來加，`electron/ipc-channels.cjs`（H1 第二步）正好可以變成 preload 嘅白名單來源。
-- 每次改動之後嘅驗收閘（AGENTS §8）：`npm.cmd test` **303** 全過、`fit-score` 5/5 誤差 0、
+- 每次改動之後嘅驗收閘（AGENTS §8）：`npm.cmd test` **312** 全過、`fit-score` 5/5 誤差 0、
   動影像就 30/30＋14/14＋負樣本 6/6、動墨點／色相就 `diag-hue --assert`、
   動 `statbar.js`／`capture.html` 就 `diag-statbar --read` 14/14＋6/6＋`replay-dumps` 退步 0、
   動 `electron/*.html` 或 `main.js` 就 `check-renderer-syntax.js` 全 ✓。
