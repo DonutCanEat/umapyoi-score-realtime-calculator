@@ -17,6 +17,9 @@
 // ⭐ C3 成長曲線嘅 view（樣本 → 折線座標）。同一個資料夾、同樣係純函數，
 //    所以呢個 import 唔會引入 Electron 依賴（維持「layout.js 可 node --test」）。
 import { historyView } from './history.js';
+// ⭐ 共用小工具（`describe()`／`isPlainObject()`／`clampNumber()`／`finiteOr()`）——
+//    同 `config.js` 用同一份（獨立審計 L1）。
+import { clampNumber, describe, finiteOr } from './util.js';
 
 /** 內容區（16:9）比例。 */
 export const CONTENT_ASPECT = 9 / 16;
@@ -146,14 +149,10 @@ export function clampLayout(layout = {}) {
   };
 }
 
-function num(v, fallback = NaN) {
-  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
-}
-
-function clamp(v, lo, hi) {
-  if (!Number.isFinite(v)) return lo;
-  return Math.min(hi, Math.max(lo, v));
-}
+// ⚠️ `num()`／`clamp()`／`describe()` 已經搬去 `util.js`（同 `config.js` 共用一份，
+//    見獨立審計 L1）——呢度只保留別名，令下面幾十處唔使改。
+const num = finiteOr;
+const clamp = clampNumber;
 
 /**
  * 6 位小數已經遠細過一個像素（1920 闊之下 1px = 0.0005），純粹係令存檔靚仔。
@@ -257,15 +256,6 @@ function assertContent(content) {
 function assertBounds(bounds) {
   const ok = bounds && ['x', 'y', 'width', 'height'].every((k) => Number.isFinite(num(bounds[k])));
   if (!ok) throw new Error(`拖位反推要一個有效嘅視窗範圍（x/y/width/height 都係數字），實得 ${describe(bounds)}`);
-}
-
-function describe(v) {
-  if (v === undefined) return 'undefined';
-  try {
-    return JSON.stringify(v);
-  } catch {
-    return String(v);
-  }
 }
 
 /** 五維嘅繁中標籤（跟遊戲ステータス面板由左至右：速度／持久力／力量／毅力／智力）。 */

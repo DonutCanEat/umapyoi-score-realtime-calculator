@@ -58,6 +58,7 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node
 import { dirname, join } from 'node:path';
 
 import { envIsSet } from './env-flag.js';
+import { describe, isPlainObject } from './util.js';
 
 import {
   DEFAULT_HUD_LAYOUT,
@@ -804,10 +805,8 @@ export function resolveHudConfig(env = {}, fileConfig = null, { onWarn } = {}) {
 }
 
 // ─────────────────────────── 小工具 ───────────────────────────
-
-function isPlainObject(v) {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
+// ⚠️ `isPlainObject()`／`describe()` 已經搬去 `util.js`（同 `layout.js` 共用一份，
+//    見獨立審計 L1）——呢個檔只留返只屬於設定檔層嘅 `onlyKeys()`／`numAt()`／`deepFreeze()`。
 
 function onlyKeys(where, obj, allowed) {
   for (const key of Object.keys(obj)) {
@@ -823,16 +822,6 @@ function numAt(where, raw) {
     throw new Error(`${where} 要係有限數字，實得 ${describe(raw)}`);
   }
   return raw;
-}
-
-function describe(v) {
-  if (typeof v === 'string') return `「${v}」`;
-  if (v === undefined) return 'undefined';
-  try {
-    return JSON.stringify(v);
-  } catch {
-    return String(v);
-  }
 }
 
 function deepFreeze(obj) {
