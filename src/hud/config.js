@@ -54,7 +54,7 @@
  * 真係唔合法**（右邊界 > 1／`size <= 0`／`x[0] < 0`）才 throw。
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import {
@@ -584,15 +584,42 @@ export function loadConfig(options = {}) {
  * ⚠️ **寫之前一定 validate**：寧願寫唔到（throw），都唔可以寫一個壞檔落去 ——
  * 壞檔會令下次開程式**越讀越亂**，而且用戶睇唔出係邊一步寫壞。
  *
+ * ## 原子寫（`atomic`，2026-09-19 收埋入呢度）
+ *
+ * 以前「先寫 `<path>.tmp` 再 `rename`」呢一步住喺 `electron/main.js`
+ * （`saveHudConfigFile()`），即係**同一件事兩份實作**：經 `main.js` 存嘅係原子寫，
+ * 其他呼叫者（含測試）係直接寫 → 中途出事（無電／被殺）就會留低半個檔。
+ * 而家預設**所有**呼叫都係原子寫（審計 M5）：
+ *   ① 寫 `<path>.tmp`；② `rename(tmp → path)`（Windows 之下 rename 會覆蓋舊檔）。
+ * ⚠️ 失敗一定清走 `.tmp`：唔係就會喺用戶目錄留低垃圾，而且下次開程式
+ *    會見到一個「唔知邊嚟」嘅 `.tmp` 檔。
+ * ⚠️ 想直接寫（例如測試想睇「寫緊嘅中途狀態」）可以傳 `atomic: false`。
+ *
  * @param {unknown} config 想寫嘅設定（會被 validate ＋ 正規化）
- * @param {{filePath?:string}} [options]
+ * @param {{filePath?:string, atomic?:boolean}} [options] `atomic` 預設 `true`
  * @returns {string} 實際寫入嘅路徑（畀呼叫者 log 用）
  */
-export function saveConfig(config, { filePath } = {}) {
+export function saveConfig(config, { filePath, atomic = true } = {}) {
   const path = filePath ?? defaultConfigPath();
   const normalized = validateConfig(config); // 先 validate，後寫檔（順序唔可以掉亂）
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
+  const text = `${JSON.stringify(normalized, null, 2)}\n`;
+  if (!atomic) {
+    writeFileSync(path, text, 'utf8');
+    return path;
+  }
+  const tmp = `${path}.tmp`;
+  writeFileSync(tmp, text, 'utf8');
+  try {
+    renameSync(tmp, path);
+  } catch (error) {
+    try {
+      rmSync(tmp, { force: true });
+    } catch {
+      /* 清唔到都唔應該蓋過原本嗰個錯誤 */
+    }
+    throw error;
+  }
   return path;
 }
 

@@ -18,7 +18,7 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, screen } from 'electron';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { readFileSync, existsSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 
 import { pickGameSource } from '../src/capture/source.js';
 import { loadTemplates, readStats, StatTracker, scoreStats } from '../src/vision/reader.js';
@@ -346,11 +346,15 @@ function loadHudConfig() {
   }
 }
 
-/** 設定檔寫入（**原子寫**：先寫 `.tmp` 再 rename，避免中途出事留低半個壞檔）。 */
+/**
+ * 設定檔寫入（log ＋ env 警告）。
+ *
+ * ⚠️ 原子寫（`.tmp` + `rename`）已經收埋入 `config.js` 嘅 `saveConfig()`
+ *    （預設 `atomic: true`，見獨立審計 M5）——以前呢度自己砌 tmp 路徑，
+ *    即係「同一件事兩份實作」：經呢條路存係原子，其他呼叫者係直接寫。
+ */
 function saveHudConfigFile(config) {
-  const tmp = `${hudConfigPath}.tmp`;
-  saveConfig(config, { filePath: tmp }); // validate + 格式由 config.js 負責（唔喺呢度重寫一套）
-  renameSync(tmp, hudConfigPath); // Windows 之下 rename 會覆蓋舊檔
+  saveConfig(config, { filePath: hudConfigPath }); // validate + 格式 + 原子寫由 config.js 負責
   // ⚠️ 唔可以寫 `savedAt`／`contentRef` 入 JSON：`validateConfig()` 唔准唔認識嘅 key
   //    （打錯字要即刻出聲）→ 改為 log 出嚟，需要時查 console。
   console.log(

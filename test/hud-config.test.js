@@ -824,6 +824,42 @@ test('hud-config saveConfig：validate 唔過就 throw，而且**唔會**寫壞�
   assert.equal(readFileSync(path, 'utf8'), good, '舊檔要原封不動');
 });
 
+// ─────────────── 原子寫（`.tmp` + rename，2026-09-19 由 main.js 收埋入 saveConfig）───────────────
+//
+// 為何要呢幾條（獨立審計 M5）：以前「先寫 `<path>.tmp` 再 rename」住喺
+// `electron/main.js`（`saveHudConfigFile()`），即係同一件事兩份實作 ——
+// 經 main.js 存係原子寫、其他呼叫者（含測試）係直接寫。而家 `saveConfig()` 預設原子寫，
+// 所以閘一定要驗：① 成功之後冇 `.tmp` 殘骸；② 失敗（validate 唔過）連 `.tmp` 都唔准留。
+
+test('hud-config saveConfig：預設係原子寫 —— 寫完唔會留低 .tmp，覆寫都要乾淨', () => {
+  const path = freshPath('atomic.json');
+  assert.equal(saveConfig(defaultHudConfig(), { filePath: path }), path, '要回實際寫入路徑');
+  assert.deepEqual(loadConfig({ filePath: path }), validateConfig(defaultHudConfig()));
+  assert.equal(existsSync(`${path}.tmp`), false, '⭐ 寫完一定要清走 .tmp（唔係會喺用戶目錄留垃圾）');
+
+  // 覆寫：新內容要完全取代舊內容（唔可以一半新一半舊）
+  const custom = { layout: { x: [0.1, 0.4], y: [0.2, 0.5], offset: { dx: 0, dy: 0 }, size: { w: 0.3, h: 0.3 } } };
+  saveConfig(custom, { filePath: path });
+  assert.deepEqual(loadConfig({ filePath: path }), validateConfig(custom));
+  assert.equal(existsSync(`${path}.tmp`), false, '覆寫之後一樣唔准有 .tmp');
+});
+
+test('hud-config saveConfig：validate 唔過時連 .tmp 都唔准留低（唔止唔寫壞檔，連殘骸都唔准）', () => {
+  const path = freshPath('atomic-bad.json');
+  assert.throws(() => saveConfig({ layout: { x: [0.9, 0.1] } }, { filePath: path }), /前細後大/);
+  assert.equal(existsSync(path), false, '⭐ 寧願寫唔到，都唔可以寫一個壞檔落去');
+  // ⚠️ 呢條係新增嘅（以前直接寫就唔會有 .tmp 呢個問題）：
+  //    原子寫係「先寫 .tmp」，所以失敗路徑一樣要驗冇殘骸。
+  assert.equal(existsSync(`${path}.tmp`), false, '⭐ 失敗路徑一樣唔准留低 .tmp');
+});
+
+test('hud-config saveConfig：atomic: false 就係直接寫（舊行為留返俾想睇中途狀態嘅呼叫者）', () => {
+  const path = freshPath('direct.json');
+  saveConfig(defaultHudConfig(), { filePath: path, atomic: false });
+  assert.deepEqual(loadConfig({ filePath: path }), validateConfig(defaultHudConfig()));
+  assert.equal(existsSync(`${path}.tmp`), false, '直接寫唔應該產生 .tmp');
+});
+
 // ─────────────── assertFullDisplay（`applyHudConfig()` 嘅防呆閘）───────────────
 //
 // 為何要呢條閘（獨立審計發現嘅「靜默重設」）：`layout.js` `hudState()` 嘅語意係
