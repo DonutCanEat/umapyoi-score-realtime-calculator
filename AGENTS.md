@@ -292,8 +292,9 @@ src/vision/
   pngwrite.js     # 零依賴 PNG **編碼**器（dump 實機幀做證據用；有 round-trip 測試）
   skillscreen.js  # ⭐ 技能畫面（畫面 B）欄／行／名框偵測（見 §6.5）
   skillname.js    # ⭐ 技能名「影像特徵」＋比對（絕對尺度；Phase 2 識字路線，見 §6.5）
-  anchor.js       # ⚠️ 已棄用（靠粉紅色揾面板 → 見地雷 #10/#11），保留只為舊測試
-  panel.js        # ⚠️ 同上（粉紅比例版），未接入主流程
+  # ⚠️ `anchor.js`／`panel.js`（靠粉紅色揾面板 → 地雷 #10/#11）**2026-09-19 已刪**（A8）：
+  #    當時寫「保留只為舊測試」，但冇任何 src／tools／electron 用佢哋，唯一引用係自己嗰個測試
+  #    → 留住只會令人以為「有兩套面板偵測」。要睇歷史：`git log -- src/vision/anchor.js`。
 
 src/capture/
   source.js       # ⭐ 揀「擷取來源」嘅純函數（零 Electron、可 node --test）：
@@ -1035,7 +1036,7 @@ uma1-p1 → uma1-p2 啱啱好併 **2** 行（＝兩頁重疊 2 行）、uma3 併
 | A5 | **`npm start` 前置檢查** | 開唔到遊戲視窗／模板缺失／Smart App Control 擋咗 → 出清楚指引（見 §7 已知坑） | 細 |
 | A6 | **日誌整理** | 分 `--verbose`／靜音；log 寫檔（方便用戶回報問題） | 細 |
 | A7 | **測試覆蓋** | `evaluate.js` 邊界（1200／2000 上限、負分進化技能）、更多合成圖 | 中 |
-| A8 | **清理舊碼** | `anchor.js`／`panel.js`（已棄用）＋ 相關舊測試，減低混亂 | 細 |
+| A8 | ~~**清理舊碼**~~ ✅ **已做（2026-09-19）** | 刪咗 `src/vision/anchor.js`（`detectStatPanel()` 粉紅版）、`src/vision/panel.js`（粉紅比例版）同 `test/anchor.test.js`（唯一引用者）。⚠️ 驗證方法：`grep -r "anchor\.js\|panel\.js" src tools test electron` 一定要**零命中**（除咗檔頭註釋講歷史）| 細 |
 | A9 | **打包** | Electron → portable 單檔 exe（約 200MB，見 §7） | 中 |
 | A10 | **`shots/` 大掃除 ＋ 說明** | 分類、寫清每個目錄係咩、邊啲要 commit（`shots/` 要 commit，見 §0） | 細 |
 
