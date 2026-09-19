@@ -62,6 +62,10 @@ src/hud/
                   #       寫死嘅 x[1] 同推導值唔一致 → 警告（onWarn，唔 throw）；
                   #       只有「推導出嚟嘅範圍唔合法」才 throw（見 §2／§6.4）
   config-path.js  # ⭐ 設定檔擺邊（純函數）：開發 = 專案根；打包／asar = app.getPath('userData')
+  write-root.js   # ⭐ A9：dump／連拍要**寫**邊（純函數）：開發 = 專案根（同以前一樣）；
+                  #    打包／asar = app.getPath('userData')。⚠️ 為何要：打包後 ROOT 係唯讀
+                  #    asar，原本文寫死 join(ROOT,'shots',…) → mkdirSync throw（ENOTDIR／EROFS），
+                  #    而且係喺「讀唔清」出錯嗰陣才爆。underWriteRoot() 順手集中 join
   history.js      # ⭐ C3 成長曲線核心（純函數，可 node --test）：pushSample()（**只記真變化**、
                   #    有上限 MAX_HISTORY=240、NaN 唔准入）／sparklinePoints()（100×22 折線座標；
                   #    `max === min` 畫中間橫線，**唔准除 0 出 NaN**）／historySummary()／historyView()
@@ -109,6 +113,10 @@ test/
                       #    （冇檔 → 回預設、唔准 throw；有檔 → 真係讀到嗰個檔）—— 理由：唔准斷言
                       #    「repo 根有 `hud-position.json`」（嗰個檔唔入 git，乾淨 checkout 冇 → 見 §8）
   hud-config-path.test.js # ⭐ 設定檔路徑決策（開發 vs 打包 vs asar）
+  write-root.test.js  # ⭐ A9 寫入根目錄決策（5 條）：開發 = 專案根／打包 = userData／
+                      #    `ROOT` 落喺 .asar 就算 isPackaged=false 都用 userData／
+                      #    缺 rootDir 或 userDataDir 一律 throw（唔准靜默 fallback）／
+                      #    underWriteRoot 砌得出 `shots/live-debug`、`shots/skill-dump`
   hud-settings-html.test.js # ⭐ 「設定窗 ↔ config.js 欄位對齊」：**真係由 `electron/settings.html` 抽**
                       #    `DISPLAY_FIELDS`／`NUM_FIELDS` 再同 `HUD_DISPLAY_KEYS`／layout 欄位比對
                       #    （之前呢兩份清單係人手抄嘅，加一格／少一格冇人知）
@@ -169,6 +177,12 @@ tools/
   check-renderer-syntax.js # ⭐ renderer inline script 嘅**語法閘**（抽出 `<script>` 再 `node --check`）——
                          #    四個 HTML 入唔到 `node --test`（classic script ＋ DOM），打錯一個字
                          #    就係「HUD 靜默唔郁」而冇錯誤訊息 → 呢個係最低成本嘅防線（見 §8 4b）
+                         #    ⚠️ 2026-09-19 擴充到 src/**（31）＋ tools/**（34）
+  verify-renderer-load.js # ⭐ **renderer 實載閘**（H1 完成嗰陣加）：用 **Electron** 跑（唔係 node），
+                         #    真開 4 個窗（show:false、唔需要遊戲）載入 4 個 HTML，斷言
+                         #    ① page 冇 throw（＝ require('./ipc-channels.cjs') 解得開）
+                         #    ② main→renderer 送真 payload 後讀 DOM ③ renderer→main 收得到
+                         #    ⚠️ 靜態閘捉唔到「page 開頭 throw → listener 靜默唔註冊」（見 §8 4c）
 
 data/
   skill-db-tw.json       # 1323 招技能（繁中）
@@ -198,4 +212,10 @@ docs/
   formula.md             # 公式推導、驗證、來源
   vision-design.md       # 影像辨識設計（座標模型、畫面清單、邊界情況）
   skill-screen.md        # ⭐ 技能畫面（Phase 2）實測版面 ＋ 識字嘅硬限制同可行路線
+  packaging.md           # ⭐ A9 打包：指令／輸出大細／白名單／打包後嘅路徑規則／驗收紀錄／未驗清單
 ```
+
+⚠️ `package.json` 嘅 `build` 欄 = electron-builder 設定（A9）：
+`files` 白名單（`electron/**`＋`src/**`＋2 個 runtime data JSON＋`package.json`）、
+`asar: true`、`electronDist: node_modules/electron/dist`（唔使重新下載 Electron）、
+`npmRebuild: false`、`win.target: portable`。⚠️ **將來加 runtime data 檔要同步加落白名單**。

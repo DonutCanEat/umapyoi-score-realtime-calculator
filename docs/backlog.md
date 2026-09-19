@@ -21,7 +21,7 @@
 | A6 | **日誌整理** | 分 `--verbose`／靜音；log 寫檔（方便用戶回報問題） | 細 |
 | A7 | **測試覆蓋** | `evaluate.js` 邊界（1200／2000 上限、負分進化技能）、更多合成圖 | 中 |
 | A8 | ~~**清理舊碼**~~ ✅ **已做（2026-09-19）** | 刪咗 `src/vision/anchor.js`（`detectStatPanel()` 粉紅版）、`src/vision/panel.js`（粉紅比例版）同 `test/anchor.test.js`（唯一引用者）。⚠️ 驗證方法：`grep -r "anchor\.js\|panel\.js" src tools test electron` 一定要**零命中**（除咗檔頭註釋講歷史）| 細 |
-| A9 | **打包** | Electron → portable 單檔 exe（約 200MB，見 §7） | 中 |
+| A9 | ~~**打包**~~ ✅ **已做（2026-09-19）** | Electron → portable 單檔 exe。`npm.cmd run pack:win`（electron-builder `portable`）→ `dist/UmapyoiScoreRealtimeCalculator-0.1.0-portable.exe`（**實測 95.7 MB**，唔係估嘅 200MB —— NSIS 有壓縮）。① 白名單打包（`electron/**`＋`src/**`＋2 個 runtime data JSON＋`package.json`，asar 共 48 項）；② ⚠️ **順手修好一個真 bug**：打包後 `ROOT` 係唯讀 asar，`join(ROOT,'shots',…)` 一 dump 就爆 → 抽出 `src/hud/write-root.js`（＋5 條測試）；③ 實測驗收：打包版開得到（`MainWindowTitle`＝「Umapyoi 擷取」）、非法 `UMAPYOI_HUD_X=0.9,0.5` 即刻 exit 1、asar 內模板／技能庫讀得到（79809／458862 bytes 可 parse）。⚠️ 未做：icon（用 Electron 預設）、簽名（SmartScreen 會攔）、未實機對住遊戲跑。詳情：`docs/packaging.md` | 中 |
 | A10 | ~~**`shots/` 大掃除 ＋ 說明**~~ ✅ **已做（2026-09-19）** | ① 根目錄 10 個散檔 → `shots/debug-crops/`（引用一齊改：`diag-row.js`／`read-stats.js`／`inkmask.js`／`README.md`）；② 新增 **`shots/README.md`**（每個目錄係咩／入唔入 git／加檔會入邊個閘 ＋ 三條唔准拆嘅規矩）；③ 順手發現 `data/calc-page.html` 同 `calc-page-tw.html` **SHA-256 完全相同**（舊命名嘅重複 cache，590KB）→ 刪；④ ⚠️ 「驗證」= `git status` 見到係 `R`（rename）而唔係 delete+add，同埋四個閘照跑 | 細 |
 
 ### B. 需要開遊戲配合

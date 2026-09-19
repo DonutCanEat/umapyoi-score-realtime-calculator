@@ -74,6 +74,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 | Phase 2 | 技能 icon 識別（自動知學咗邊啲技能）| ⏸️ **暫停（用戶 2026-09-19 指示：暫時唔處理技能呢一 part）** —— 已經做好嘅部分見下面，隨時可以接返。原狀態：🚧 **兩步做好**：① 技能畫面欄／行偵測器（`skillscreen.js`，8 張實機圖全部搵到 7 行）；② **名稱框抽取**（112 個全部抽到）＋ **影像比對可行性已量化**（互相最佳配對中位數 **0.986**、撞分上限 **0.604** —— 見 `docs/skill-screen.md` §5）。⏳ 未做：接上**候選名單**（見 §9）|
 | Phase 3 | what-if 模擬（加一招加幾多分／Pt）、成長曲線 | ✅ **C1 已做 ＋ 2026-09-19 用戶實機驗過（原話「呢兩樣都ok」）**：`src/umascore/whatif.js`（純函數）＋ `tools/whatif.js` CLI ＋ **獨立 what-if 窗**（`electron/whatif.html`，`UMAPYOI_NO_WHATIF=1` 唔開）＋ `src/umascore/aptitude.js`（適性規則**單一來源**）。✅ **C3 成長曲線亦已做（未實機驗）**：`src/hud/history.js`（樣本記錄／去重／上限／折線座標，純函數）＋ HUD 用 SVG polyline 畫（顯示選項 `history`，第 9 個）|
 | Phase 4 | 事件選項助手（已 mark，見 `docs/vision-design.md` §5.5）| 暫緩 |
+| Phase 5 | **打包（A9）** | ✅ **已做（2026-09-19）**：`npm.cmd run pack:win`（electron-builder，`portable` target）→ `dist/UmapyoiScoreRealtimeCalculator-0.1.0-portable.exe` **95.7 MB** 單檔。asar 白名單 48 項（`electron/**`＋`src/**`＋2 個 runtime data JSON＋`package.json`）。⚠️ 順手修好一個真 bug：打包後 `ROOT` 係唯讀 asar，原本文寫死 `join(ROOT,'shots',…)` → 一 dump 就爆 → 抽出 `src/hud/write-root.js`（同 `config-path.js` 一樣嘅純函數決策）。✅ 實測：打包版開得到（`MainWindowTitle`＝「Umapyoi 擷取」）、非法 env 即刻 exit 1（行緊同一套邏輯）、asar 內模板／技能庫讀得到（79809／458862 bytes 可 parse）。⚠️ 未實機對住遊戲跑、未設 icon、未簽名 —— 詳情 `docs/packaging.md` |
 
 > **影像辨識里程碑（2026-09）**：由實機截圖直接讀出五維，
 > uma1／uma3／uma4 三條紀錄 **30/30 格完全命中真值**（`node tools/read-stats.js`）。
@@ -132,9 +133,9 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（328 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（333 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ electron/main.js
-                                     #    ＋ src/**（30 檔）＋ tools/**（34 檔）—— 見 §8 4b
+                                     #    ＋ src/**（31 檔）＋ tools/**（34 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
                                      #    喺 HEAD 已經爆 SyntaxError 都冇人知（見 §8 4b）
 node tools/collect-diagnostics.js    # ⭐ D2 一鍵診斷包 → diagnostics/diag-<時間>/report.md
@@ -151,6 +152,12 @@ node_modules\.bin\electron.cmd tools\verify-renderer-load.js
                                     #       會漏）→ 先 `Remove-Item Env:\ELECTRON_RUN_AS_NODE`，
                                     #       唔然 electron.exe 會用 Node 模式跑（`import … from
                                     #       'electron'` 即刻爆／攞到 npm shim）
+npm.cmd run pack:win                # ⭐ A9 打包：electron-builder → portable 單檔 exe
+                                    #    → dist/UmapyoiScoreRealtimeCalculator-<版>-portable.exe
+                                    #    （實測 0.1.0 = **95.7 MB**；`dist/` 唔入 git）
+                                    #    ⚠️ 打包版 `ROOT` ＝ 唯讀 app.asar → 設定檔同 dump 位置
+                                    #       全靠兩個純函數決策（`config-path.js`／`write-root.js`）
+                                    #        —— 詳情同驗收紀錄：`docs/packaging.md`
 # IPC channel 名嘅唯一來源 = electron/ipc-channels.cjs（**CommonJS**：renderer 係 classic script）
 #   `main.js`（29 處）＋ **4 個 renderer** 都已經改用 `IPC_CHANNELS.<key>`
 #   （renderer 係 `const { IPC_CHANNELS } = require('./ipc-channels.cjs');`）。
@@ -290,7 +297,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **328 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **333 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 14/14**、**負樣本 6/6 唔出數**），全部都要中
@@ -316,18 +323,20 @@ src/umascore/   # 計分核心（純函數）：tables.js（精確 statPoints �
 src/vision/     # 影像：inkmask.js（墨點遮罩，關鍵）／digitrow.js（gt 排法）／statbar.js（實機面板條 ⭐）／
                 #   glyphs.js／reader.js（多數投票）／png.js／pngwrite.js／skillscreen.js／skillname.js
 src/capture/    # source.js ⭐ 揀擷取來源（排除自己嘅窗；純函數、有測試）
-src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔層）／config-path.js／
+src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔層）／config-path.js（設定檔擺邊）／
+                #   write-root.js（⭐ A9：dump／連拍要寫邊 —— 打包後 ROOT 係唯讀 asar）／
                 #   env-flag.js（環境變數唯一讀法）／history.js（C3 成長曲線核心）
-electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／capture.html／hud.html／
-                #   settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 328 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
-tools/          # 32 個 CLI：診斷／建模板／對答案／what-if／advice／診斷包…（見 §2）
+electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／ipc-channels.cjs（channel 名唯一來源）／
+                #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
+test/           # 333 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+tools/          # 32 個 CLI：診斷／建模板／對答案／what-if／advice／診斷包／renderer 實載閘…（見 §2）
 data/           # skill-db-tw.json（1323 招）／glyph-templates.json／live-truth.json／ground-truth/
+                #   ⚠️ runtime 只讀頭兩個 → **打包白名單要有佢哋**（見 `docs/packaging.md` §5）
 shots/          # ⭐ 證據庫 —— **每個目錄係咩睇 `shots/README.md`**（邊啲入 git／加檔入邊個閘）
                 #   gt/（面板排法）／live/（實機 ＋ 失敗幀回歸）／negatives/（唔准出數）／
                 #   debug-crops/（人手剪放大圖）／live-debug/、skill-dump/（唔入 git）
 docs/           # formula.md／vision-design.md／skill-screen.md／pitfalls.md（30 條地雷）／
-                #   known-issues.md／backlog.md／file-map.md／design.md
+                #   known-issues.md／backlog.md／file-map.md／design.md／packaging.md（A9）
 ```
 
 ⚠️ 每個檔案嘅**用途、為何咁做、有咩閘**：睇 `docs/file-map.md`（完整版）。
@@ -451,19 +460,20 @@ oval > 0 → 再加 oval 部分；最後 floor
 | npm cache | 必須指入 workspace（`.npmrc` 已設），否則沙盒會擋 `%LOCALAPPDATA%` |
 | Electron 下載 | 要同時設 `ELECTRON_CACHE` **同** `LOCALAPPDATA` 指入 workspace（`.cache-local/`）|
 | **Smart App Control** | 必須**關閉**，否則 `electron.exe` 會被擋（`spawn UNKNOWN`／`An Application Control policy has blocked this file`）。呢個係機器政策，唔係程式問題 |
-| 最終打包 | Electron → portable 單檔 exe，約 **200MB**（electron.exe 本身就 235MB）|
+| 最終打包 | Electron → portable 單檔 exe。✅ **A9 實測（2026-09-19）**：`npm.cmd run pack:win` → **95.7 MB**（NSIS 壓縮；`win-unpacked` 內嘅 electron.exe 本身 234.9 MB）。⚠️ icon 未設（用 Electron 預設）、未簽名（SmartScreen 會攔）。詳細流程／白名單／驗收：`docs/packaging.md` |
 
 ---
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **328 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **333 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
    （歷史：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js` 要求 repo 根
-   有 `hud-position.json`），修好之後兩邊一樣；而家兩邊都係 **328／0**
-   （2026-09-19 H1 第二次核對：乾淨 HEAD 樹 **327／0**、工作樹 **328／0**）。
+   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹係 **333／0**
+   （2026-09-19 兩次核對：H1 之後乾淨 HEAD **327／0** vs 工作樹 **328／0**；
+   A9 再加 5 條 `write-root` 測試 → 333，查法一樣：`git archive` 出乾淨樹跑一次）。
    ⚠️ **唔准**用 `skip`／`if (!existsSync(...)) return;` 迴避 —— 咁樣只係把「驗唔到」
    變成「靜默通過」。要用嘅話就**自己控制環境**（例如 `os.tmpdir()` ＋ `process.chdir()`）。
    ⚠️ 涉及 cwd 嘅測試一定要**同步** ＋ `finally` 還原（`--test-isolation=none` 之下
@@ -484,7 +494,7 @@ oval > 0 → 再加 oval 部分；最後 floor
    ⚠️ 為何要：四個 HTML 係 classic script（`require('electron')` ＋ DOM）
    → **入唔到 `node --test`**，打錯一個字（少個括號、`await` 喺非 async）嘅後果係
    **renderer 一開頭 throw → 之後所有 IPC listener 都註冊唔到 → HUD／設定窗靜默唔郁**。
-   ⚠️ **2026-09-19 擴充**：而家連 `src/**`（29 檔）＋ `tools/**`（33 檔）一齊驗 ——
+   ⚠️ **2026-09-19 擴充**：而家連 `src/**`（31 檔）＋ `tools/**`（34 檔）一齊驗 ——
    因為去重審計期間一次過揭發**兩個工具喺 HEAD 已經爆 `SyntaxError`**
    （`tools/diag-skills.js` 用咗冇宣告嘅 `scale`；`tools/dump-namebox.js` 同一個 scope
    宣告咗兩次 `scale`）：兩者都係「冇測試、冇閘、冇人跑」嘅檔，靜默壞咗好耐 ——
@@ -520,7 +530,7 @@ oval > 0 → 再加 oval 部分；最後 floor
 ## 10. 總 Backlog（A／B／C／D）—— ⭐ **詳情喺 `docs/backlog.md`**
 
 > 完整清單（每項嘅內容、狀態、大細）搬咗去 `docs/backlog.md`（D4，2026-09-19）。
-> 快速記憶：**A** 唔使開遊戲（A8 清舊碼 ✅、A10 `shots/` 大掃除 ✅…）／
+> 快速記憶：**A** 唔使開遊戲（A8 清舊碼 ✅、**A9 打包 ✅（2026-09-19）**、A10 `shots/` 大掃除 ✅…）／
 > **B** 要開遊戲（B4 收數字樣本、B5 其他畫面負樣本，都係 🔄 做緊）／
 > **C** 新功能（C1 what-if ✅、C3 成長曲線 ✅、C4 升級建議 🚧、C5 ランク目標 ✅…）／
 > **D** agent 提議（D2 診斷包 ✅、D4 就係呢次拆章、D5 技能分進度 ✅…）。
