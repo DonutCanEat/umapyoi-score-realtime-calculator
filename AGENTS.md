@@ -7,7 +7,7 @@
 >
 > ⚠️ 為咗令呢份文件**讀得完**（agent 嘅工作區指令預算 65,536 bytes），
 > 三份大表已經搬去 `docs/`（D4，2026-09-19）—— **同你嘅改動有關就要開嚟睇**：
-> - `docs/pitfalls.md`：**31 條地雷**（改影像／計分／HUD 之前必讀）
+> - `docs/pitfalls.md`：**32 條地雷**（改影像／計分／HUD 之前必讀）
 > - `docs/known-issues.md`：已知待辦 ＋ **未修**嘅技術債（§9.1）
 > - `docs/backlog.md`：總 Backlog（A／B／C／D，邊項做咗／做緊）
 >
@@ -151,7 +151,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
 npm.cmd test              # 單元測試（351 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ electron/main.js
-                                     #    ＋ src/**（31 檔）＋ tools/**（34 檔）—— 見 §8 4b
+                                     #    ＋ src/**（34 檔）＋ tools/**（36 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
                                      #    喺 HEAD 已經爆 SyntaxError 都冇人知（見 §8 4b）
 node tools/collect-diagnostics.js    # ⭐ D2 一鍵診斷包 → diagnostics/diag-<時間>/report.md
@@ -380,8 +380,9 @@ data/           # skill-db-tw.json（1323 招）／glyph-templates.json／live-t
                 #   ⚠️ runtime 只讀頭兩個 → **打包白名單要有佢哋**（見 `docs/packaging.md` §5）
 shots/          # ⭐ 證據庫 —— **每個目錄係咩睇 `shots/README.md`**（邊啲入 git／加檔入邊個閘）
                 #   gt/（面板排法）／live/（實機 ＋ 失敗幀回歸）／negatives/（唔准出數）／
-                #   debug-crops/（人手剪放大圖）／live-debug/、skill-dump/（唔入 git）
-docs/           # formula.md／vision-design.md／skill-screen.md／pitfalls.md（31 條地雷）／
+                #   result/（培育結束確認正面樣本）／debug-crops/（人手剪放大圖）／
+                #   live-debug/、skill-dump/（唔入 git）
+docs/           # formula.md／vision-design.md／skill-screen.md／pitfalls.md（32 條地雷）／
                 #   known-issues.md／backlog.md／file-map.md／design.md／packaging.md（A9）
 ```
 
@@ -440,7 +441,7 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ---
 
-## 5. 地雷清單（31 條）—— ⭐ **詳情喺 `docs/pitfalls.md`**
+## 5. 地雷清單（32 條）—— ⭐ **詳情喺 `docs/pitfalls.md`**
 
 > ⚠️ **動到相關範圍之前，一定要開 `docs/pitfalls.md` 睇全條**（呢度只係索引；
 > 每一條都係實際踩過嘅坑，寫明「⛔ 舊寫法／錯假設」同「✅ 正解」，通常連住一個閘）。
@@ -479,6 +480,7 @@ oval > 0 → 再加 oval 部分；最後 floor
 | 29 | 以為「拖完 HUD 就完」—— 唔記得通知設定窗 |
 | 30 | 以為「只有面板條先砌得出 5 個等距數字」 |
 | 31 | ⭐ 以為「格與格之間嘅分隔線唔會入墨色窗口」同「同字元一樣高就一定係字元」 |
+| 32 | ⭐ 以為「面板底一定係淺色」→ 直接拿面板條嘅 `lightFraction` 去讀「培育結束確認」（半透明面板 → 0.4 會削走數字） |
 
 ---
 
@@ -543,7 +545,7 @@ oval > 0 → 再加 oval 部分；最後 floor
    ⚠️ 為何要：四個 HTML 係 classic script（`require('electron')` ＋ DOM）
    → **入唔到 `node --test`**，打錯一個字（少個括號、`await` 喺非 async）嘅後果係
    **renderer 一開頭 throw → 之後所有 IPC listener 都註冊唔到 → HUD／設定窗靜默唔郁**。
-   ⚠️ **2026-09-19 擴充**：而家連 `src/**`（31 檔）＋ `tools/**`（34 檔）一齊驗 ——
+   ⚠️ **2026-09-19 擴充**：而家連 `src/**`（34 檔）＋ `tools/**`（36 檔）一齊驗 ——
    因為去重審計期間一次過揭發**兩個工具喺 HEAD 已經爆 `SyntaxError`**
    （`tools/diag-skills.js` 用咗冇宣告嘅 `scale`；`tools/dump-namebox.js` 同一個 scope
    宣告咗兩次 `scale`）：兩者都係「冇測試、冇閘、冇人跑」嘅檔，靜默壞咗好耐 ——

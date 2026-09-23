@@ -31,6 +31,9 @@ src/vision/
   statbar.js      # ⭐⭐ **實機面板條**（畫面 A）：相對 ROI → 切大數值行/上限行 →
                   #    只按右邊界間距揀 5 個 → 讀數 ＋ 信心閘（見地雷 #23/#24）
   glyphs.js       # 切字元 → 尺度歸一化 → 模板比對（NCC）＋ 由右邊貪心收剔徽章
+  resultpanel.js  # ⭐⭐ **培育結束確認（畫面 D）數字欄 reader**（2026-09-23）：固定相對 ROI →
+                  #    逐行墨量切 5 行（要均勻）→ 每行右邊數字框 → 字形比對；
+                  #    `lightFraction` **0.05**（面板半透明，數字騎住剪影 —— 地雷 #32）
   reader.js       # ⭐ 影像 → 五維 → 評價分；幀間多數投票（StatTracker）
   png.js          # 零依賴 PNG 解碼器（讀實機截圖用）
   pngwrite.js     # 零依賴 PNG **編碼**器（dump 實機幀做證據用；有 round-trip 測試）
@@ -169,6 +172,8 @@ tools/
   whatif.js              # ⭐ C1 what-if CLI（加一招幾多分／Pt／升唔升級）—— 同 what-if 窗共用
                          #    `src/umascore/whatif.js`，所以 CLI 同窗一定同一個答案（headless 可驗）
   read-stats.js          # ⭐ 截圖 → 五維（可 --gt 對答案、--trace 睇字元分數）
+  read-result.js         # ⭐⭐ **培育結束確認（畫面 D）閘**（2026-09-23）：`--all` ＝
+                         #    `data/result-truth.json` 全部要完全命中 ＋ `shots/negatives/` 全部唔准出數
   build-glyph-templates.js  # ⭐ 建字形模板（面板截圖 ＋ 實機面板條；驗證唔過就唔寫檔）
   tune-detect.js         # 參數掃描（用 ground truth 做客觀評分；--hue = 色相窗口單軸掃描）
   diag-row.js            # ⭐ 純文字環境睇圖（--gray/--map/--lines/--profile/--templates）
@@ -208,6 +213,8 @@ data/
   skill-overrides.json   # 主 DB 冇收錄嘅技能（繼承技）
   glyph-templates.json   # ⭐ 10 個數字字形模板（16×24，NCC 用）
   live-truth.json        # ⭐ 實機面板條真值（values ＋ 每張圖 perShot 例外；`roi-*` = 已剪 ROI）
+  result-truth.json      # ⭐ **培育結束確認（畫面 D）真值**（2026-09-23）：檔名 → 五維 ＋ 信心；
+                         #    由 `tools/read-result.js --all` 覆核（完全命中，唔准差一個數）
   skill-name-lib/        # ⭐ 技能名影像庫（index.json ＋ img/*.png；個名未配）
   skill-name-labels.json # ⚠️ 我第一次人手標註嘅 112 格（**已知有錯位**，唔要當真值）
   calc-page-tw.html      # bwiki 頁面 cache
@@ -219,7 +226,8 @@ shots/
   live/roi-regress-*.png # ⭐ **實機失敗幀**（已剪 ROI）—— 永久回歸案例（地雷 #25/#26）
   live/roi-live-*.png    # ⭐ 實機**成功**幀（已剪 ROI，每個檔名尾 = 速度值）；真值喺 `live-truth.json`
   negatives/*.png        # ⭐ **負樣本**（其他畫面：支援卡列表／插畫…）—— 每一幀都**唔准出數**；
-                         #    資料夾本身就係宣告（加檔就自動入四個閘，見地雷 #30）
+                         #    資料夾本身就係宣告（加檔就自動入五個閘，見地雷 #30）
+  result/*.png           # ⭐ **培育結束確認（畫面 D）正面樣本**（整個遊戲視窗）；真值喺 `result-truth.json`
   skill-dump/            # ⭐ 技能連拍收到嘅頁面 PNG（UMAPYOI_SKILL_DUMP=1；唔入 git）
   live-debug/            # ⚠️ 執行時自動 dump（.raw ＋ .json，唔入 git）；有代表性嘅
                          #    手動複製去 shots/live/ 再入 live-truth 做正式回歸
