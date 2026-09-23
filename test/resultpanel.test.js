@@ -17,7 +17,7 @@ import { decodePng } from '../src/vision/png.js';
 import { contentBox } from '../src/vision/content-box.js';
 import { cropImage, readStatBar } from '../src/vision/statbar.js';
 import { loadTemplates } from '../src/vision/reader.js';
-import { DEFAULT_RESULT_OPTIONS, readResultPanel, resultStripRect } from '../src/vision/resultpanel.js';
+import { DEFAULT_RESULT_OPTIONS, readResultPanel, resultStripRect, createResultGate } from '../src/vision/resultpanel.js';
 import { solidImage } from './helpers/image.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -86,4 +86,30 @@ test('resultpanel：相對 ROI 係「內容區」嘅比例（同 renderer 同一
   // 內容框一移位／改大細，數字欄要跟住移（唔可以寫死像素）
   const other = resultStripRect({ x: 100, y: 60, width: 1280, height: 720 });
   assert.ok(other.y0 > 60 && other.y1 < 780 && other.x0 > 100);
+});
+
+test('resultgate：第一張唔接受，第二張一樣就接受（避免一幀閃過就出數）', () => {
+  const gate = createResultGate();
+  assert.equal(gate.accept('1846/1074/1179/965/1390', 1000), false);
+  assert.equal(gate.accept('1846/1074/1179/965/1390', 2000), true);
+});
+
+test('resultgate：⭐ 停留喺同一個畫面（20 秒）都要一直接受 —— 唔可以 5 秒後停止更新', () => {
+  const gate = createResultGate();
+  gate.accept('1846/1074/1179/965/1390', 0); // 第一張（唔接受）
+  for (let t = 1000; t <= 20000; t += 1000) {
+    assert.equal(gate.accept('1846/1074/1179/965/1390', t), true, `${t}ms：停留期間一定要繼續接受`);
+  }
+});
+
+test('resultgate：數字一變就要重新確認；中間停過（>confirmMs）亦要重新確認', () => {
+  const gate = createResultGate();
+  gate.accept('1000/1000/1000/1000/1000', 0);
+  assert.equal(gate.accept('1000/1000/1000/1000/1000', 1000), true);
+  // 數字變咗 → 一定要等下一張
+  assert.equal(gate.accept('1846/1074/1179/965/1390', 2000), false);
+  assert.equal(gate.accept('1846/1074/1179/965/1390', 3000), true);
+  // 中間停咗 8 秒（凍結／轉場）→ 重新確認一次，唔可以直接接受
+  assert.equal(gate.accept('1846/1074/1179/965/1390', 11000), false);
+  assert.equal(gate.accept('1846/1074/1179/965/1390', 12000), true);
 });

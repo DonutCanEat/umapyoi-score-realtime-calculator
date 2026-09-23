@@ -45,7 +45,7 @@ import { logFilePathFor, openLogFile } from '../src/hud/log-file.js';
 // ⭐ 「寫入診斷 log」掣用：快照嘅**格式化**部分（純函數，有測試）。
 import { formatSnapshot } from '../src/hud/snapshot.js';
 // ⭐ 「培育結束確認 → 基礎能力」讀取（用戶 2026-09-23 要求）。
-import { DEFAULT_RESULT_OPTIONS, readResultPanel } from '../src/vision/resultpanel.js';
+import { DEFAULT_RESULT_OPTIONS, readResultPanel, createResultGate } from '../src/vision/resultpanel.js';
 // ⭐ IPC channel 名嘅**唯一來源**：`electron/ipc-channels.cjs`（CommonJS —— 因為 4 個
 //    renderer 係 classic script，只可以 `require()`；見嗰個檔嘅檔頭）。
 //    ESM import CJS 用 default import 再解構（唔靠 cjs-module-lexer 嘅具名匯出偵測）。
@@ -1877,8 +1877,7 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
  *      但可以擋走一次性嘅誤讀。
  */
 let lastResultSummary = null;
-let resultPendingKey = '';
-let resultPendingAt = 0;
+const resultGate = createResultGate();
 let lastResultLogAt = 0;
 
 function handleResultFrame({ width, height, buffer }) {
@@ -1917,12 +1916,8 @@ function handleResultFrame({ width, height, buffer }) {
   }
 
   const key = read.stats.join('/');
-  if (resultPendingKey !== key) {
-    resultPendingKey = key;
-    resultPendingAt = now;
-    return; // 等下一張確認（1 秒後）
-  }
-  if (now - resultPendingAt > 5000) return; // 太耐之前嗰張，唔算「連續」
+  // ⭐ 「連續兩張一樣才接受」＋ ⭐ 接受時刷新時間戳（停留喺呢個畫面唔會 5 秒後停止更新）
+  if (!resultGate.accept(key, now)) return;
 
   const score = scoreStats(read.stats);
   // ⭐ 標明來源（HUD 會照住講「技能分未讀 → 總分係下限」，見 `layout.hudState()`）。

@@ -108,6 +108,42 @@ export function resultStripRect(content, options = {}) {
   };
 }
 
+/**
+ * 「連續兩張一樣才接受」嘅閘（純函數；狀態收喺 closure 入面）。
+ *
+ * ⚠️ **唔可以**「接受咗就唔再刷新時間戳」—— 用戶正正係要**停留喺培育結束確認畫面**
+ *    睇最終總分：1 秒一張、兩張一樣就接受，但如果唔刷新，`now − at` 會一路升，
+ *    5 秒之後就**永遠唔再更新** → `lastScoreAt` 唔郁 → HUD 會變黃並講
+ *    「唔見面板條 N 秒」（其實畫面正正喺度，數字亦讀到）。
+ *
+ * 規則：
+ *   ① key 同上次唔同 → 記住佢，**唔接受**（等下一張確認）
+ *   ② key 一樣但距上次**超過 `confirmMs`** → 中間停過（凍結／轉場返嚟）→ 重新確認一次
+ *   ③ 其餘（1 秒一張嘅連續確認）→ **接受 ＋ 刷新時間戳**
+ */
+export const RESULT_CONFIRM_MS = 5000;
+
+export function createResultGate({ confirmMs = RESULT_CONFIRM_MS } = {}) {
+  let key = '';
+  let at = 0;
+  return {
+    accept(stats, now) {
+      const next = Array.isArray(stats) ? stats.join('/') : String(stats);
+      if (key !== next) {
+        key = next;
+        at = now;
+        return false;
+      }
+      if (now - at > confirmMs) {
+        at = now;
+        return false;
+      }
+      at = now;
+      return true;
+    },
+  };
+}
+
 /** 把「相隔唔夠 maxGap 像素」嘅墨群合併返做一個（＝同一個數字嘅字元）。純函數。 */
 export function mergeCloseSpans(spans, maxGap) {
   const out = [];
