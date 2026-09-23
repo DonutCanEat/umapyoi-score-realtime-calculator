@@ -22,11 +22,6 @@ src/umascore/
   advice.js       # ⭐ C4 升級建議（純函數）：marginalPoints()（= statPoints(v+1) − statPoints(v)，
                   #    **差分**而唔係微分 → 同核心庫一致）／statEfficiency()（邊際排序）／
                   #    trainingAdvice()（差 N 分 → 每屬性約要幾多點；封頂屬性**唔准入建議**）
-  training.js     # ⭐⭐ C4（2026-09-23）**訓練評分**（純函數）：gainsScore()（一筆實測加成值幾多
-                  #    評價分 —— 精確 statPoints() 差分，封頂夾 2000）／rankTrainings()（照
-                  #    `data/training-gains.json` 嘅**實測樣本**排「邊項訓練加分最多」；同項多筆
-                  #    出中位數 ＋ min–max ＋ 樣本數）／validateSample()（壞樣本**點名 throw**）
-                  #    ⛔ **冇樣本嘅訓練一律 known:false、唔排名唔估**（唔准寫死一張「真值表」）
   calibrate.js    # 對答案邏輯
   index.js        # re-export
 
@@ -174,12 +169,6 @@ tools/
   fit-score.js           # 對答案報表
   breakdown.js           # 逐招明細表
   advice.js              # ⭐ C4 升級建議 CLI（邊際效率 ＋ 差 N 分要加幾多點）
-  training.js            # ⭐⭐ C4（2026-09-23）訓練評分 CLI：照實測樣本排「邊項訓練加分最多」
-                         #    `--list`（睇樣本）／`--add=speed:3:speed=12,power=6 --skill-pt=4`
-                         #    ／`--remove=N`／`--stats=… [--level=N]`／`--json`
-                         #    ⚠️ 冇樣本嘅訓練報「未收集」——CLI 自己**唔會**估加成
-  lib/write-json.js      # ⭐ 工具共用：寫 JSON **原子寫 ＋ fsync**（樣本係用家實測紀錄，
-                         #    寫壞就冇 —— 同 `src/hud/config.js` 一樣嘅理由）
   whatif.js              # ⭐ C1 what-if CLI（加一招幾多分／Pt／升唔升級）—— 同 what-if 窗共用
                          #    `src/umascore/whatif.js`，所以 CLI 同窗一定同一個答案（headless 可驗）
   read-stats.js          # ⭐ 截圖 → 五維（可 --gt 對答案、--trace 睇字元分數）
@@ -224,9 +213,6 @@ data/
   skill-overrides.json   # 主 DB 冇收錄嘅技能（繼承技）
   glyph-templates.json   # ⭐ 10 個數字字形模板（16×24，NCC 用）
   live-truth.json        # ⭐ 實機面板條真值（values ＋ 每張圖 perShot 例外；`roi-*` = 已剪 ROI）
-  training-gains.json    # ⭐⭐ C4 訓練增益**實測樣本**（2026-09-23；**空表入庫**）——
-                         #    每筆 = 你實機見到嘅一次加成（training／level／gains／skillPt／note）
-                         #    ⚠️ **唔准**放來源不明或者估出嚟嘅數字：測試會要求每筆都有 `at`（實測日期）
   result-truth.json      # ⭐ **培育結束確認（畫面 D）真值**（2026-09-23）：檔名 → 五維 ＋ 信心；
                          #    由 `tools/read-result.js --all` 覆核（完全命中，唔准差一個數）
   skill-name-lib/        # ⭐ 技能名影像庫（index.json ＋ img/*.png；個名未配）
