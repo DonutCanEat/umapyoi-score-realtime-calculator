@@ -149,7 +149,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（363 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（371 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ electron/main.js
                                      #    ＋ src/**（34 檔）＋ tools/**（36 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
@@ -264,6 +264,18 @@ node tools/advice.js --stats=1200,600,600,600,600
                                            #    「仲差 N 分大約要加幾多點」（--json 有全部數據）
                                            #    ⚠️ 唔係「邊個訓練最好」（要訓練增益表，本專案未有）
 
+node tools/training.js --stats=1846,1074,1179,965,1390
+                                           # ⭐ C4（2026-09-23）：「今次邊項訓練加分最多」——
+                                           #    照**實測樣本**（`data/training-gains.json`）用
+                                           #    精確 `statPoints()` 差分算；`--level=N` 只計嗰個等級；
+                                           #    **冇樣本嘅訓練一律報「未收集」，唔排名唔估**
+node tools/training.js --list              # 睇收集咗咩樣本（有編號，--remove=N 用嗰個）
+node tools/training.js --add=speed:3:speed=12,power=6 --skill-pt=4 --note="友情亮"
+                                           # ⭐ 記一筆**實機**見到嘅訓練加成（寫入前一律驗證；
+                                           #    檔案原子寫 ＋ fsync —— 呢啲係用家實測紀錄，唔可以寫壞）
+node tools/training.js --remove=0          # 刪第 0 筆
+node tools/training.js --stats=... --json  # 餵落 what-if 窗／其他工具
+
 node tools/whatif.js --stats=1200,600,600,600,600 --skill=弧線的教授
                                            # ⭐ 唔開 Electron 都試算得到（同 what-if 窗共用
                                            #    `src/umascore/whatif.js`，唔可能算出唔同答案）
@@ -340,7 +352,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **363 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **371 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 15/15**、**負樣本 5/5 唔出數**），全部都要中
@@ -362,7 +374,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 src/umascore/   # 計分核心（純函數）：tables.js（精確 statPoints ＋ ランク表）／skills.js／
                 #   evaluate.js（唯一要 100% 準）／aptitude.js（適性規則單一來源）／
-                #   whatif.js（C1）／advice.js（C4）／profiles.js／calibrate.js
+                #   whatif.js（C1）／advice.js（C4 邊際效率）／training.js（⭐ C4 訓練評分：照實測樣本算加分，冇樣本唔估）／profiles.js／calibrate.js
 src/vision/     # 影像：inkmask.js（墨點遮罩，關鍵）／digitrow.js（gt 排法）／statbar.js（實機面板條 ⭐）／
                 #   resultpanel.js（⭐「培育結束確認 → 基礎能力」數字欄 reader，見 §2）／
                 #   glyphs.js／reader.js（多數投票）／png.js／pngwrite.js／skillscreen.js／skillname.js
@@ -374,9 +386,9 @@ src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔�
                 #   env-flag.js（環境變數唯一讀法）／history.js（C3 成長曲線核心）
 electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／ipc-channels.cjs（channel 名唯一來源）／
                 #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 363 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
-tools/          # 32 個 CLI：診斷／建模板／對答案／what-if／advice／診斷包／renderer 實載閘…（見 §2）
-data/           # skill-db-tw.json（1323 招）／glyph-templates.json／live-truth.json／ground-truth/
+test/           # 371 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+tools/          # 33 個 CLI：診斷／建模板／對答案／what-if／advice／training（C4 收樣本）／診斷包／renderer 實載閘…（見 §2）
+data/           # skill-db-tw.json（1323 招）／glyph-templates.json／live-truth.json／ground-truth/／training-gains.json（⭐ C4 訓練增益**實測樣本**，空表入庫，唔准放假數）
                 #   ⚠️ runtime 只讀頭兩個 → **打包白名單要有佢哋**（見 `docs/packaging.md` §5）
 shots/          # ⭐ 證據庫 —— **每個目錄係咩睇 `shots/README.md`**（邊啲入 git／加檔入邊個閘）
                 #   gt/（面板排法）／live/（實機 ＋ 失敗幀回歸）／negatives/（唔准出數）／
@@ -515,7 +527,7 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **363 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **371 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
@@ -524,7 +536,7 @@ oval > 0 → 再加 oval 部分；最後 floor
    （2026-09-19 幾次核對：H1 之後乾淨 HEAD **327／0** vs 工作樹 **328／0**；
    A9 加 5 條 `write-root` 測試 → 333；地雷 #31 加 1 條 → 334；
    日誌檔加 5 條 `log-file` 測試 → 339；擷取凍結加 3 條 → 342；診斷掣加 4 條 → 346；
-   培育結束確認 reader 加 5 條 → 351；確認閘（停留都要繼續更新）加 3 條 → 354；hudViewKey 閘加 4 條 → 358；設定檔 fsync 閘加 1 條 → 359；placeHud DIP 換算加 4 條 → **363**，查法一樣：`git archive` 出乾淨樹跑一次）。
+   培育結束確認 reader 加 5 條 → 351；確認閘（停留都要繼續更新）加 3 條 → 354；hudViewKey 閘加 4 條 → 358；設定檔 fsync 閘加 1 條 → 359；placeHud DIP 換算加 4 條 → 363；C4 訓練樣本引擎加 8 條 → **371**，查法一樣：`git archive` 出乾淨樹跑一次）。
    ⚠️ **唔准**用 `skip`／`if (!existsSync(...)) return;` 迴避 —— 咁樣只係把「驗唔到」
    變成「靜默通過」。要用嘅話就**自己控制環境**（例如 `os.tmpdir()` ＋ `process.chdir()`）。
    ⚠️ 涉及 cwd 嘅測試一定要**同步** ＋ `finally` 還原（`--test-isolation=none` 之下
