@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import {
   anchorHud,
   contentRect,
+  gameWindowRect,
   hudState,
   layoutFromEnv,
   DEFAULT_HUD_LAYOUT,
@@ -186,4 +187,45 @@ test('hud hudState：讀唔到（過期）→ 保留上一個穩定值，唔可�
     stats.map(String),
   );
   assert.match(s.note, /上一個穩定值/);
+});
+
+// ─────────────── gameWindowRect：DIP vs 物理像素（技術債 §9.1-2，2026-09-23）───────────────
+//
+// 為何要：`placeHud()` 以前寫 `Math.min(workArea.width /* DIP */, game.width /* 物理像素 */)`
+// —— 兩種單位撈埋。遊戲最大化（擷取幀大細 == 工作區）時兩者一樣所以睇唔出，
+// 但「視窗化 ＋ 150% 縮放」之下會攞物理像素當 DIP → HUD 擺錯位（而且係靜默錯位）。
+
+test('gameWindowRect：縮放 100% → 物理像素同 DIP 一樣（唔可以改變現有行為）', () => {
+  const display = { workArea: { x: 0, y: 0, width: 2560, height: 1440 }, scaleFactor: 1 };
+  assert.deepEqual(gameWindowRect({ width: 2560, height: 1440 }, display), { x: 0, y: 0, width: 2560, height: 1440 });
+  assert.deepEqual(gameWindowRect({ width: 1930, height: 1116 }, display), { x: 0, y: 0, width: 1930, height: 1116 });
+});
+
+test('gameWindowRect：⭐ 150% 縮放 ＋ 視窗化遊戲 → 一定要 ÷scaleFactor（唔可以攞物理像素當 DIP）', () => {
+  // 實機例子（用戶部機）：工作區 1707×960 DIP、遊戲視窗 2560×1440 物理像素
+  const display = { workArea: { x: 0, y: 0, width: 1707, height: 960 }, scaleFactor: 1.5 };
+  const rect = gameWindowRect({ width: 2560, height: 1440 }, display);
+  assert.equal(rect.width, 1707, '2560 ÷ 1.5 = 1707（唔係攞 2560 去 min）');
+  assert.equal(rect.height, 960);
+  // 舊寫法（混用單位）嘅結果：min(1707, 2560) = 1707 —— 啱啱好一樣，所以下面呢個 case 才係真陷阱：
+  const windowed = gameWindowRect({ width: 1930, height: 1116 }, display);
+  assert.equal(windowed.width, 1287, '1930 ÷ 1.5 ≈ 1287');
+  assert.equal(windowed.height, 744, '1116 ÷ 1.5 = 744');
+  assert.notEqual(windowed.width, 1930, '⛔ 直接攞物理像素 ＝ HUD 會擺錯位');
+});
+
+test('gameWindowRect：工作區左上角做基準、大過工作區就夾返（唔准走出螢幕）', () => {
+  const display = { workArea: { x: 100, y: 50, width: 1707, height: 960 }, scaleFactor: 1.5 };
+  const rect = gameWindowRect({ width: 6000, height: 4000 }, display);
+  assert.deepEqual(rect, { x: 100, y: 50, width: 1707, height: 960 });
+});
+
+test('gameWindowRect：冇量到遊戲大細／scaleFactor 唔合法 → 用工作區（唔准出 NaN）', () => {
+  const display = { workArea: { x: 0, y: 0, width: 1920, height: 1080 }, scaleFactor: 0 };
+  for (const game of [undefined, {}, { width: 0, height: 0 }, { width: NaN, height: 'x' }]) {
+    const rect = gameWindowRect(game, display);
+    assert.deepEqual(rect, { x: 0, y: 0, width: 1920, height: 1080 }, `實得 ${JSON.stringify(game)}`);
+  }
+  // display 完全缺失（例如測試／極端情況）都要有合理預設，唔可以 throw
+  assert.deepEqual(gameWindowRect({ width: 1280, height: 720 }, undefined), { x: 0, y: 0, width: 1280, height: 720 });
 });

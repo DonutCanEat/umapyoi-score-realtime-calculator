@@ -26,10 +26,15 @@
    `getBounds()` vs `getContentBounds()` vs 肉眼（對位模式已經 log `[HUD/位]` 三組數，
    `setBounds()` 之後唔一致會 warn）。⚠️ 因為 `setContentProtection(true)`，
    HUD **唔會出現喺任何截圖** → 位置**唔可以用截圖核對**，只可以靠 log ＋ 肉眼。
-2. **`placeHud()` 既有單位 bug（未修）**：`Math.min(workArea.width /* DIP */,
-   game.width /* 擷取幀物理像素 */)` 混用兩種單位 → 遊戲最大化時兩者啱啱好一樣所以無事，
-   **遊戲視窗化 ＋ 150% 縮放**之下會攞物理像素當 DIP → HUD 擺錯位。
-   修法要分清 DIP／物理像素（`screen.dipToScreenRect()` 一類）＋ 實機驗，唔可以純推理。
+2. ✅ **已修（2026-09-23，技術債 §9.1-2）—— 但實機驗未完**：`placeHud()` 嘅單位混用
+   （`Math.min(workArea.width /* DIP */, game.width /* 擷取幀物理像素 */)`）已抽出純函數
+   `src/hud/layout.js` 嘅 `gameWindowRect(game, display)`：**物理像素 ÷ `scaleFactor` → DIP**
+   之後才同 `workArea` 比（`scaleFactor` 唔合法／冇量到遊戲大細 → 用工作區，唔會出 NaN）。
+   回歸：`test/hud.test.js` 4 條（100% 縮放行為**唔變**、150% ＋ 視窗化要 ÷1.5、
+   大過工作區要夾返、冇量到要安全）。
+   ⚠️ **仍未做**：窗口化遊戲嘅**螢幕位置**照舊假設喺工作區左上角（冇 Win32 API 讀遊戲窗座標）；
+   而且上面係**純推理 ＋ 單元測試**，**未經實機 150% 縮放驗證** —— 要驗就要用
+   `UMAPYOI_HUD_EDIT=1` 睇 `[HUD/位]` log（或在 150% 縮放之下拖一次對位）。
 3. **金色格 `highlighted` 只係 row-level**（整條數值行嘅墨點色相 p90 ≥ 33°），**唔係逐格** →
    app 只講得出「有金格」，講唔出「係邊一格」。⚠️ 而 `src/vision/statbar.js` 自己嘅註釋
    反而寫「一定要逐格判斷…唔可以用整條面板條嘅平均」→ **兩者矛盾，係既有取捨（未修）**。

@@ -29,7 +29,7 @@ import { encodePng } from '../src/vision/pngwrite.js';
 import { STAT_LABELS, STAT_KEYS } from '../src/umascore/evaluate.js';
 import { parseStatInput, skillSearchItems, whatIfAddSkill } from '../src/umascore/whatif.js';
 import { trainingAdvice } from '../src/umascore/advice.js';
-import { anchorHud, contentRect, hudState, hudViewKey, clampLayout, layoutFromBounds, relativeFromBounds, HUD_ENV_KEYS } from '../src/hud/layout.js';
+import { anchorHud, contentRect, gameWindowRect, hudState, hudViewKey, clampLayout, layoutFromBounds, relativeFromBounds, HUD_ENV_KEYS } from '../src/hud/layout.js';
 import { loadConfig, saveConfig, resolveHudConfig, validateConfig, assertFullDisplay } from '../src/hud/config.js';
 import { configPathFor } from '../src/hud/config-path.js';
 import { envFlag, envIsSet, envNumber } from '../src/hud/env-flag.js';
@@ -835,25 +835,20 @@ function warnIfHudOffContent(target) {
  *   ② 開「HUD 設定」窗（`npm start` 會一齊開）用 slider 調
  *   ③ `UMAPYOI_HUD_X=0.01,0.20` 之類嘅環境變數（**優先過**設定檔）
  *
- * ⚠️ 已知單位問題（**未修**，唔喺 A1／A2 範圍）：`area` 係 **DIP**，
- *    而 `game.width` 係**擷取幀嘅物理像素** → `Math.min` 混用兩種單位。
- *    遊戲最大化時兩者啱啱好一樣所以無事；視窗化 ＋ 150% 縮放之下會攞物理像素當 DIP
- *    → HUD 擺錯位。A1／A2 冇加劇：拖位反推用嘅係**同一個** `hudContent`。
+ * ⚠️ 單位（技術債 §9.1-2，2026-09-23 已修）：`area` 係 **DIP**，而 `game.width` 係
+ *    **擷取幀嘅物理像素** → 一律經 `gameWindowRect()`（純函數，有測試）換算：
+ *    物理像素 ÷ `scaleFactor` 先同 `workArea` 比。以前直接 `Math.min(area.width, game.width)`
+ *    係兩種單位撈埋，遊戲最大化時啱啱好一樣所以睇唔出，視窗化 ＋ 150% 縮放之下會擺錯位。
+ * ⚠️ 仍然係近似：**窗口化遊戲嘅螢幕位置**假設喺工作區左上角（冇 Win32 API 讀遊戲窗座標）。
  *
- * @param {{width:number,height:number}} game 遊戲視窗大細（由擷取串流量到）
+ * @param {{width:number,height:number}} game 遊戲視窗大細（由擷取串流量到，**物理像素**）
  */
 function placeHud(game) {
   if (!hudWindow) return;
   if (!hudConfig) hudConfig = resolveHudConfig(process.env, null); // 保險（正常 whenReady 已設好）
   const display = screen.getPrimaryDisplay();
-  const area = display.workArea;
-  // 遊戲視窗通常同工作區一樣大；大細唔同時（例如視窗化）以擷取到嘅大細為準。
-  const windowRect = {
-    x: area.x,
-    y: area.y,
-    width: Math.min(area.width, Math.round(game.width || area.width)),
-    height: Math.min(area.height, Math.round(game.height || area.height)),
-  };
+  // 遊戲視窗通常同工作區一樣大；大細唔同時（例如視窗化）以擷取到嘅大細為準（換算成 DIP）。
+  const windowRect = gameWindowRect(game, display);
   hudContent = contentRect(windowRect); // ⭐ 單一來源：拖位反推一定用返呢個物件
   const target = anchorHud(hudContent, hudConfig.layout);
   hudWindow.setBounds(target);

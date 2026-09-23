@@ -573,3 +573,36 @@ export const HUD_VIEW_KEY_FIELDS = Object.freeze([
 export function hudViewKey(view) {
   return JSON.stringify(HUD_VIEW_KEY_FIELDS.map((field) => view?.[field] ?? null));
 }
+
+/**
+ * ⭐ 由「擷取幀大細」＋ 顯示器資訊，砌出遊戲視窗喺螢幕上嘅矩形（**一律 DIP**）。
+ *
+ * 為何要有呢個純函數（技術債 §9.1-2）：`placeHud()` 以前寫
+ * `Math.min(workArea.width, game.width)` —— 前者係 **DIP**、後者係**物理像素**，
+ * **兩種單位撈埋一齊**。遊戲最大化（＝擷取幀大細啱啱好等於工作區）嗰陣兩者數值一樣
+ * 所以睇唔出，但**視窗化 ＋ 150% 縮放**之下就會攞「物理像素」當「DIP」→ HUD 擺錯位。
+ *
+ * ⚠️ Electron 嘅 `workArea`／`setBounds()` 一律係 **DIP**，而擷取幀嘅 `width`／`height`
+ *    係遊戲視窗內容區嘅**物理像素** → 一定要 `÷ scaleFactor` 先可以同 `workArea` 比。
+ * ⚠️ 呢度**只**解決單位；窗口化遊戲嘅**螢幕位置**仍然係「假設喺工作區左上角」
+ *    （本專案冇 Win32 API 讀遊戲視窗座標，見 `placeHud()` 嘅註釋）。
+ *
+ * @param {{width?:number,height?:number}} game 擷取到嘅遊戲內容區大細（**物理像素**）
+ * @param {{workArea?:{x:number,y:number,width:number,height:number}, scaleFactor?:number}} display
+ * @returns {{x:number,y:number,width:number,height:number}} DIP 矩形
+ */
+export function gameWindowRect(game, display) {
+  const area = display?.workArea ?? { x: 0, y: 0, width: 1920, height: 1080 };
+  const raw = Number(display?.scaleFactor);
+  const scale = Number.isFinite(raw) && raw > 0 ? raw : 1;
+  const toDip = (px, fallback) => {
+    const n = Number(px);
+    return Number.isFinite(n) && n > 0 ? n / scale : fallback;
+  };
+  return {
+    x: area.x,
+    y: area.y,
+    width: Math.min(area.width, Math.round(toDip(game?.width, area.width))),
+    height: Math.min(area.height, Math.round(toDip(game?.height, area.height))),
+  };
+}
