@@ -149,7 +149,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（354 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（363 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ electron/main.js
                                      #    ＋ src/**（34 檔）＋ tools/**（36 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
@@ -340,7 +340,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **354 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **363 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 15/15**、**負樣本 5/5 唔出數**），全部都要中
@@ -374,7 +374,7 @@ src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔�
                 #   env-flag.js（環境變數唯一讀法）／history.js（C3 成長曲線核心）
 electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／ipc-channels.cjs（channel 名唯一來源）／
                 #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 354 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+test/           # 363 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
 tools/          # 32 個 CLI：診斷／建模板／對答案／what-if／advice／診斷包／renderer 實載閘…（見 §2）
 data/           # skill-db-tw.json（1323 招）／glyph-templates.json／live-truth.json／ground-truth/
                 #   ⚠️ runtime 只讀頭兩個 → **打包白名單要有佢哋**（見 `docs/packaging.md` §5）
@@ -515,7 +515,7 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **354 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **363 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
@@ -524,7 +524,7 @@ oval > 0 → 再加 oval 部分；最後 floor
    （2026-09-19 幾次核對：H1 之後乾淨 HEAD **327／0** vs 工作樹 **328／0**；
    A9 加 5 條 `write-root` 測試 → 333；地雷 #31 加 1 條 → 334；
    日誌檔加 5 條 `log-file` 測試 → 339；擷取凍結加 3 條 → 342；診斷掣加 4 條 → 346；
-   培育結束確認 reader 加 5 條 → 351；確認閘（停留都要繼續更新）加 3 條 → **354**，查法一樣：`git archive` 出乾淨樹跑一次）。
+   培育結束確認 reader 加 5 條 → 351；確認閘（停留都要繼續更新）加 3 條 → 354；hudViewKey 閘加 4 條 → 358；設定檔 fsync 閘加 1 條 → 359；placeHud DIP 換算加 4 條 → **363**，查法一樣：`git archive` 出乾淨樹跑一次）。
    ⚠️ **唔准**用 `skip`／`if (!existsSync(...)) return;` 迴避 —— 咁樣只係把「驗唔到」
    變成「靜默通過」。要用嘅話就**自己控制環境**（例如 `os.tmpdir()` ＋ `process.chdir()`）。
    ⚠️ 涉及 cwd 嘅測試一定要**同步** ＋ `finally` 還原（`--test-isolation=none` 之下
