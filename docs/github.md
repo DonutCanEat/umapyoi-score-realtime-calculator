@@ -26,7 +26,7 @@
 - 去 <https://github.com/new>
 - 名：`umapyoi-score-realtime-calculator`（或者你喜歡嘅名）
 - **唔好**勾「Add README／.gitignore／licence」（我哋本地已經有）
-- 公開（public）定私人（private）由你決定 —— ⚠️ 公開之前留意下面 §5「法律／禮貌」
+- 公開（public）定私人（private）：⭐ **2026-09-23 用戶決定要 public**（見 §5）
 
 ### 2.2 授權（三揀一）
 
@@ -154,17 +154,20 @@ git commit -m "<type>(<scope>): <繁中一句話>"
 
 ---
 
-## 5. 公開之前要諗嘅事
+⭐ **用戶 2026-09-23 決定：保持 public**（實測 API `"private": false` —— 倉庫已經係公開，
+任何人有 link 就睇得到 source、`shots/` 證據圖、Release exe）。下面幾項係當時列出嘅風險，
+**用戶知悉並接受**（未有 `LICENSE`，所以預設「保留所有權利」）：
 
 | 項目 | 情況 |
 |---|---|
 | **敏感資料** | ✅ 已掃過：追蹤檔冇 token／密碼／真實個人路徑（測試入面 `C:\Users\x` 係假嘅） |
-| **`data/skill-db-tw.json`（1323 招技能名）** | ⚠️ 由 bwiki 抓返嚟嘅**遊戲資料**。技能名／數值係遊戲內容（Cygames 版權）。技術上係事實資料、社群 wiki 亦一直公開，但**公開 repo 等於再分發**。想保守：改為 `.gitignore` 佢，附一個 `tools/fetch-skill-db.js` 令用家自己抓（本專案已經有呢個工具 ✅） |
-| **`shots/gt/*.png`（遊戲截圖）** | ⚠️ 同上：遊戲畫面截圖。做測試證據好有用，但係遊戲內容 |
-| **冇 licence** | ⚠️ 冇 `LICENSE` 檔 ＝ 預設「保留所有權利」（人哋唔可以合法重用）。想開放就要加（MIT／Apache-2.0…）。想「睇得唔改得」就唔加，但要喺 README 寫明 |
+| **`data/skill-db-tw.json`（1323 招技能名）** | ⚠️ 由 bwiki 抓返嚟嘅**遊戲資料**（Cygames 版權）—— 已知悉，**照公開** |
+| **`shots/gt/*.png`（遊戲截圖）** | ⚠️ 同上：遊戲畫面截圖 —— 已知悉，**照公開** |
+| **冇 licence** | ⚠️ 冇 `LICENSE` 檔 ＝ 預設「保留所有權利」（人哋唔可以合法重用）—— 現狀 |
 | **`AGENTS.md`／`docs/`** | 內容係開發紀錄，公開冇問題（反而係賣點） |
 
-⭐ 建議：**先開 private 倉庫**，確認一切正常再決定要唔要轉 public（轉嘅時候可以順手處理上面兩項）。
+⚠️ 想轉返 private：GitHub → Settings → 最底 Danger Zone → Change repository visibility
+（agent 唔會幫你改呢樣）。
 
 ---
 

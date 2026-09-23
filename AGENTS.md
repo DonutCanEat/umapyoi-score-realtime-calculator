@@ -31,7 +31,7 @@ git -C "D:\File\Program Project\Umapyoi Score Realtime Calculator" log --oneline
 沙盒會擋 `.git/index.lock` → commit 一定失敗）。本專案獨立成庫，兩者互不干擾。
 
 ⭐ **遠端（2026-09-19 設定）**：`origin` = `https://github.com/DonutCanEat/umapyoi-score-realtime-calculator.git`
-（**private**；用戶名 `DonutCanEat`）。主分支 `main`。
+（⭐ **public —— 用戶 2026-09-23 明確決定保持公開**；用戶名 `DonutCanEat`）。主分支 `main`。
 - ⭐ **exe 一律擺 Release，唔入 repo**（`dist/` 已喺 `.gitignore`）：推 `v*` tag
   → `.github/workflows/release.yml` 自動跑（測試閘 → 語法閘 → fit-score → `pack:win` → 掛上 Release）。
   完整流程同公開前注意事項：`docs/github.md`。
