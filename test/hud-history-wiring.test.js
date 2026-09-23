@@ -26,11 +26,16 @@ const MAIN = read('electron/main.js');
 const HUD = read('electron/hud.html');
 
 test('C3：`pushHud()` 嘅 dedupe key 一定要包含 `view.history`（唔加＝條線永遠唔郁）', () => {
-  const keyBlock = /const key = JSON\.stringify\(\[([\s\S]*?)\]\);/.exec(MAIN);
-  assert.ok(keyBlock, '搵唔到 pushHud() 嘅 dedupe key');
-  assert.match(keyBlock[1], /view\.history/, '⭐ dedupe key 要包含 view.history');
-  for (const field of ['view.state', 'view.lines', 'view.summary', 'view.note', 'view.edit', 'view.gold']) {
-    assert.ok(keyBlock[1].includes(field), `dedupe key 漏咗 ${field}（改嘅時候唔准順手刪走）`);
+  // ⭐ 2026-09-23（技術債 §9.1-4）：欄位清單**唔再**寫死喺 `main.js` —— 唯一來源係
+  //    `src/hud/layout.js` 嘅 `HUD_VIEW_KEY_FIELDS`（純函數 `hudViewKey()`），
+  //    所以呢條閘改為：① `main.js` 真係用 `hudViewKey()`；② 清單本身唔准漏欄位。
+  //    ⚠️ 反向：`main.js` 自己再砌一條 `JSON.stringify([view.…])` ＝ 兩條清單靜默分叉
+  //    （`test/hud-view-key.test.js` 有專門一條擋呢件事）。
+  assert.match(MAIN, /const key = hudViewKey\(view\);/, 'pushHud() 要經 `hudViewKey()` 砌 key');
+  const block = /export const HUD_VIEW_KEY_FIELDS = Object\.freeze\(\[([\s\S]*?)\]\);/.exec(read('src/hud/layout.js'));
+  assert.ok(block, '搵唔到 `HUD_VIEW_KEY_FIELDS`（dedupe key 欄位清單嘅唯一來源）');
+  for (const field of ['state', 'lines', 'summary', 'note', 'edit', 'gold', 'history']) {
+    assert.ok(block[1].includes(`'${field}'`), `dedupe key 漏咗 ${field}（改嘅時候唔准順手刪走）`);
   }
 });
 
@@ -44,8 +49,8 @@ test('C3：主程序要真係每幀餵 `pushSample()`（而且用同一個上限
 });
 
 test('C3：HUD renderer 只畫唔計（計嘅嘢一律喺 `src/hud/history.js`）', () => {
-  assert.match(HUD, /renderHistory\(view\.history\)/, '要真係讀 view.history');
-  assert.match(HUD, /view\.points\.map\(\(p\) => `\$\{p\.x\},\$\{p\.y\}`\)/, '座標直接嚟自主程序');
+  assert.match(HUD, /renderHistory\(history\)/, '要真係讀 view.history（參數叫 `history` 見下面註釋）');
+  assert.match(HUD, /history\.points\.map\(\(p\) => `\$\{p\.x\},\$\{p\.y\}`\)/, '座標直接嚟自主程序');
   assert.match(HUD, /createElementNS\(svgNs, 'polyline'\)/, '用 SVG polyline 畫');
   // ⚠️ 反向斷言：renderer 一旦自己縮放，就會同核心庫嘅座標系唔一致（而且冇測試守）
   for (const bad of [/function\s+sparkline/i, /SPARK_WIDTH/, /Math\.min\(\.\.\.values\)/]) {

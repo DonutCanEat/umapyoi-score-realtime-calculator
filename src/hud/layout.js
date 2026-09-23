@@ -555,3 +555,21 @@ export function hudState({
     history: historyViewOut,
   };
 }
+
+/**
+ * ⭐ `hudState()` 出嘅 view 入面，**renderer（`electron/hud.html`）真係會讀**嘅欄位。
+ *
+ * ⚠️ 為何要單獨列一張表（技術債 §9.1-4）：`pushHud()` 用 JSON key 做 dedupe
+ *    （key 冇變就唔 send）→ **漏一個會顯示嘅欄位落 key ＝ 嗰個欄位永遠唔會更新**
+ *    （典型死法：「加咗新顯示項目但 HUD 唔郁」）。呢張表就係「key ⊆ renderer 讀嘅欄位」
+ *    呢個不變式嘅**單一來源**，由 `test/hud-view-key.test.js` 同時守住兩邊：
+ *    ① 每個欄位變 → key 一定要變；② `hud.html` 讀嘅 `view.X` 一定要喺呢張表入面。
+ */
+export const HUD_VIEW_KEY_FIELDS = Object.freeze([
+  'state', 'lines', 'summary', 'note', 'edit', 'gold', 'history',
+]);
+
+/** 由 view 砌 dedupe key（純函數；`pushHud()` 同測試共用同一條規則）。 */
+export function hudViewKey(view) {
+  return JSON.stringify(HUD_VIEW_KEY_FIELDS.map((field) => view?.[field] ?? null));
+}

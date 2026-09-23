@@ -94,11 +94,16 @@
        *
        * ⚠️ 呢度**唔准**自己計斜率／縮放：renderer 冇測試覆蓋（見 AGENTS §9.1），
        *    畫錯線係靜默嘅。主程序傳 `viewBox` 座標（100×22），呢邊只負責塞入 `<polyline>`。
+       *
+       * ⚠️ 參數名叫 `history`（唔係 `view`）：`test/hud-view-key.test.js` 會由呢個檔
+       *    抽所有「`view` 加點再加名」嘅寫法嚟守住「dedupe key 冇漏欄位」——
+       *    如果呢個參數叫 `view`，佢啲 `points`／`width` 就會被誤當成**頂層**欄位
+       *    （技術債 §9.1-4）。所以呢個註釋**唔可以**寫出嗰種寫法做例子。
        */
-      function renderHistory(view) {
-        if (!view || !view.points || view.points.length < 2) {
+      function renderHistory(history) {
+        if (!history || !history.points || history.points.length < 2) {
           // 唔夠兩個點 → 畫唔到線；有記錄嘅話老實講「等緊變化」，冇就索性唔出。
-          const fallback = view && view.count === 1 ? '成長曲線：等緊下一次變化' : '';
+          const fallback = history && history.count === 1 ? '成長曲線：等緊下一次變化' : '';
           if (historyEl.dataset.fallback === fallback) return;
           historyEl.dataset.fallback = fallback;
           historyKey = '';
@@ -106,21 +111,21 @@
           historyEl.textContent = fallback;
           return;
         }
-        const key = `${view.width}x${view.height}|${view.points.map((p) => `${p.x},${p.y}`).join(' ')}|${view.delta}|${view.capped}`;
+        const key = `${history.width}x${history.height}|${history.points.map((p) => `${p.x},${p.y}`).join(' ')}|${history.delta}|${history.capped}`;
         if (key === historyKey) return;
         historyKey = key;
-        const minutes = Math.round(view.spanMs / 60000);
-        const sign = view.delta >= 0 ? '+' : '';
+        const minutes = Math.round(history.spanMs / 60000);
+        const sign = history.delta >= 0 ? '+' : '';
         const svgNs = 'http://www.w3.org/2000/svg';
         const svg = document.createElementNS(svgNs, 'svg');
-        svg.setAttribute('viewBox', `0 0 ${view.width} ${view.height}`);
+        svg.setAttribute('viewBox', `0 0 ${history.width} ${history.height}`);
         svg.setAttribute('preserveAspectRatio', 'none');
         const line = document.createElementNS(svgNs, 'polyline');
-        line.setAttribute('points', view.points.map((p) => `${p.x},${p.y}`).join(' '));
+        line.setAttribute('points', history.points.map((p) => `${p.x},${p.y}`).join(' '));
         svg.append(line);
         const label = document.createElement('div');
         label.className = 'hist';
-        label.textContent = `成長 ${sign}${view.delta}（${minutes} 分鐘${view.capped ? '，只顯示最近一段' : ''}）`;
+        label.textContent = `成長 ${sign}${history.delta}（${minutes} 分鐘${history.capped ? '，只顯示最近一段' : ''}）`;
         historyEl.hidden = false;
         historyEl.replaceChildren(svg, label);
       }

@@ -29,7 +29,7 @@ import { encodePng } from '../src/vision/pngwrite.js';
 import { STAT_LABELS, STAT_KEYS } from '../src/umascore/evaluate.js';
 import { parseStatInput, skillSearchItems, whatIfAddSkill } from '../src/umascore/whatif.js';
 import { trainingAdvice } from '../src/umascore/advice.js';
-import { anchorHud, contentRect, hudState, clampLayout, layoutFromBounds, relativeFromBounds, HUD_ENV_KEYS } from '../src/hud/layout.js';
+import { anchorHud, contentRect, hudState, hudViewKey, clampLayout, layoutFromBounds, relativeFromBounds, HUD_ENV_KEYS } from '../src/hud/layout.js';
 import { loadConfig, saveConfig, resolveHudConfig, validateConfig, assertFullDisplay } from '../src/hud/config.js';
 import { configPathFor } from '../src/hud/config-path.js';
 import { envFlag, envIsSet, envNumber } from '../src/hud/env-flag.js';
@@ -1023,9 +1023,9 @@ function pushHud(now = Date.now()) {
   // ⚠️ dedupe key 一定要包含**所有**會顯示嘅欄位：漏一個 = 嗰個欄位永遠唔會更新
   //    （加咗新顯示項目但唔加落 key，就係「HUD 唔郁」嘅經典死法）——
   //    ⭐ C3 成長曲線就係靠呢個 key 入面有 `view.history` 先會逐筆更新。
-  const key = JSON.stringify([
-    view.state, view.lines, view.summary, view.note, view.edit, view.gold, view.history,
-  ]);
+  //    ⭐ 欄位清單唔再散喺度：唯一來源 = `src/hud/layout.js` 嘅 `HUD_VIEW_KEY_FIELDS`，
+  //       由 `test/hud-view-key.test.js` 守住「hud.html 讀嘅 view.X 一定要喺清單入面」。
+  const key = hudViewKey(view);
   if (key === lastHudKey) return; // 冇變就唔好每幀 send
   lastHudKey = key;
   hudWindow.webContents.send(IPC_CHANNELS.hud, view);

@@ -34,10 +34,18 @@
    app 只講得出「有金格」，講唔出「係邊一格」。⚠️ 而 `src/vision/statbar.js` 自己嘅註釋
    反而寫「一定要逐格判斷…唔可以用整條面板條嘅平均」→ **兩者矛盾，係既有取捨（未修）**。
    升級要 `statbar.js` 額外回傳每格判斷（逐個數字格各自量色相 p90）。
-4. **`pushHud()` 嘅 dedupe key 冇永久自動閘**：要驗「renderer 讀嘅欄位 ⊆ key」就要測
-   `main.js`，但 `electron/main.js` **入唔到 `node --test`**（main process 要 Electron runtime）
-   → 呢個不變式而家只靠註釋同人手記住。建議將來抽成 `src/hud/layout.js` 純函數
-   （例如 `hudViewKey(view)`）＋ 加返個測試。
+4. ✅ **已修（2026-09-23，技術債）—— 唔可以再當「技術債」**：`pushHud()` 嘅 dedupe key
+   終於有永久自動閘。做法同當初建議一樣：欄位清單搬去 `src/hud/layout.js` 純函數
+   `HUD_VIEW_KEY_FIELDS` ＋ `hudViewKey(view)`（`main.js` 只負責叫佢），
+   再用 `test/hud-view-key.test.js`（4 條）由**兩邊**夾住呢個不變式：
+   ① 每個欄位一變 → key 一定要變（純函數測試；連「唔喺清單入面嘅 `total`／`rank` 唔應該影響 key」都反證埋）；
+   ② 由 `electron/hud.html` **原始碼抽所有 `view.<欄位>`** → 每一個都要喺清單入面
+   （呢條就係「加咗新顯示項目但唔加落 key ＝ HUD 靜默唔郁」嘅閘）；
+   ③ `main.js` 唔准自己再砌 `JSON.stringify([view.…])`（兩條清單分叉就係原本嘅病）。
+   ⚠️ 順手要改兩處先做得到：`hud.html` 嘅 `renderHistory(view)` 參數改名做 `history`
+   （唔係嘅話佢啲 `points`／`width` 會被當成**頂層**欄位）；`test/hud-history-wiring.test.js`
+   兩條 C3 閘由「抽 `main.js` 嗰條陣列」改為「檢查 `HUD_VIEW_KEY_FIELDS` ＋ `main.js` 真係用
+   `hudViewKey()`」。測試 354 → **358**。
 5. **`electron/main.js`／`hud.html` 零測試覆蓋**（IPC handler 嘅 try/catch、拖曳狀態機）——
    ⚠️ 呢條係**已知缺口**，唔係「已驗證」。
    ✅ **2026-09-19 部分收窄（唔係全修）**：① 設定窗表單 ↔ `config.js` 欄位一致性而家有閘
