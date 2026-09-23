@@ -543,7 +543,11 @@ export function hudState({
     note: shown(display, 'note')
       ? (stale
         ? `唔見面板條 ${(ageMs / 1000).toFixed(0)} 秒 → 顯示上一個穩定值`
-        : `ランク ${score.rank}`)
+        // ⭐ 「培育結束確認 → 基礎能力」讀到嘅值要標明來源：嗰個畫面**冇技能分**
+        //    （技能清單喺另一個 tab）→ 呢個總分係**下限**，唔可以當佢同面板條一樣。
+        : score.source === 'result'
+          ? `ランク ${score.rank}　（培育結束確認：基礎能力 → 技能分未讀，總分係下限）`
+          : `ランク ${score.rank}`)
       : '',
     summary,
     edit: editLine,

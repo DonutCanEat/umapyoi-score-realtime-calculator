@@ -44,6 +44,8 @@ import { underWriteRoot, writeRootFor } from '../src/hud/write-root.js';
 import { logFilePathFor, openLogFile } from '../src/hud/log-file.js';
 // ⭐ 「寫入診斷 log」掣用：快照嘅**格式化**部分（純函數，有測試）。
 import { formatSnapshot } from '../src/hud/snapshot.js';
+// ⭐ 「培育結束確認 → 基礎能力」讀取（用戶 2026-09-23 要求）。
+import { DEFAULT_RESULT_OPTIONS, readResultPanel } from '../src/vision/resultpanel.js';
 // ⭐ IPC channel 名嘅**唯一來源**：`electron/ipc-channels.cjs`（CommonJS —— 因為 4 個
 //    renderer 係 classic script，只可以 `require()`；見嗰個檔嘅檔頭）。
 //    ESM import CJS 用 default import 再解構（唔靠 cjs-module-lexer 嘅具名匯出偵測）。
@@ -1635,13 +1637,16 @@ async function beginCapture(win) {
     // renderer 只負責 1:1 剪出嚟傳返嚟（唔可以兩邊各自寫死一組數字）。
     // ⭐ 技能連拍模式：唔剪面板條，傳整個內容區（再由 `SKILL_CROP` 剪技能清單嗰橛）。
     win.webContents.send(IPC_CHANNELS.roi, SKILL_DUMP
-      ? { x0: 0, x1: 1, y0: 0, y1: 1, aspect: DEFAULT_STATBAR_OPTIONS.aspect }
+      ? { x0: 0, x1: 1, y0: 0, y1: 1, aspect: DEFAULT_STATBAR_OPTIONS.aspect, result: null }
       : {
         x0: DEFAULT_STATBAR_OPTIONS.roiX[0],
         x1: DEFAULT_STATBAR_OPTIONS.roiX[1],
         y0: DEFAULT_STATBAR_OPTIONS.roiY[0],
         y1: DEFAULT_STATBAR_OPTIONS.roiY[1],
         aspect: DEFAULT_STATBAR_OPTIONS.aspect,
+        // ⭐ 「培育結束確認 → 基礎能力」數字欄（renderer 每秒另外剪一次傳返嚟）。
+        //    欄位選填 → 舊 renderer 照舊（唔會爆），新 renderer 冇呢個欄位亦照用 null。
+        result: { ...DEFAULT_RESULT_OPTIONS.roi },
       });
     win.webContents.send(IPC_CHANNELS.start, hit.id);
     captureSourceId = hit.id;
@@ -1727,6 +1732,12 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
   // ⭐ 心跳用（見 `startCaptureWatchdog()`）：有幀到就代表擷取仲生。
   lastFrameAt = Date.now();
   framesInWindow += 1;
+
+  // ⭐ 「培育結束確認 → 基礎能力」條帶（renderer 每秒一張）——**另一條路**，唔關面板條事。
+  if (frame.result) {
+    handleResultFrame({ width, height, buffer });
+    return;
+  }
 
   // ⭐ 技能連拍模式：唔做五維辨識，只逐幀存「新頁面」（見 SKILL_DUMP 註解）。
   if (SKILL_DUMP) {
@@ -1852,8 +1863,87 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
   pushHud(); // 有新數即刻推（唔等 500ms 嗰個 interval）
 });
 
-ipcMain.on(IPC_CHANNELS.captureError, (_event, message) => {
-  console.error('[擷取失敗]', message);
+/**
+ * ⭐ 讀「培育結束確認 → 能力值（基礎能力）」嗰條數字欄（用戶 2026-09-23 要求）。
+ *
+ * 呢條路同面板條**完全分開**：
+ *   - 呢個畫面冇「面板條」（ROI 落喺插畫）→ `readStatBar()` 一定報 `notBar`；
+ *   - 所以 renderer 每秒另外剪一條數字欄傳返嚟（見 `capture.html`），呢度只用
+ *     `readResultPanel()` 讀佢，讀到就**當佢係另一個分數來源**推落 HUD。
+ *
+ * ⚠️ 兩個閘：
+ *   ① `notResult`（唔似嗰個畫面）→ 靜靜咁唔理（換咗畫面係正常，唔准當錯誤洗版）；
+ *   ② 連續**兩張**讀到同一組數先採用 —— 呢條路每秒一張、畫面係靜態，等多一秒冇代價，
+ *      但可以擋走一次性嘅誤讀。
+ */
+let lastResultSummary = null;
+let resultPendingKey = '';
+let resultPendingAt = 0;
+let lastResultLogAt = 0;
+
+function handleResultFrame({ width, height, buffer }) {
+  if (Object.keys(templates).length === 0) return;
+  const image = { data: new Uint8ClampedArray(buffer), width, height };
+  const read = readResultPanel(image, templates);
+  lastResultSummary = {
+    at: Date.now(),
+    notResult: Boolean(read.notResult),
+    stats: read.stats ?? null,
+    confidence: read.confidence ?? 0,
+    reason: read.reason ?? '',
+    size: `${width}×${height}`,
+  };
+
+  const now = Date.now();
+  const quiet = (ms) => {
+    if (now - lastResultLogAt < ms) return false;
+    lastResultLogAt = now;
+    return true;
+  };
+
+  if (read.notResult) {
+    // 唔喺培育結束確認畫面（99% 嘅時間都係咁）→ 好少 log 一次就夠。
+    if (quiet(120000)) console.log(`[培育結束] 唔似（${read.reason}）`);
+    return;
+  }
+  if (!read.stats) {
+    if (quiet(30000)) {
+      console.log(
+        `[培育結束] 讀唔到：${read.reason}` +
+        (read.texts ? `（讀到：${read.texts.join('/')}）` : ''),
+      );
+    }
+    return;
+  }
+
+  const key = read.stats.join('/');
+  if (resultPendingKey !== key) {
+    resultPendingKey = key;
+    resultPendingAt = now;
+    return; // 等下一張確認（1 秒後）
+  }
+  if (now - resultPendingAt > 5000) return; // 太耐之前嗰張，唔算「連續」
+
+  const score = scoreStats(read.stats);
+  // ⭐ 標明來源（HUD 會照住講「技能分未讀 → 總分係下限」，見 `layout.hudState()`）。
+  score.source = 'result';
+  lastScore = score;
+  lastStats = read.stats;
+  lastScoreAt = now;
+  lastGold = false;
+  statHistory = pushSample(
+    statHistory,
+    { at: lastScoreAt, total: score.total, stats: read.stats },
+    { max: MAX_HISTORY },
+  );
+  console.log(
+    `[評価分] 五維 ${read.stats.join('/')} → 五維分 ${score.statScore}　評價点 ${score.total}（${score.rank}）` +
+    `　信心 ${read.confidence.toFixed(2)}　來源 培育結束確認（基礎能力 數字欄 ${width}×${height}）`,
+  );
+  pushHud();
+}
+
+ipcMain.on(IPC_CHANNELS.captureError, (_event, message) => {  console.error('[擷取失敗]', message);
   // ⭐ 真失敗（唔係轉場）→ 即刻試救：重新叫 renderer 開一次擷取（有次數上限）。
   recoverCapture(`renderer 報錯：${message}`);
 });

@@ -106,6 +106,11 @@
         //    （要向後兼容「新 renderer ＋ 舊 main」同「舊 renderer ＋ 新 main」）。
         const aspect = Number(rect?.aspect);
         if (Number.isFinite(aspect) && aspect > 0) contentAspect = aspect;
+        // ⭐ 「培育結束確認 → 基礎能力」數字欄嘅相對範圍（欄位選填；冇就唔會剪）。
+        const r = rect?.result;
+        if (r && [r.x0, r.x1, r.y0, r.y1].every((v) => Number.isFinite(v))) {
+          resultRoi = { x0: r.x0, x1: r.x1, y0: r.y0, y1: r.y1 };
+        }
       });
 
       // 主程序可以調幀率（技能連拍模式用 1fps）。
@@ -198,6 +203,33 @@
         );
       }, 3000);
 
+      /**
+       * ⭐ 「培育結束確認 → 基礎能力」數字欄嘅相對範圍（用戶 2026-09-23 要求）。
+       *
+       * 由主程序經**同一條 `roi` 訊息**嘅 `result` 欄位傳落嚟（欄位選填 → 舊 main 照用 null，
+       * 行為等價）。呢條欄每秒另外剪一次傳返主程序（唔使跟面板條嘅 5fps：
+       * 呢個畫面係靜態嘅，而且一幀只係 ~150KB）。
+       */
+      let resultRoi = null;
+      let lastResultSent = 0;
+      const RESULT_INTERVAL_MS = 1000;
+
+      /** 由一個相對範圍砌出「實際要剪嘅像素矩形」（內容框要扣標題列，同面板條一樣）。 */
+      function regionFor(vw, vh, rect) {
+        const contentH = Math.min(vh, Math.round(vw * contentAspect));
+        const contentTop = Math.max(0, vh - contentH);
+        const x0 = Math.round(vw * rect.x0);
+        const x1 = rect.x1 >= 1 ? vw : Math.max(x0 + 8, Math.round(vw * rect.x1));
+        const y0 = rect.y0 <= 0 ? contentTop : contentTop + Math.round(contentH * rect.y0);
+        const y1 = rect.y1 >= 1 ? contentTop + contentH : Math.max(y0 + 8, contentTop + Math.round(contentH * rect.y1));
+        return {
+          sx: x0,
+          sy: y0,
+          sw: Math.min(vw - x0, x1 - x0),
+          sh: Math.min(vh - y0, y1 - y0),
+        };
+      }
+
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
       function loop(now) {
@@ -271,6 +303,31 @@
           cropped: Boolean(roi),
           buffer: image.data.buffer,
         });
+
+        // ⭐ 另外每秒剪一次「基礎能力數字欄」傳返主程序（培育結束確認畫面用）。
+        //    ⚠️ 唔可以每幀都傳：呢條欄主程序只係用嚟「睇下係唔係嗰個畫面」，
+        //    每秒一張已經夠（畫面係靜態），而且唔會搶面板條嗰條 5fps 路。
+        if (resultRoi && now - lastResultSent >= RESULT_INTERVAL_MS) {
+          lastResultSent = now;
+          const r = regionFor(vw, vh, resultRoi);
+          const rw = Math.max(1, r.sw);
+          const rh = Math.max(1, r.sh);
+          if (canvas.width !== rw || canvas.height !== rh) {
+            canvas.width = rw;
+            canvas.height = rh;
+          }
+          ctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, rw, rh);
+          const resultImage = ctx.getImageData(0, 0, rw, rh);
+          ipcRenderer.send(IPC_CHANNELS.frame, {
+            width: rw,
+            height: rh,
+            fullWidth: vw,
+            fullHeight: vh,
+            cropped: true,
+            result: true,
+            buffer: resultImage.data.buffer,
+          });
+        }
 
         hintEl.textContent =
           ' · 遊戲 ' + vw + '×' + vh +

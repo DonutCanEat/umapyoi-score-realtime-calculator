@@ -11,7 +11,7 @@
  * ## 用法
  *
  *   node tools/collect-diagnostics.js                 # 收報告（唔跑閘）
- *   node tools/collect-diagnostics.js --run-gates     # 順手跑四個驗收閘（慢，但最有價值）
+ *   node tools/collect-diagnostics.js --run-gates     # 順手跑齊 6 個驗收閘（慢，但最有價值）
  *   node tools/collect-diagnostics.js --with-dumps    # 連最近幾張 dump PNG 一齊複製
  *
  * 輸出：`diagnostics/diag-<時間戳>/report.md`（＋ `files/`）
@@ -43,6 +43,7 @@ const GATES = [
   ['單元測試', process.execPath, ['--test', '--test-isolation=none', ...testFiles()]],
   ['計分對答案', process.execPath, ['tools/fit-score.js']],
   ['實機面板條 ＋ 負樣本', process.execPath, ['tools/diag-statbar.js', '--read']],
+  ['培育結束確認（基礎能力）＋ 負樣本', process.execPath, ['tools/read-result.js', '--all']],
   ['色相回歸閘', process.execPath, ['tools/diag-hue.js', '--assert']],
   ['renderer 語法閘', process.execPath, ['tools/check-renderer-syntax.js']],
 ];
@@ -205,7 +206,7 @@ if (RUN_GATES) {
 } else {
   lines.push('## 6. 驗收閘');
   lines.push('');
-  lines.push('（冇跑 —— 加 `--run-gates` 就會跑齊 5 個閘並把尾部輸出寫落嚟）');
+  lines.push('（冇跑 —— 加 `--run-gates` 就會跑齊 6 個閘並把尾部輸出寫落嚟）');
   lines.push('');
 }
 
@@ -239,5 +240,5 @@ if (WITH_DUMPS) {
 }
 
 console.log(`[診斷] 報告：${relative(ROOT, reportPath)}`);
-console.log(`[診斷] 內容：環境／Git／HUD 設定／影像資料／dump${RUN_GATES ? '／**5 個閘**' : ''}`);
+console.log(`[診斷] 內容：環境／Git／HUD 設定／影像資料／dump${RUN_GATES ? '／**6 個閘**' : ''}`);
 console.log('[診斷] ⚠️ `diagnostics/` 唔入 git —— 要交返嚟就複製 report.md（同 files/ 有需要先）');
