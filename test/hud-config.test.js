@@ -860,6 +860,31 @@ test('hud-config saveConfig：atomic: false 就係直接寫（舊行為留返俾
   assert.equal(existsSync(`${path}.tmp`), false, '直接寫唔應該產生 .tmp');
 });
 
+// ─────────────── fsync（技術債 §9.1-6，2026-09-23）───────────────
+//
+// 為何要：`writeFileSync()` 只係寫入 OS page cache —— 停電之下 `rename()` 完成咗但內容
+// 仲喺 cache，開機之後見到嘅可以係**空檔或者半截 JSON**，而用戶完全睇唔出（設定無啦啦冇咗）。
+// ⚠️ 「停電」喺測試入面**製造唔到**：所以呢條閘用**原始碼次序**斷言（同其他接線閘一套做法）
+//    —— 佢擋得到「fsync 被拆走／搬到 rename 之後」，而真正嘅斷電行為要靠 OS 保證。
+
+test('hud-config saveConfig：⭐ fsync 一定要喺 rename 之前（唔係「原子寫」擋唔到停電）', () => {
+  const configSrc = readFileSync(new URL('../src/hud/config.js', import.meta.url), 'utf8');
+  const body = /export function saveConfig\(([\s\S]*?)\n\}/.exec(configSrc)?.[1];
+  assert.ok(body, '搵唔到 `saveConfig()` —— 個閘壞咗');
+  const at = (re) => {
+    const m = re.exec(body);
+    return m ? m.index : -1;
+  };
+  const iWrite = at(/writeSync\(fd, text\)/);
+  const iSync = at(/fsyncSync\(fd\)/);
+  const iRename = at(/renameSync\(tmp, path\)/);
+  assert.ok(iSync >= 0, '⛔ 唔見 `fsyncSync()` —— 原子寫擋唔到停電（半截 JSON 會令用戶啲設定無啦啦冇咗）');
+  assert.ok(iWrite >= 0 && iWrite < iSync, '`fsyncSync()` 要喺 `writeSync()` 之後');
+  assert.ok(iSync < iRename, '⭐ `fsyncSync()` 一定要喺 `renameSync()` **之前**');
+  // 反向：唔准為咗「寫得快」而用返 writeFileSync 寫 .tmp（嗰個唔會 fsync）
+  assert.ok(!/writeFileSync\(tmp,/.test(body), '⛔ 唔准用 `writeFileSync` 寫 .tmp（冇 fd 就 fsync 唔到）');
+});
+
 // ─────────────── assertFullDisplay（`applyHudConfig()` 嘅防呆閘）───────────────
 //
 // 為何要呢條閘（獨立審計發現嘅「靜默重設」）：`layout.js` `hudState()` 嘅語意係

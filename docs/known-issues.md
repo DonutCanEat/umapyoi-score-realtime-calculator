@@ -59,9 +59,15 @@
    ⑤ 設定窗 slider 上下限抽成純函數 `fieldBounds()`（`test/hud-settings-html.test.js` 3 條，
    **真係由 HTML 抽出嚟執行**）—— 但「互動中唔搶控制」嗰段（`interacting`／watchdog／
    `describeClamp()`／`renderEffective()`，全部要 DOM）**仍然零覆蓋**，只可以手動驗。⑥ 拖位 ↔ 設定窗嘅同步線抽成**接線閘** `test/hud-config-sync.test.js`（由 `main.js`／`settings.html` **原始碼抽關鍵接線**斷言）—— ⚠️ 佢只擋「條線被拆走」，**唔算**功能已驗證：行為仍然要實機拖一次再撳「儲存」（見地雷 #29）。
-6. **原子寫冇 `fsync`**（`saveHudConfigFile()` = 寫 `.tmp` ＋ `renameSync`）：停電／硬斷電
-   可能留低半截 JSON。可接受嘅理由：`loadConfig()` 會**大聲 throw**，而且**唔會覆寫**壞檔
-   （改用預設 ＋ 設定窗出紅色橫額）—— 但唔係「零風險」。
+6. ✅ **已修（2026-09-23，技術債 §9.1-6）—— 唔可以再當「技術債」**：原子寫原本冇 `fsync`
+   （`saveConfig()` = `writeFileSync(.tmp)` ＋ `renameSync`）→ `writeFileSync` 只係寫入
+   OS page cache，**停電／硬斷電**之下 `rename()` 完成咗但內容仲喺 cache，開機之後見到嘅
+   可以係**空檔或者半截 JSON**；而用戶完全睇唔出（`loadConfig()` 只會大聲 throw ＋ 改用預設，
+   即係「啲設定無啦啦冇咗」）。已改成：`openSync` → `writeSync` → **`fsyncSync`** → `closeSync`
+   → `renameSync`；失敗路徑照舊清走 `.tmp`。
+   ⚠️ **停電喺測試入面製造唔到** → 回歸閘用**原始碼次序**斷言（`test/hud-config.test.js`
+   「⭐ fsync 一定要喺 rename 之前」）：① `fsyncSync` 一定要存在；② 要喺 `writeSync` 之後、
+   `renameSync` **之前**；③ 唔准用返 `writeFileSync(tmp, …)`（冇 fd 就 fsync 唔到）。
 7. ✅ **已修（2026-09-19，獨立審計 M1）—— 唔可以再當「技術債」**：
    同一類 truthiness 問題嘅最後一個 —— `UMAPYOI_SKILL_DUMP`。
    舊寫法 `SKILL_DUMP = Boolean(process.env.UMAPYOI_SKILL_DUMP)` → `UMAPYOI_SKILL_DUMP=0`

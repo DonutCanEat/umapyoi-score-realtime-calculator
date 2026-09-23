@@ -54,7 +54,7 @@
  * 真係唔合法**（右邊界 > 1／`size <= 0`／`x[0] < 0`）才 throw。
  */
 
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { envIsSet } from './env-flag.js';
@@ -598,6 +598,16 @@ export function loadConfig(options = {}) {
  *    會見到一個「唔知邊嚟」嘅 `.tmp` 檔。
  * ⚠️ 想直接寫（例如測試想睇「寫緊嘅中途狀態」）可以傳 `atomic: false`。
  *
+ * ## ⭐ fsync（技術債 §9.1-6，2026-09-23）
+ *
+ * `writeFileSync()` **只係寫入 OS page cache**，唔等於落咗磁碟 —— 停電／硬斷電之下，
+ * `rename()` 已經完成但內容仲喺 cache → 開機之後見到嘅可以係**空檔或者半截 JSON**。
+ * 所以原子寫多一步：`writeSync()` → **`fsyncSync()`** → 才 `renameSync()`。
+ * ⚠️ 呢一步**唔准拆**：冇咗佢，「原子寫」只擋到「程式中途死」，擋唔到「停電」
+ *    （而壞檔係用戶睇唔出嘅 —— `loadConfig()` 只會大聲 throw 同改用預設，
+ *     用戶見到嘅係「啲設定無啦啦冇咗」）。回歸：`test/hud-config.test.js`
+ *    「⭐ fsync 一定要喺 rename 之前」。
+ *
  * @param {unknown} config 想寫嘅設定（會被 validate ＋ 正規化）
  * @param {{filePath?:string, atomic?:boolean}} [options] `atomic` 預設 `true`
  * @returns {string} 實際寫入嘅路徑（畀呼叫者 log 用）
@@ -612,8 +622,14 @@ export function saveConfig(config, { filePath, atomic = true } = {}) {
     return path;
   }
   const tmp = `${path}.tmp`;
-  writeFileSync(tmp, text, 'utf8');
   try {
+    const fd = openSync(tmp, 'w');
+    try {
+      writeSync(fd, text);
+      fsyncSync(fd); // ⭐ 一定要喺 rename 之前落磁碟（見上面「fsync」一節）
+    } finally {
+      closeSync(fd);
+    }
     renameSync(tmp, path);
   } catch (error) {
     try {
