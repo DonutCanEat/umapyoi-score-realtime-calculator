@@ -1,26 +1,31 @@
+# ── 依賴／快取（沙盒要求全部擺喺 workspace 內，見 AGENTS.md §7）──
 node_modules/
 .npm-cache/
-dist/
-out/
-*.log
 .electron-cache/
 .cache-local/
 
-# 實機除錯 dump（逐幀、體積大且係臨時證據）。
-# 搵到有代表性嘅失敗幀之後，手動複製去 shots/live/ 再入 `data/live-truth.json`，
-# 令佢變成正式回歸案例（唔好原封不動 commit 成堆 dump）。
+# ── 建置產物（exe 一律擺 Release，唔入 repo，見 AGENTS.md §0）──
+dist/
+out/
+
+# ── log（真實 log 會 mirror 落 <writeRoot>/umapyoi.log）──
+*.log
+
+# ── 執行時 dump：冇代表性嘅失敗幀（唔入 git）──
+# 搵到有代表性嘅就要**手動複製**去 shots/live/，再入 `data/live-truth.json`，
+# 令佢變成正式回歸樣本；留住喺呢度嘅只係未整理嘅 dump。
 shots/live-debug/
 
-# 技能畫面連拍（UMAPYOI_SKILL_DUMP=1）收到嘅頁面 PNG —— 用完建庫之後就係中間產物，唔入 git
+# ── 技能連拍（UMAPYOI_SKILL_DUMP=1）收嘅整頁 PNG：一次過支援資料，唔入 git ──
 shots/skill-dump/
 
-# HUD 設定（位置／大細／顯示選項）—— runtime 用戶狀態，人人唔同，唔應該入庫。
-# （`.tmp` 係主程序原子寫入嘅中間檔：寫檔途中死咗會剩低，一樣唔入 git。）
+# ── HUD 設定檔：runtime 用戶狀態，人人唔同，唔應該入 git ──
+# `.tmp` 係原子寫入嘅中轉檔 —— 寫嘅中途停電會留低，一樣唔入 git。
 hud-position.json
 hud-position.json.tmp
 
-# D2 �E�_�]�]�@���ʤ䴩��ơA���J git�^
+# ── D2 一鍵診斷包：一次性支援資料，唔入 git ──
 diagnostics/
 
-# 診斷快照（擷取窗『寫入診斷 log』掣／UMAPYOI_SNAPSHOT_AFTER 產生）—— runtime 一次性支援資料
+# ── 診斷快照（擷取窗撳掣／設 UMAPYOI_SNAPSHOT_AFTER 產生）：runtime 一次性資料 ──
 snapshots/
