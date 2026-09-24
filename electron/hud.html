@@ -64,7 +64,7 @@
   </head>
   <body data-state="none">
     <div id="box">
-      <div id="total">評價点 —</div>
+      <div id="total">評價點 —</div>
       <div id="stats"></div>
       <div id="summary"></div>
       <div id="history" hidden></div>
@@ -140,7 +140,7 @@
 
         const total = view.lines.find((l) => l.key === 'total');
         // 空字串 = 主程序話「呢一項唔顯示」（顯示選項閂咗）→ `:empty` CSS 會收埋個框。
-        totalEl.textContent = total ? `評價点 ${total.value}` : '';
+        totalEl.textContent = total ? `評價點 ${total.value}` : '';
 
         const stats = view.lines.filter((l) => l.key.startsWith('stat'));
         const nextKeys = stats.map((l) => `${l.key}:${l.label}:${l.value}`).join('|');

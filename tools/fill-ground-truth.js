@@ -3,7 +3,7 @@
  * 用技能資料庫自動填返 ground truth JSON：技能基礎評價分、條件、適性。
  *
  * 分類規則（已驗證）：
- *   - 技能名喺 DB 揾到   → 普通技能，用 DB 嘅「评价分」做 base
+ *   - 技能名喺 DB 搵到   → 普通技能，用 DB 嘅「评价分」做 base
  *   - 技能名唔喺 DB     → 係其他ウマ娘嘅固有スキル → **繼承固有**，固定 180
  *   - uniqueSkills[0]  → 育成ウマ娘自己嘅固有，用 ★數 × Lv 計
  *
@@ -46,7 +46,7 @@ const db = JSON.parse(readFileSync(dbPath, 'utf8'));
 /**
  * 技能名正規化：遊戲畫面同 wiki 用嘅標點可以唔同。
  * 實例：遊戲「競賽的精髓・體能」(U+30FB 片假名中點) vs
- *       wiki「競賽的精髓．體能」(U+FF0E 全形句號) → 直接比對會揾唔到，
+ *       wiki「競賽的精髓．體能」(U+FF0E 全形句號) → 直接比對會搵唔到，
  *       然後就會被誤判成「繼承固有 180」，令評價分少計。
  */
 function normalizeName(name) {
@@ -70,7 +70,7 @@ function lookupSkill(name) {
 
 /**
  * 手動 override：wiki「分类:繁中技能」冇收錄嘅技能（多數係「繼承技」，PT = 0）。
- * 佢哋喺 wiki 係另一個命名空間（繁/继承技/<名>），所以主 DB 揾唔到，
+ * 佢哋喺 wiki 係另一個命名空間（繁/继承技/<名>），所以主 DB 搵唔到，
  * 唔補嘅話就會被誤判成「繼承固有 180」而少計分。
  */
 const overridePath = join(ROOT, 'data', 'skill-overrides.json');

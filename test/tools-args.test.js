@@ -40,7 +40,7 @@ test('args：flagValue 同以前 `slice(name.length + 3)` 逐個長度都一樣'
   assert.equal(flagValue(['--x=1', '--x=2'], 'x'), '1');
 });
 
-test('args：flagValues 攞晒重複嘅值（保持次序）', () => {
+test('args：flagValues 攞曬重複嘅值（保持次序）', () => {
   const argv = ['--page=a.png', '--top=20', '--page=b.png'];
   assert.deepEqual(flagValues(argv, 'page'), ['a.png', 'b.png']);
   assert.deepEqual(flagValues(argv, 'nope'), []);

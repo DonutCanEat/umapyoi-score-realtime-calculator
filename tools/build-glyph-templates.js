@@ -121,7 +121,7 @@ function discoverNegativeSources() {
 const negativeSources = discoverNegativeSources();
 
 if (sources.length === 0 && liveSources.length === 0) {
-  console.error('揾唔到任何「ground truth + 截圖」配對，冇嘢可以做。');
+  console.error('搵唔到任何「ground truth + 截圖」配對，冇嘢可以做。');
   process.exit(1);
 }
 console.log(

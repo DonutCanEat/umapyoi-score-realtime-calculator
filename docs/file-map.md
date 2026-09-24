@@ -39,7 +39,7 @@ src/vision/
   pngwrite.js     # 零依賴 PNG **編碼**器（dump 實機幀做證據用；有 round-trip 測試）
   skillscreen.js  # ⭐ 技能畫面（畫面 B）欄／行／名框偵測（見 §6.5）
   skillname.js    # ⭐ 技能名「影像特徵」＋比對（絕對尺度；Phase 2 識字路線，見 §6.5）
-  # ⚠️ `anchor.js`／`panel.js`（靠粉紅色揾面板 → 地雷 #10/#11）**2026-09-19 已刪**（A8）：
+  # ⚠️ `anchor.js`／`panel.js`（靠粉紅色搵面板 → 地雷 #10/#11）**2026-09-19 已刪**（A8）：
   #    當時寫「保留只為舊測試」，但冇任何 src／tools／electron 用佢哋，唯一引用係自己嗰個測試
   #    → 留住只會令人以為「有兩套面板偵測」。要睇歷史：`git log -- src/vision/anchor.js`。
 
@@ -181,7 +181,7 @@ tools/
   diag-hue.js            # ⭐ 量數字墨／徽章色相分佈（--assert = 色相回歸閘）
   experiment-mask.js     # ⭐ 掃描墨點遮罩門檻喺真值圖上嘅命中率（搵安全邊界；地雷 #26）
   diag-scale.js          # ⭐ 縮圖尺度診斷（--scale／--tune／--probe；見地雷 #22）
-  diag-skills.js         # ⭐ 技能畫面欄／行偵測（Phase 2；--all 跑晒 8 張實機圖）
+  diag-skills.js         # ⭐ 技能畫面欄／行偵測（Phase 2；--all 跑曬 8 張實機圖）
   skillname-sheet.js     # 8 圖 × 14 名框拼成一張大對照表（肉眼標註用）
   skillrow-sheet.js      # ⭐ 只睇「某遊戲列」跨 8 張圖（最易肉眼對齊；--col=N 只睇一邊）
   dump-namebox.js        # 單一名框嘅像素（原圖色＋遮罩）—— 抽取有 bug 時唯一可靠嘅查法
@@ -217,7 +217,7 @@ data/
                          #    由 `tools/read-result.js --all` 覆核（完全命中，唔准差一個數）
   skill-name-lib/        # ⭐ 技能名影像庫（index.json ＋ img/*.png；個名未配）
   skill-name-labels.json # ⚠️ 我第一次人手標註嘅 112 格（**已知有錯位**，唔要當真值）
-  calc-page-tw.html      # bwiki 頁面 cache
+  calc-page-tw.html      # bwiki 頁面 cache（**簡體來源**，唔准手改 —— 佢就係 `simplifiedName` 嘅出處）
   ground-truth/*.json    # 5 條培育完成紀錄（誤差 0 嘅證據；05 = 第一次用遊戲顯示嘅分）
 
 shots/
@@ -249,6 +249,25 @@ docs/
   electron-dedup-report.md  # ⚠️ **歷史存檔**（2026-09-19 去重審計）：15 簇重複嘅成因、修法、
                             #    逐 commit 驗收數據。簇編號改過一次 → 唔好靠編號，用簇標題
 ```
+
+## 全 repo 嘅字型約定（2026-09-24：簡 → 繁清一次）
+
+本專案**全文用繁體**（香港風格）。有**兩處刻意保留簡體** —— ⛔ 唔准「順手統一」，
+統一咗會壞功能：
+
+| 位置 | 為何要留住簡體 |
+|---|---|
+| `skill-db-tw.json` 嘅 **`simplifiedName`**（1323 條）＋ `test/whatif.test.js` 對應嘅 fixture | `src/umascore/whatif.js` 會同時比對 `name` 同 `simplifiedName` → **俾人用簡體字搜技能**（用戶睇簡體攻略照打得中）。`tools/fetch-skill-db.js` 由 bwiki 嘅 `中文名` 欄填呢個值 |
+| bwiki 嘅**頁面標題／欄位名**：`繁中评分计算器`、`评价分`、`条件限制`、`类型`、`颜色`、`图标`、`分类:繁中技能`、`繁/继承技/`、`五维计算()`、`评级` | 佢哋係 **API 契約**（`tools/fetch-skill-db.js` 真係用呢幾個字串去 fetch／解析）—— 改咗就連 wiki 都對唔上。⚠️ **只可以轉值，唔可以轉 key** |
+| `data/calc-page-tw.html` | bwiki 原始 cache（**簡體來源**）—— 佢就係 `simplifiedName` 嘅出處，唔准手改 |
+| `data/skill-db-tw.json` 嘅 `source` URL | 字面 URL（含上面嗰個頁面標題） |
+| `docs/formula.md` 引用日文 wiki 嘅文字（`評価点の…`、`距離・脚質専用白スキル`、`総評価点`） | 日文漢字（`点`／`価`／`総`／`継`）**唔係簡化字**，轉咗就唔再係原文 |
+
+⭐ `data/skill-db-tw.json` 嘅 `color` 欄（`黄色／绿色／蓝色／红色`）**已經轉做繁體**，
+而且 `tools/fetch-skill-db.js` 加咗 `COLOR_TW` 對照表 → 重新 fetch 都唔會還原返簡體。
+
+⚠️ **將來加文字之前**：手寫嘅一律用繁體。要引用 bwiki／日文 wiki 嘅字串就**照抄原文**，
+唔好「順手轉」—— 上面張表就係實際踩過嘅分辨位。
 
 ⚠️ `package.json` 嘅 `build` 欄 = electron-builder 設定（A9）：
 `files` 白名單（`electron/**`＋`src/**`＋2 個 runtime data JSON＋`package.json`）、

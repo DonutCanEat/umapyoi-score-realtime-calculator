@@ -26,7 +26,7 @@
 ## 常用命令
 
 ```bash
-node tools/diag-shots.js                    # 列晒所有截圖同尺寸（睇下而家有咩）
+node tools/diag-shots.js                    # 列曬所有截圖同尺寸（睇下而家有咩）
 node tools/raw-to-png.js shots/live-debug   # dump 幀（.raw）轉 PNG
 node tools/diag-statbar.js --read           # 對 data/live-truth.json（15/15）＋ 負樣本（5/5 唔出數）
 node tools/read-result.js --all             # 對 data/result-truth.json（培育結束確認，2/2 完全命中）

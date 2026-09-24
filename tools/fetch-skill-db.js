@@ -41,6 +41,17 @@ function parseArgs(argv) {
 const SKRAW_RE = /var\s+skraw\s*=\s*\{([\s\S]*?)\}\s*;\s*skillData\.push\(skraw\)/g;
 const PAIR_RE = /"([^"]+)"\s*:\s*(?:"((?:[^"\\]|\\.)*)"|parseInt\("(-?\d+)"\)|(-?\d+(?:\.\d+)?))/g;
 
+/**
+ * `颜色` **值**嘅簡 → 繁對照（bwiki 係簡體 wiki）。
+ *
+ * ⚠️ 為何要喺度轉：本專案其餘文字一律繁體；`color` 係顯示用元資料
+ *    （目前冇任何程式讀），但留住簡體會令「全 repo 繁體」嘅約定穿窿，
+ *    而且 `npm.cmd run fetch` 之後會**靜默還原**做簡體。
+ * ⚠️ 只轉**值**：`raw['颜色']` 個 **key 唔准改** —— 佢係 bwiki 嘅欄位名，
+ *    改咗就連 API 都對唔上（同 `繁中评分计算器`／`评价分` 一樣道理）。
+ */
+const COLOR_TW = Object.freeze({ 黄色: '黃色', 绿色: '綠色', 蓝色: '藍色', 红色: '紅色' });
+
 function parseSkills(html) {
   const skills = [];
   for (const match of html.matchAll(SKRAW_RE)) {
@@ -65,7 +76,7 @@ function parseSkills(html) {
       skillPt: Number(raw['所需技能PT']) || null,
       special: Number(raw['特殊']) || 0,
       type: Number(raw['类型']) || null,
-      color: raw['颜色'] ?? null,
+      color: COLOR_TW[raw['颜色']] ?? raw['颜色'] ?? null,
       icon: raw['图标'] ?? null,
     });
   }

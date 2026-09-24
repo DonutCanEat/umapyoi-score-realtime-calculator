@@ -51,11 +51,11 @@ test('適性：同類取最大（兩個距離關鍵字 → 只乘一次，取倍
   assert.deepEqual(multiplierForGrades(tie1), multiplierForGrades(tie2));
 });
 
-test('適性：跨類別相乘（脚質 × 距離）', () => {
+test('適性：跨類別相乘（腳質 × 距離）', () => {
   assert.deepEqual(
     aptitudesFor('前列, 中距離', { 前列: 'S', 中距離: 'A' }),
     ['S', 'A'],
-    '唔同類別 → 兩個都要（次序：先脚質、後距離）',
+    '唔同類別 → 兩個都要（次序：先腳質、後距離）',
   );
   assert.equal(multiplierForGrades(['S', 'A']), 1.1 * 1.1);
 });
@@ -87,7 +87,7 @@ test('適性：等級表同 skills.js 嘅係數要對得上（1.1 = 1 + 0.1）',
 
 test('適性：groupHits() 講得出每一類係邊個關鍵字（UI 要同用戶交代假設）', () => {
   assert.deepEqual(groupHits('前列, 中距離'), [
-    { key: '脚質', keyword: '前列' },
+    { key: '腳質', keyword: '前列' },
     { key: '距離', keyword: '中距離' },
   ]);
   assert.deepEqual(groupHits('草地'), []);
@@ -108,9 +108,9 @@ test('skillPointsFor：未知等級要 throw（唔准靜默當 ×1）', () => {
 });
 
 test('aptitudeMapFor：由「每一類嘅等級」砌出關鍵字表（大逃 → 領頭）', () => {
-  assert.deepEqual(aptitudeMapFor('大逃, 中距離', { 脚質: 'S', 距離: 'B' }), { 領頭: 'S', 中距離: 'B' });
+  assert.deepEqual(aptitudeMapFor('大逃, 中距離', { 腳質: 'S', 距離: 'B' }), { 領頭: 'S', 中距離: 'B' });
   // 用戶冇揀嗰類 → 唔入表（＝唔乘，唔會偷偷當 A）
-  assert.deepEqual(aptitudeMapFor('大逃, 中距離', { 脚質: 'S' }), { 領頭: 'S' });
+  assert.deepEqual(aptitudeMapFor('大逃, 中距離', { 腳質: 'S' }), { 領頭: 'S' });
 });
 
 // ─────────────────────── what-if 主菜 ───────────────────────
@@ -179,9 +179,9 @@ test('whatIfAddSkill：唔合法嘅技能要 throw（唔准靜默當 0 分）', 
 test('whatIfAddSkill：groups 要老實講「假設咗邊個適性」（UI 靠呢個交代）', () => {
   const r = whatIfAddSkill({ stats: STATS }, {
     base: 262, condition: '前列, 中距離', skillPt: 340,
-  }, { 脚質: 'S', 距離: 'B' });
+  }, { 腳質: 'S', 距離: 'B' });
   assert.deepEqual(r.groups, [
-    { key: '脚質', keyword: '前列', grade: 'S' },
+    { key: '腳質', keyword: '前列', grade: 'S' },
     { key: '距離', keyword: '中距離', grade: 'B' },
   ]);
   assert.deepEqual(r.aptitudes, ['S', 'B']);
@@ -190,7 +190,7 @@ test('whatIfAddSkill：groups 要老實講「假設咗邊個適性」（UI 靠�
 });
 
 test('whatIfAddSkill：用戶冇揀嘅類別 → 唔乘（唔會偷偷假設 A）', () => {
-  const r = whatIfAddSkill({ stats: STATS }, { base: 300, condition: '前列, 中距離' }, { 脚質: 'S' });
+  const r = whatIfAddSkill({ stats: STATS }, { base: 300, condition: '前列, 中距離' }, { 腳質: 'S' });
   assert.deepEqual(r.aptitudes, ['S']);
   assert.equal(r.points, Math.round(300 * 1.1));
   const none = whatIfAddSkill({ stats: STATS }, { base: 300, condition: '前列, 中距離' });
@@ -274,7 +274,7 @@ test('IPC：skillSearchItems 冇 skillPt 要出 null（唔可以當 0＝進化�
 test('IPC：skillSearchItems 要順便回 groups（窗靠佢畫適性下拉，唔使再問主程序）', () => {
   const lib = [{ name: '前列直線', condition: '前列, 中距離', base: 217, skillPt: 130 }];
   assert.deepEqual(skillSearchItems(lib, '前列')[0].groups, [
-    { key: '脚質', keyword: '前列' },
+    { key: '腳質', keyword: '前列' },
     { key: '距離', keyword: '中距離' },
   ]);
 });

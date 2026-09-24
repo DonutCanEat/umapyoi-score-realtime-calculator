@@ -27,7 +27,7 @@ function allOff(overrides = {}) {
 
 test('顯示選項：唔傳 display → 同加設定之前一模一樣（唔可以一開就少咗嘢）', () => {
   const s = hudState({ score: SCORE, stats: STATS, updatedAt: 1000, now: 1200 });
-  assert.equal(s.lines.length, 6, '評價点 + 五維 5 格');
+  assert.equal(s.lines.length, 6, '評價點 + 五維 5 格');
   assert.equal(s.lines[0].key, 'total');
   assert.deepEqual(s.summary.map((x) => x.key), ['stat', 'skill']);
   assert.equal(s.note, 'ランク UE2');
@@ -56,7 +56,7 @@ test('顯示選項：逐個 key 閂 → 只影響自己嗰項（冇連鎖）', (
 
   const noStats = hudState({ ...base, display: allOff({ stats: false }) });
   assert.equal(noStats.lines.filter((l) => l.key.startsWith('stat')).length, 0);
-  assert.equal(noStats.lines.find((l) => l.key === 'total').value, '32334', '評價点要留住');
+  assert.equal(noStats.lines.find((l) => l.key === 'total').value, '32334', '評價點要留住');
 
   const noStatScore = hudState({ ...base, display: allOff({ statScore: false }) });
   assert.deepEqual(noStatScore.summary.map((x) => x.key), ['skill'], '只閂五維分');
@@ -75,7 +75,7 @@ test('顯示選項：`display` 只寫一部分 key → 冇寫嘅照開（≠ 閂
     stats: STATS,
     updatedAt: 1000,
     now: 1200,
-    display: { total: false }, // 淨係想閂評價点
+    display: { total: false }, // 淨係想閂評價點
   });
   assert.equal(s.lines.find((l) => l.key === 'total'), undefined);
   assert.equal(s.lines.filter((l) => l.key.startsWith('stat')).length, 5, '冇寫 stats 就唔可以當閂');

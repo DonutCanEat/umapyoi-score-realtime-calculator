@@ -15,7 +15,7 @@
  *
  * ## 適性（最易錯嘅位）
  *
- * 用戶要為技能條件入面**每一類**揀等級（脚質／距離），規則見 `aptitude.js`
+ * 用戶要為技能條件入面**每一類**揀等級（腳質／距離），規則見 `aptitude.js`
  * （同類取最大、跨類別相乘、**草地／沙地唔乘**、通用技能 ×1.0）。
  * ⚠️ 唔准喺呢度自己乘 —— 一律經 `aptitudesFor()`。
  *
@@ -87,12 +87,12 @@ export function searchSkills(skills, query, options = {}) {
 /**
  * 由「每一類揀咗嘅等級」砌出 `aptitude.js` 要嘅適性表。
  *
- * 例如技能條件係「前列, 中距離」而用戶揀 `{脚質:'S', 距離:'A'}`
+ * 例如技能條件係「前列, 中距離」而用戶揀 `{腳質:'S', 距離:'A'}`
  * → `{前列:'S', 中距離:'A'}`（key 用**條件字串入面真正出現嘅關鍵字**，
  * 所以 `大逃` 呢類同義詞都會照樣查到 `領頭` 嗰格 —— 見 `aptitudeKeyOf()`）。
  *
  * @param {string} condition
- * @param {Record<string,'S'|'A'|'B'|'C'|'D'|'E'|'F'|'G'>} grades 例：`{脚質:'S', 距離:'A'}`
+ * @param {Record<string,'S'|'A'|'B'|'C'|'D'|'E'|'F'|'G'>} grades 例：`{腳質:'S', 距離:'A'}`
  * @returns {Record<string,string>}
  */
 export function aptitudeMapFor(condition, grades = {}) {
@@ -180,11 +180,11 @@ function scoreOf(player) {
 /**
  * ⭐ 主菜：「而家嘅狀態」＋「想加嘅一招」＋「嗰招嘅適性」→ 加幾多分／夠唔夠升級。
  *
- * @param {object} [player] 現況。⚠️ **唔使**俾晒全部嘢：
+ * @param {object} [player] 現況。⚠️ **唔使**俾曬全部嘢：
  *        淨係得五維（HUD 讀到嘅嘢）就傳 `{stats:[…]}` —— 咁 `before.total` 就係五維分，
- *        同 HUD 顯示嘅「評價点」一致（技能未讀到之前係咁，見 AGENTS §6.2）。
+ *        同 HUD 顯示嘅「評價點」一致（技能未讀到之前係咁，見 AGENTS §6.2）。
  * @param {{base:number, condition?:string, name?:string, skillPt?:number}} skill 想加嘅技能
- * @param {Record<string,string>} [grades] 每一類適性等級（例：`{脚質:'A', 距離:'A'}`）
+ * @param {Record<string,string>} [grades] 每一類適性等級（例：`{腳質:'A', 距離:'A'}`）
  * @returns {{
  *   name:string|null, base:number, condition:string, pt:number|null,
  *   groups:Array<{key:string, keyword:string, grade:string|null}>,

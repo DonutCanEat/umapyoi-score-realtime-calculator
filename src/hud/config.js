@@ -81,12 +81,12 @@ export const HUD_CONFIG_FILENAME = 'hud-position.json';
  *
  * | config key   | hudState() 出處                      | 意思 |
  * |---|---|---|
- * | `total`      | `lines[].key === 'total'`            | 評價点總分 |
+ * | `total`      | `lines[].key === 'total'`            | 評價點總分 |
  * | `stats`      | `lines[].key === 'stat0'…'stat4'`    | 五維逐格（速度／持久／力量／毅力／智力）|
  * | `statScore`  | `summary[].key === 'stat'`           | 五維分 |
  * | `skillScore` | `summary[].key === 'skill'`          | 技能分（未讀到 = `？／總分 ≥ X`）|
  * | `rankTarget` | `summary[].key === 'nextRank'`       | ランク目標（仲差幾多分升級；C5）|
- * | `history`    | `history`（折線座標 ＋ 摘要）          | 成長曲線（C3：最近一段嘅評價点變化）|
+ * | `history`    | `history`（折線座標 ＋ 摘要）          | 成長曲線（C3：最近一段嘅評價點變化）|
  * | `goldMark`   | `statbar.readStatBar()` 回嘅 `highlighted` | 金色格標示（屬性 > 1200）|
  * | `note`       | `note`（ランク／過期提示）            | 狀態一行 |
  * | `edit`       | `edit`（對位模式 `UMAPYOI_HUD_EDIT=1`）| 範圍／偏移一行 |
@@ -782,7 +782,7 @@ export function resolveHudConfig(env = {}, fileConfig = null, { onWarn } = {}) {
     },
     // ⚠️ 只交「env 寫死嘅大細」：檔案自己嗰對由 `span` 帶入去（見 `assertAxis()`）。
     //    ⚠️ **唔可以**交 `{w: ax.size, h: ay.size}`：`resolveAxis()` 個 `size` 係「呢個軸
-    //    用邊個大細」（可能係預設／檔案），唔係「用戶寫死咗」—— 交晒兩個就會令
+    //    用邊個大細」（可能係預設／檔案），唔係「用戶寫死咗」—— 交曬兩個就會令
     //    「只寫一半範圍」（長度 1，＝末端要由大細推）嗰條路**靜默**變咗「大細寫死」，
     //    個 range 起點就會唔見咗（實測：`UMAPYOI_HUD_W=0.2` ＋ 檔案 `x:[0.1,0.4]`
     //    → x 變咗由預設 0.598 起，而唔係檔案嘅 0.1）。

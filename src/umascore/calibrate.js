@@ -1,7 +1,7 @@
 /**
- * 對答案（calibration）：用育成終了畫面嘅真實評價点，量度我哋公式嘅誤差。
+ * 對答案（calibration）：用育成終了畫面嘅真實評價點，量度我哋公式嘅誤差。
  *
- * 背景：遊戲**只喺培育完之後**先顯示総合評價点，育成途中冇得對答案。
+ * 背景：遊戲**只喺培育完之後**先顯示総合評價點，育成途中冇得對答案。
  * 所以每一條「完成咗嘅育成」都係一個 ground truth sample。
  *
  * 核心等式：
@@ -89,7 +89,7 @@ export function analyzeSample(sample, options = {}) {
   const result = predict(sample, options);
   const observedTotal = Number(sample.total);
   if (!Number.isFinite(observedTotal)) {
-    throw new Error(`sample「${sample.id ?? '(未命名)'}」缺少有效嘅 total（遊戲顯示嘅総合評價点）`);
+    throw new Error(`sample「${sample.id ?? '(未命名)'}」缺少有效嘅 total（遊戲顯示嘅総合評價點）`);
   }
 
   const { skillScore, source, unresolved } = resolveSkillScore(sample, result);

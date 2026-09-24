@@ -61,7 +61,7 @@ if (samples.length === 0) {
   console.log('  data/ground-truth/README.md');
   console.log('  data/ground-truth/_template.json.example');
   console.log('');
-  console.log('最低限度需要：stats（五維）＋ total（遊戲顯示嘅総合評價点）。');
+  console.log('最低限度需要：stats（五維）＋ total（遊戲顯示嘅総合評價點）。');
   process.exit(0);
 }
 

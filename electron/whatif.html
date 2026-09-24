@@ -130,7 +130,7 @@
       let followLive = true;  // 五維係唔係跟實機（用戶一改就變 false）
       let manualStats = null; // 用戶自己打嘅五維
       let picked = null;      // { key, skill } —— 技能庫嘅 index ＋ 原始條目
-      let grades = {};        // { 脚質:'A', 距離:'A' }
+      let grades = {};        // { 腳質:'A', 距離:'A' }
       let dbCount = 0;
       let dbError = null;
 
@@ -190,7 +190,7 @@
           : '　<span class="muted">（已到最高ランク UA）</span>';
         const age = info.ageMs === null ? '' : `　<span class="muted">（${Math.round(info.ageMs / 1000)} 秒前讀到）</span>`;
         currentEl.innerHTML =
-          `五維分 <b>${info.statScore}</b>　評價点 <b>${info.total}</b>（<b>${info.rank}</b>）${gap}${age}`
+          `五維分 <b>${info.statScore}</b>　評價點 <b>${info.total}</b>（<b>${info.rank}</b>）${gap}${age}`
           + '<div class="muted">技能分：未讀到（Phase 2 暫停）→ 呢個係下限</div>';
       }
 
@@ -291,7 +291,7 @@
           ? '已到最高ランク（UA）'
           : `仲差 <b>${result.gapAfter}</b> 分到 ${result.after.nextRank.rank}`;
         after.innerHTML =
-          `評價点 ${result.before.total}（${result.before.rank}） → <b>${result.after.total}</b>（<b>${result.after.rank}</b>）`
+          `評價點 ${result.before.total}（${result.before.rank}） → <b>${result.after.total}</b>（<b>${result.after.rank}</b>）`
           + `${result.rankUp ? ' <span class="up">⭐ 升級！</span>' : ''}`
           + `<div>${gapTxt}</div>`;
         pickedEl.append(after);

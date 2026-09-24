@@ -30,7 +30,7 @@ const IPC_CHANNELS = Object.freeze({
   // ── 擷取管線（`capture.html` ↔ main）──
   frame: 'frame',                 // renderer → main：一幀（ROI 或縮圖）嘅 raw RGBA
   captureError: 'capture-error',  // renderer → main：getUserMedia 失敗
-  noSource: 'no-source',          // main → renderer：揾唔到遊戲視窗
+  noSource: 'no-source',          // main → renderer：搵唔到遊戲視窗
   roi: 'roi',                     // main → renderer：要剪嘅相對範圍（＋ aspect）
   start: 'start',                 // main → renderer：開始擷取（帶 sourceId）
   fps: 'fps',                     // main → renderer：改幀率（連拍模式用 1fps）

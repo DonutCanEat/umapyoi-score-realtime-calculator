@@ -87,7 +87,7 @@
       let roi = null;
       // ⭐ 連拍模式可以再剪細：主程序經 IPC 傳一個「內容區比例」矩形落嚟，
       //    只傳嗰橛（例如「賽馬娘詳情」彈窗嘅技能清單）——
-      //    全畫面 1928×1085 一幀 8MB，而且技能清單淨係佔中間一小橛，冇必要傳晒。
+      //    全畫面 1928×1085 一幀 8MB，而且技能清單淨係佔中間一小橛，冇必要傳曬。
       let crop = null;
       const CROP_MAX_W = 1200; // 剪完之後最闊幾多（夠放 7 列技能名）
 
@@ -95,7 +95,7 @@
       let lastSent = 0;
 
       ipcRenderer.on(IPC_CHANNELS.noSource, () => {
-        statusEl.textContent = '揾唔到遊戲視窗';
+        statusEl.textContent = '搵唔到遊戲視窗';
         hintEl.textContent = '請先開賽馬娘，再重新啟動本程式。';
       });
 

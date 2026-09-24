@@ -31,7 +31,7 @@ function fullView() {
     total: 26390,
     rank: 'UF5',
     ageMs: 0,
-    lines: [{ key: 'total', label: '評價点', value: '26390' }],
+    lines: [{ key: 'total', label: '評價點', value: '26390' }],
     summary: [{ label: '技能分', value: '？' }],
     note: 'ランク UF5',
     edit: '',
@@ -51,7 +51,7 @@ test('hudViewKey：每個會顯示嘅欄位一變，key 就要變', () => {
 
   const changed = {
     state: 'stale',
-    lines: [{ key: 'total', label: '評價点', value: '99' }],
+    lines: [{ key: 'total', label: '評價點', value: '99' }],
     summary: [{ label: '技能分', value: '123' }],
     note: '唔見面板條',
     edit: '對位模式',

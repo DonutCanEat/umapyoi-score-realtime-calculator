@@ -110,7 +110,7 @@ test('hud hudState：冇分數 → 老實講「等待面板條」', () => {
   assert.match(s.note, /等待面板條/);
 });
 
-test('hud hudState：有新鮮分數 → 顯示評價点、ランク、五維逐格', () => {
+test('hud hudState：有新鮮分數 → 顯示評價點、ランク、五維逐格', () => {
   const stats = [1489, 543, 655, 624, 628];
   const s = hudState({
     score: { total: 32334, rank: 'UE2', statScore: 30000 },

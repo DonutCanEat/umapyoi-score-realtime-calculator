@@ -38,7 +38,7 @@ const flags = bareFlags(args);
 
 const rawStats = argValue('stats');
 if (!rawStats) {
-  console.error('用法：node tools/whatif.js --stats=速度,持久,力量,毅力,智力 --skill=<技能名> [--grades=脚質:S,距離:A] [--all] [--json]');
+  console.error('用法：node tools/whatif.js --stats=速度,持久,力量,毅力,智力 --skill=<技能名> [--grades=腳質:S,距離:A] [--all] [--json]');
   console.error('例：  node tools/whatif.js --stats=1200,600,600,600,600 --skill=弧線的教授');
   process.exit(2);
 }
@@ -123,7 +123,7 @@ if (flags.has('--json')) {
   process.exit(0);
 }
 
-console.log(`五維 ${stats.join('/')} → 五維分 ${statScore}（＝而家嘅評價点；技能分未讀到之前就係咁）`);
+console.log(`五維 ${stats.join('/')} → 五維分 ${statScore}（＝而家嘅評價點；技能分未讀到之前就係咁）`);
 console.log('');
 
 for (const { skill, assumed, result } of results) {
@@ -135,7 +135,7 @@ for (const { skill, assumed, result } of results) {
   console.log(`   適性 ${apt}${assumed.length ? `　⚠️ ${assumed.join('／')} 係**假設 A**（--grades 可以改）` : ''}`);
   console.log(`   倍率 ×${result.multiplier.toFixed(2)}　→ 加 ${result.points >= 0 ? '+' : ''}${result.points} 分`);
   console.log(
-    `   評價点 ${result.before.total}（${result.before.rank}）`
+    `   評價點 ${result.before.total}（${result.before.rank}）`
     + ` → ${result.after.total}（${result.after.rank}）`
     + `${result.rankUp ? '　⭐ 升級！' : ''}`,
   );
@@ -147,5 +147,5 @@ for (const { skill, assumed, result } of results) {
 }
 
 if (matches.length > 1 && !flags.has('--all')) {
-  console.log(`（技能庫仲有更多命中，加 --all 睇晒；而家淨係列頭 ${matches.length} 個）`);
+  console.log(`（技能庫仲有更多命中，加 --all 睇曬；而家淨係列頭 ${matches.length} 個）`);
 }

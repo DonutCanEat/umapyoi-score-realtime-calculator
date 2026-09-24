@@ -116,7 +116,7 @@ const SCENARIOS = [
       win.webContents.send(IPC_CHANNELS.noSource);
       await sleep(200);
       const status = await text(win, "document.getElementById('status').textContent");
-      check(status === '揾唔到遊戲視窗', 'capture.html：收到 no-source（main → renderer 通）', status);
+      check(status === '搵唔到遊戲視窗', 'capture.html：收到 no-source（main → renderer 通）', status);
     },
   },
   {
@@ -130,7 +130,7 @@ const SCENARIOS = [
       win.webContents.send(IPC_CHANNELS.hud, {
         state: 'ok',
         lines: [
-          { key: 'total', label: '評價点', value: 1234 },
+          { key: 'total', label: '評價點', value: 1234 },
           { key: 'stat0', label: '速度', value: 600 },
         ],
         summary: [],
@@ -141,7 +141,7 @@ const SCENARIOS = [
       });
       await sleep(200);
       const total = await text(win, "document.getElementById('total').textContent");
-      check(total === '評價点 1234', 'hud.html：收到 hud（main → renderer 通）', total);
+      check(total === '評價點 1234', 'hud.html：收到 hud（main → renderer 通）', total);
     },
   },
   {

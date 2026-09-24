@@ -50,7 +50,7 @@ export function uniqueSkillPoints(star, level) {
  * @param {string[]} aptitudes 該技能每個限制條件對應嘅適性等級，例如 ['S'] 或 ['A','B']
  * @returns {number} 已四捨五入嘅評價點
  *
- * 例：217 × 1.1 = 238.7 → 239（同日文 wiki 嘅「距離・脚質專用白スキル = 239」吻合）
+ * 例：217 × 1.1 = 238.7 → 239（同日文 wiki 嘅「距離・腳質專用白スキル = 239」吻合）
  */
 export function normalSkillPoints(base, aptitudes = []) {
   const basePoints = Number(base);

@@ -238,7 +238,7 @@ if (lineArg) {
 const row = detectDigitRow(image);
 console.log('');
 if (!row) {
-  console.log('❌ detectDigitRow 揾唔到數字列');
+  console.log('❌ detectDigitRow 搵唔到數字列');
   process.exit(0);
 }
 console.log(

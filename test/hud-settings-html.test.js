@@ -42,14 +42,14 @@ function readSettings(text) {
  *
  * ```js
  * const DISPLAY_FIELDS = [
- *   { key: 'total', label: '評價点（總分）' },
+ *   { key: 'total', label: '評價點（總分）' },
  *   ...
  * ];
  * ```
  */
 function displayKeysFromHtml(text) {
   const block = /const DISPLAY_FIELDS\s*=\s*\[([\s\S]*?)\]/.exec(readSettings(text));
-  assert.ok(block, '⚙️ 由 settings.html 揾唔到 `const DISPLAY_FIELDS = [...]` —— 測試要更新 regex（唔准改 HTML）');
+  assert.ok(block, '⚙️ 由 settings.html 搵唔到 `const DISPLAY_FIELDS = [...]` —— 測試要更新 regex（唔准改 HTML）');
   return [...block[1].matchAll(/\bkey:\s*'([^']+)'/g)].map((m) => m[1]);
 }
 
@@ -65,7 +65,7 @@ function displayKeysFromHtml(text) {
  */
 function numKeysFromHtml(text) {
   const block = /const NUM_FIELDS\s*=\s*\[([\s\S]*?)\]/.exec(readSettings(text));
-  assert.ok(block, '⚙️ 由 settings.html 揾唔到 `const NUM_FIELDS = [...]` —— 測試要更新 regex（唔准改 HTML）');
+  assert.ok(block, '⚙️ 由 settings.html 搵唔到 `const NUM_FIELDS = [...]` —— 測試要更新 regex（唔准改 HTML）');
   return [...block[1].matchAll(/\bkey:\s*'([^']+)'/g)].map((m) => m[1]);
 }
 
@@ -83,7 +83,7 @@ function fieldBoundsFromHtml(text) {
   const src = readSettings(text);
   const pick = (re, label) => {
     const m = re.exec(src);
-    assert.ok(m, `⚙️ 由 settings.html 揾唔到 ${label} —— 測試要更新 regex（唔准改 HTML）`);
+    assert.ok(m, `⚙️ 由 settings.html 搵唔到 ${label} —— 測試要更新 regex（唔准改 HTML）`);
     return m[0];
   };
   const code = [

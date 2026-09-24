@@ -258,7 +258,7 @@ function assertBounds(bounds) {
 export const STAT_LABELS_ZH = Object.freeze(['速度', '持久', '力量', '毅力', '智力']);
 
 /**
- * 對位模式（`UMAPYOI_HUD_EDIT=1`）：把範圍／偏移交晒俾用戶自己調，
+ * 對位模式（`UMAPYOI_HUD_EDIT=1`）：把範圍／偏移交曬俾用戶自己調，
  * 調好之後可以照抄落 `DEFAULT_HUD_LAYOUT` 或者經環境變數長用。
  *
  * 為何要（唔係「可有可無嘅花巧嘢」）：HUD 位置係**主觀**嘅（用戶指定「拍攝掣下面」），
@@ -474,7 +474,7 @@ export function hudState({
       total: null,
       rank: null,
       ageMs: null,
-      lines: shown(display, 'total') ? [{ key: 'total', label: '評價点', value: '—' }] : [],
+      lines: shown(display, 'total') ? [{ key: 'total', label: '評價點', value: '—' }] : [],
       note: shown(display, 'note') ? '等待面板條（開育成主畫面）' : '',
       summary: [],
       edit: editLine,
@@ -486,7 +486,7 @@ export function hudState({
   const ageMs = Math.max(0, now - updatedAt);
   const stale = ageMs > STALE_MS;
   const lines = shown(display, 'total')
-    ? [{ key: 'total', label: '評價点', value: String(score.total) }]
+    ? [{ key: 'total', label: '評價點', value: String(score.total) }]
     : [];
 
   // 技能分未讀到 → 老實出「？／總分 ≥ 五維分」（唔可以假設 0）

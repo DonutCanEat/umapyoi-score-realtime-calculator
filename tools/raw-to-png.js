@@ -5,7 +5,7 @@
  *
  * 用法：
  *   node tools/raw-to-png.js shots/live-debug/2026-09-18T12-00-00-roi.raw
- *   node tools/raw-to-png.js shots/live-debug        # 轉晒個資料夾
+ *   node tools/raw-to-png.js shots/live-debug        # 轉曬個資料夾
  */
 
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from 'node:fs';

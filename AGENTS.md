@@ -375,7 +375,7 @@ node tools/whatif.js --stats=1200,600,600,600,600 --skill=弧線的教授
                                            # ⭐ 唔開 Electron 都試算得到（同 what-if 窗共用
                                            #    `src/umascore/whatif.js`，唔可能算出唔同答案）
 node tools/whatif.js --stats=... --skill=弧線的教授 --grades=距離:S   # 指定適性（冇寫嘅類別一律假設 A 並講明）
-node tools/whatif.js --stats=... --skill=直線 --all                  # 列晒所有命中（最多 200）
+node tools/whatif.js --stats=... --skill=直線 --all                  # 列曬所有命中（最多 200）
 node tools/whatif.js --stats=... --skill=弧線的教授 --json           # 餵落其他工具用
 
 # ── Phase 0（計分核心）──
@@ -419,7 +419,7 @@ node tools/diag-row.js <png> --templates   # 印出所有字形模板
 node tools/diag-shots.js                   # 列出所有截圖尺寸
 
 # ── Phase 2（技能畫面）──
-node tools/diag-skills.js shots/gt/uma1-p1-skills.png        # ⭐ 技能畫面欄／行偵測（--all 跑晒 8 張）
+node tools/diag-skills.js shots/gt/uma1-p1-skills.png        # ⭐ 技能畫面欄／行偵測（--all 跑曬 8 張）
 node tools/diag-skills.js shots/gt/uma1-p1-skills.png --gray=60,110,50,440   # 灰度圖（睇字形）
 node tools/crop-png.js shots/gt/uma1-p1-skills.png 50,60,440,105 out.png --scale=4  # 剪區域睇字形
 node tools/skillrow-sheet.js 3 --col=1        # ⭐ 只睇「遊戲列 3 右欄」跨 8 張圖（肉眼核對用）
@@ -484,8 +484,11 @@ electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 
 test/           # 363 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
 tools/          # 34 個 CLI（＋ tools/lib/ 2 個共用模組）：診斷／建模板／對答案／what-if／advice／
                 #   診斷包／renderer 實載閘…（見 §2；逐個工具嘅用途睇 `docs/file-map.md`）
-data/           # skill-db-tw.json（1323 招）／glyph-templates.json／live-truth.json／ground-truth/
-                #   ⚠️ runtime 只讀頭兩個 → **打包白名單要有佢哋**（見 `docs/packaging.md` §5）
+data/           # skill-db-tw.json（1323 招）：`name` 繁體、**`simplifiedName` 刻意保留簡體**
+                #   （`whatif.js` 用嚟俾人用簡體字搜技能 —— ⛔ 唔准「統一」佢）／`color` 已轉繁體
+                #   calc-page-tw.html ＝ bwiki 原始 cache（簡體來源，唔准手改）
+                #   glyph-templates.json／live-truth.json／ground-truth/
+                #   ⚠️ runtime 只讀頭兩個 JSON → **打包白名單要有佢哋**（見 `docs/packaging.md` §5）
 shots/          # ⭐ 證據庫 —— **每個目錄係咩睇 `shots/README.md`**（邊啲入 git／加檔入邊個閘）
                 #   gt/（面板排法）／live/（實機 ＋ 失敗幀回歸）／negatives/（唔准出數）／
                 #   result/（培育結束確認正面樣本）／debug-crops/（人手剪放大圖）／
@@ -563,13 +566,13 @@ oval > 0 → 再加 oval 部分；最後 floor
 | 1 | 用分段直線插值計五維 |
 | 2 | 信 wikiru 舊表「400 → 557」 |
 | 3 | 技能名直接字串比對 |
-| 4 | 資料庫揾唔到就當「繼承固有 180」 |
+| 4 | 資料庫搵唔到就當「繼承固有 180」 |
 | 5 | ◎ 雙圈睇成 ○ 單圈 |
 | 6 | 多條件適性「同類相乘」 |
 | 7 | 草地／沙地照乘適性 |
 | 8 | 把「自己嘅固有技能」同「同名嘅繼承固有」撈亂 |
 | 9 | 技能清單靠人手抄 |
-| 10 | 用「粉紅色」嚟揾ステータス面板 |
+| 10 | 用「粉紅色」嚟搵ステータス面板 |
 | 11 | 用 `longestPinkRun()` 呢類「連續段」做特徵 |
 | 12 | 只用「顏色」判數字墨（`isDigitInk` 睇色相 + 亮度） |
 | 13 | 按「墨量」揀數字行 |

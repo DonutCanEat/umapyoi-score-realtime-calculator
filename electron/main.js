@@ -156,7 +156,7 @@ let lastLog = 0;
 /**
  * HUD overlay（透明置頂視窗）。
  *
- * 用戶指定：只顯示「評價点 + ランク」，擺喺**左邊空白位（拍攝掣下面）**，
+ * 用戶指定：只顯示「評價點 + ランク」，擺喺**左邊空白位（拍攝掣下面）**，
  * 先做醜版睇效果。位置一律用**相對座標**（見 `src/hud/layout.js`），
  * 因為遊戲冇固定解析度、只有固定 16:9。
  *
@@ -243,7 +243,7 @@ const DRAG_IDLE_MS = 1200;
 /** 最近一次顯示嘅五維數值（HUD 要逐格顯示）。 */
 let lastStats = null;
 /**
- * ⭐ C3 成長曲線：五維／評價点嘅歷史樣本（`{at, total, stats}`）。
+ * ⭐ C3 成長曲線：五維／評價點嘅歷史樣本（`{at, total, stats}`）。
  *
  * ⚠️ 三個規矩全部由 `src/hud/history.js` 嘅 `pushSample()` 負責（純函數、有測試）：
  *    ① 只有**真變化**先入記錄（唔係每幀記，否則 5fps 之下時間軸會被壓扁）；
@@ -1619,7 +1619,7 @@ async function beginCapture(win) {
 
     if (!hit) {
       console.log('');
-      console.log('⚠️ 揾唔到遊戲視窗。請確認賽馬娘已經開咗，然後重新啟動本程式。');
+      console.log('⚠️ 搵唔到遊戲視窗。請確認賽馬娘已經開咗，然後重新啟動本程式。');
       win.webContents.send(IPC_CHANNELS.noSource);
       return;
     }
@@ -1844,7 +1844,7 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
   if (!changed) return;
 
   const summary =
-    `五維 ${stats.join('/')} → 五維分 ${score.statScore}　評價点 ${score.total}（${score.rank}）` +
+    `五維 ${stats.join('/')} → 五維分 ${score.statScore}　評價點 ${score.total}（${score.rank}）` +
     `　信心 ${read.confidence.toFixed(2)}` +
     // 金色格（屬性 > 1200）：數值照出（用 `goldLightFraction` 專用遮罩讀），只係標明
     `${read.highlighted ? '　[金色格]' : ''}` +
@@ -1927,7 +1927,7 @@ function handleResultFrame({ width, height, buffer }) {
     { max: MAX_HISTORY },
   );
   console.log(
-    `[評価分] 五維 ${read.stats.join('/')} → 五維分 ${score.statScore}　評價点 ${score.total}（${score.rank}）` +
+    `[評価分] 五維 ${read.stats.join('/')} → 五維分 ${score.statScore}　評價點 ${score.total}（${score.rank}）` +
     `　信心 ${read.confidence.toFixed(2)}　來源 培育結束確認（基礎能力 數字欄 ${width}×${height}）`,
   );
   pushHud();

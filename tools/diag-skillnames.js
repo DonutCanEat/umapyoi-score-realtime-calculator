@@ -79,7 +79,7 @@ function extractNames(rel) {
 /**
  * 名框 → 特徵。
  *
- * 步驟：① 框內揾「墨跡有幾闊」（唔理框嘅右邊留白）；② 如果右邊有一大段空位
+ * 步驟：① 框內搵「墨跡有幾闊」（唔理框嘅右邊留白）；② 如果右邊有一大段空位
  * （≥ `NAME_LEVEL_GAP`），當佢係 `Lv4`／`★3` 之類 → 切走（唔係名嘅一部分）；
  * ③ 再去 tight box；④ 按**高度**等比縮放、左對齊放入 GH×GW 網格。
  *
@@ -94,7 +94,7 @@ function normalize(image, box, y0, y1, mask) {
     const base = y * image.width;
     for (let x = x0; x <= x1; x += 1) cols[x - x0] += mask[base + x];
   }
-  // 右邊 Lv／★ 段：由右邊掃，揾最右邊一個「闊 ≥ NAME_LEVEL_GAP 嘅空洞」→ 切
+  // 右邊 Lv／★ 段：由右邊掃，搵最右邊一個「闊 ≥ NAME_LEVEL_GAP 嘅空洞」→ 切
   let rightEnd = cols.length - 1;
   let gap = 0;
   for (let i = cols.length - 1; i >= 0; i -= 1) {
