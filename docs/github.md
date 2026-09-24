@@ -97,7 +97,7 @@ node: bad option: --test-isolation=none
 - ✅ 修法：workflow `node-version: 24`（同本機 v24.9.0 一致）
 
 **教訓**：CI 嘅 Node 版本要**同本機一致**，唔可以「是但揀個 LTS」。
-呢個失敗模式好陰險 —— 本地全過（346/346），CI 一開頭就死，而且**只出 tag 唔出 release**，
+呢個失敗模式好陰險 —— 本地全過（當時 **346/346**；現時 **363/363**），CI 一開頭就死，而且**只出 tag 唔出 release**，
 睇落好似「workflow 冇跑」。
 
 **點查（唔使開瀏覽器）**：
@@ -118,7 +118,7 @@ $repo = "DonutCanEat/umapyoi-score-realtime-calculator"
 
 | 步驟 | 結果 |
 |---|---|
-| 跑單元測試（346 條） | ✅ success |
+| 跑單元測試（當時 346 條；現時 363） | ✅ success |
 | 語法閘 | ✅ success |
 | 對答案（計分核心必須誤差 0） | ✅ success |
 | 打包 portable exe | ✅ success |

@@ -236,10 +236,18 @@ shots/
   README.md              # ⭐ **每個目錄係咩、邊啲入 git、加檔之後會入邊個閘** —— 睇之前先睇呢份
 
 docs/
+  README.md              # ⭐ **索引**：「我應該睇邊份？」＋ 每個檔嘅一句簡介同狀態（現行／歷史存檔）
   formula.md             # 公式推導、驗證、來源
   vision-design.md       # 影像辨識設計（座標模型、畫面清單、邊界情況）
+  design.md              # 設計細節（兩條路、三個畫面、為何 CV 放 Node、HUD overlay、what-if）
+  pitfalls.md            # ⭐ **32 條地雷**（改影像／計分／HUD 之前必讀；每條連住一個閘）
+  known-issues.md        # 已知待辦 ＋ §9.1 **未修**嘅技術債（獨立審計發現）
+  backlog.md             # 總 Backlog（A 唔使開遊戲／B 要開遊戲／C 新功能／D agent 提議）
   skill-screen.md        # ⭐ 技能畫面（Phase 2）實測版面 ＋ 識字嘅硬限制同可行路線
   packaging.md           # ⭐ A9 打包：指令／輸出大細／白名單／打包後嘅路徑規則／驗收紀錄／未驗清單
+  github.md              # 遠端、CI／Release 流程、公開前注意事項、踩過嘅 CI-only 問題
+  electron-dedup-report.md  # ⚠️ **歷史存檔**（2026-09-19 去重審計）：15 簇重複嘅成因、修法、
+                            #    逐 commit 驗收數據。簇編號改過一次 → 唔好靠編號，用簇標題
 ```
 
 ⚠️ `package.json` 嘅 `build` 欄 = electron-builder 設定（A9）：

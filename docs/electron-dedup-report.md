@@ -1,4 +1,8 @@
-# Electron 去重审计报告
+# Electron 去重審計報告
+
+> ⚠️ **歷史存檔（2026-09-19）** —— 呢份報告記錄嗰一輪去重嘅**成因、修法同當時嘅驗收數據**，
+> 唔係待辦清單。簇編號中途改過一次 → 回溯舊 commit message 時**以簇標題為準，唔好靠編號**。
+> 現行規則一律睇 `AGENTS.md` 同 `docs/pitfalls.md`。
 
 > 版本：**2026-09-19 v5（執行紀錄：全部簇做完 —— M6／L2／L3 收尾）**
 > - 基準：commit `8febf94`（重核時 267 測試、`fit-score` 5/5 誤差 0）
@@ -19,9 +23,9 @@
 - 排除：`node_modules/`、`.git/`、各快取、`diagnostics/`、`shots/**/*.png`（證據庫）、`data/*.json`（生成物）
 - 文件約數：**85 個原始檔**（main 1、renderer 4、shared 25、tools 32、test 23）
 - 簇數：high **3** / med **9** / low **3** —— **15 簇全部做完**（H1／H3 只做咗關鍵一步，
->   第二步係可選）；另外**順手修好 2 個 HEAD 已經壞咗嘅工具**同**加咗 2 個新閘**
+  第二步係可選）；另外**順手修好 2 個 HEAD 已經壞咗嘅工具**同**加咗 2 個新閘**
 
-## Top 问题（現況）
+## Top 問題（現況）
 
 | # | 簇 | 狀態 |
 |---|---|---|
@@ -114,7 +118,7 @@
    → 已經喺 AGENTS §2 嗰行加咗警告。**下次要驗 Phase 2 路，用 `diag-namematch`／
    `diag-namepairs`（唯讀）就夠，唔好跑 build。**
 
-## 不建议动的项
+## 唔建議郁嘅項
 
 - `node_modules/`、鎖檔、`dist/`、`out/`、`diagnostics/`：第三方／建置／一次性支援資料。
 - `data/glyph-templates.json`、`data/skill-db-tw.json`：**生成物**，唔可以手改。
@@ -127,7 +131,7 @@
 - 一堆 `normalize*` 同名函數：似但語意唔同，**唔係重複**。
 - 文件之間嘅重複敘述（AGENTS／`docs/design.md`／`docs/pitfalls.md`／程式碼註釋）：刻意嘅跨檔冗餘。
 
-## 建议落地顺序（**已經全部做完**）
+## 建議落地順序（**已經全部做完**）
 
 1. ~~**M6**（tools CLI 參數，逐字保留 CLI 介面）~~ ✅ `e855f15`
 2. ~~**L2**（test fixture builder，只抽砌 buffer 嗰步）~~ ✅ `646fac9`
@@ -136,15 +140,16 @@
    ⚠️ **唔應該做**：`tools/diag-skillnames.js` 自己一套特徵抽取（見新發現 1）——
    佢讀嘅標註已知有錯位，為佢改共用模組唔值得。
 
-## 备注
+## 備註
 
 - 本報告嘅 v1／v2 由只讀審計 Preset 生成；**v3 之後嘅改動係按用戶指示實際落手做嘅**
   （用戶原話：「總之點都要commit 同埋你可以開始做」），每一步都跑齊相關驗收先 commit。
-- 若涉及 model/DTO，建议字段全部可选，避免缺字段导致解析失败。實例：`roi.aspect`（今次已經接線，
+- 若涉及 model／DTO，建議欄位全部選填，避免缺欄位導致解析失敗。實例：`roi.aspect`（今次已經接線，
   但欄位保持選填 → 舊 main 照用後備值）、`frame.cropped`；將來收成共用 model 時
   **所有欄位一律 optional ＋ 有預設**（要向後兼容「新 main ＋ 舊 renderer」同「舊 main ＋ 新 renderer」）。
 - 本專案**冇 preload**：如果將來加，`electron/ipc-channels.cjs`（H1 第二步）正好可以變成 preload 嘅白名單來源。
-- 每次改動之後嘅驗收閘（AGENTS §8）：`npm.cmd test` **318** 全過、`fit-score` 5/5 誤差 0、
-  動影像就 30/30＋14/14＋負樣本 6/6、動墨點／色相就 `diag-hue --assert`、
-  動 `statbar.js`／`capture.html` 就 `diag-statbar --read` 14/14＋6/6＋`replay-dumps` 退步 0、
+- 每次改動之後嘅驗收閘（AGENTS §8）：`npm.cmd test` 全過（當時 **318**，現時 **363**）、
+  `fit-score` 5/5 誤差 0、動影像就 30/30＋15/15＋負樣本 5/5、
+  動墨點／色相就 `diag-hue --assert`、
+  動 `statbar.js`／`capture.html` 就 `diag-statbar --read` 15/15＋5/5＋`replay-dumps` 退步 0、
   **任何改動都建議跑 `check-renderer-syntax.js`**（而家 4 HTML ＋ main.js ＋ `src/**` ＋ `tools/**`）。
