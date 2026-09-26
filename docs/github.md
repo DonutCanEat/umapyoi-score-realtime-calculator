@@ -127,6 +127,17 @@ $repo = "DonutCanEat/umapyoi-score-realtime-calculator"
 → Release：<https://github.com/DonutCanEat/umapyoi-score-realtime-calculator/releases/tag/v0.1.1>
 → 資產：`UmapyoiScoreRealtimeCalculator-0.1.1-portable.exe` **95.7 MB**（同本機打包一模一樣大細）
 
+⭐ **之後每次發版都成功（唔使再手動修）**：
+
+| run | tag | 內容 | 結果 |
+|---|---|---|---|
+| #4 | `v0.1.2` | 培育結束確認（基礎能力）讀取 | ✅ 95.7 MB |
+| #5 | `v0.1.3` | 全 repo 簡體轉繁體 ＋ docs 整理（2026-09-23） | ✅ 95.7 MB |
+
+⭐ **#5 亦係「一鍵發版 preset」（§5）第一次真跑**：本機驗收（363/363、語法閘全 ✓、
+`fit-score` 誤差 0）→ commit → `0.1.2`→`0.1.3` → 推 `main` ＋ tag → 輪詢到 run `success`
+＋ 資產 95.7 MB 為止。全程**冇**「推咗就當完成」。
+
 ⚠️ 過程中總共修**兩個** CI-only 問題（本地全部正常）：
 1. **Node 版本**：workflow 用 22，但 `npm test` 要 Node 24 嘅 `--test-isolation=none`（run #1）
 2. **`electronDist` 寫死**：本機沙盒專用嘅 `node_modules/electron/dist`，CI 上面唔存在（run #2）
@@ -151,6 +162,25 @@ git commit -m "<type>(<scope>): <繁中一句話>"
 - **內容要寫為何 ＋ 實測數據**（例：`30/30`、`誤差 0`），唔好只寫「更新檔案」
 - **驗收唔過唔准 commit**（`AGENTS.md` §8）
 - 一個 commit 一件事
+
+---
+
+## 5. ⭐ 一鍵發版 preset（2026-09-23 加）
+
+用戶要求「每次更新都想 upload 上 GitHub」，所以做咗一個 **agent preset**：
+開新 session 揀「**GitHub 發版模式**」，講一句「發版」佢就會由頭做到尾。
+
+- **位置**：`%APPDATA%\dsh-desktop\harness\.agent-presets\gh-ship\`
+  （`preset.yml` ＋ `agent.cordis.yml` ＋ `skills/gh-ship/SKILL.md`）
+- **佢會做**：跑齊驗收閘 → 該 commit 嘅 commit（§4 格式）→ 升 `package.json` 版號
+  （tag 已存在就一定 ＋1）→ `git tag -a v<版>` → 推 `main` ＋ tag → **輪詢 Actions API**
+  確認 run `success` ＋ Release 資產大小合理 → 回報（§6 檢查清單）。
+- **佢唔會做**：改已推嘅 tag、force push、改寫 `main` 歷史、`git add -A`、
+  將 `dist/`／exe／log 入 repo、改 repo 可見性、貼 token。
+- ⚠️ **push 嗰步一定要批 `danger-full-access`**（原因同 §2.3 一樣：沙盒令 schannel 攞唔到憑證）。
+  憑證照樣由 Windows 憑證管理員讀（`DonutCanEat`），**唔使 token**。
+- ⚠️ 只喺**新開嘅 session** 生效；現有 session 唔會中途轉 preset。
+- 手動做嘅話就係下面 §3 做法乙（或者做法甲）。
 
 ---
 
