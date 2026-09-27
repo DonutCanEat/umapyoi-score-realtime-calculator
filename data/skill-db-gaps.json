@@ -1,0 +1,49 @@
+{
+  "note": "技能庫（`data/skill-db-tw.json`，bwiki 計算器頁，1323 招）**未有**、但由 GameTora 技能目錄（zh-tw）核實存在嘅技能。⚠️ `base`（基礎評價分）同「係固有定進化／屬於邊隻馬邊個版本」一律留白**待確認** —— 唔准估、唔准填 0（0 係「劇本進化技能」嘅真值，見 AGENTS 地雷 #4）。評分計算**唔會**用呢個檔；要入計分就要先補齊 base ＋ 技能種類。",
+  "source": "GameTora 技能目錄 zh-tw（用戶 2026-09-27 貼上，原文存 `data/gametora-paste-2026-09-27.json`）；網站更新日期 2026-09-24",
+  "verifiedBy": "逐名同 `data/skill-db-tw.json` 嘅 name／simplifiedName 正規化後比對（`tools/diff-skill-names.js`）",
+  "checkedAt": "2026-09-27",
+  "skills": [
+    {
+      "name": "奔向理想的景色",
+      "effect": "拚命追逐想看見的景色會稍微變得容易發揮能力",
+      "category": "待確認（睇效果句似係馬娘固有技；未確認係邊隻馬／邊個版本）",
+      "base": null,
+      "skillPt": null
+    },
+    {
+      "name": "始終如一",
+      "effect": "雖然採取與過去不同的跑法但不變的意志會使能力大幅上升",
+      "category": "待確認（同上）",
+      "base": null,
+      "skillPt": null
+    },
+    {
+      "name": "對短距離競賽的意志",
+      "effect": "變得擅長草地．短距離競賽　此技能為活動專用",
+      "category": "待確認（效果明講「活動專用」→ 可能係活動限定技）",
+      "base": null,
+      "skillPt": null
+    },
+    {
+      "name": "展現追尋未知的跑姿",
+      "effect": "傳達期待下個舞台能有超凡表現的好奇心使無聲鈴鹿的能力稍微容易發揮",
+      "category": "待確認（效果句寫明「無聲鈴鹿」→ 應該係無聲鈴鹿嘅固有技）",
+      "base": null,
+      "skillPt": null
+    },
+    {
+      "name": "抬頭挺胸打比賽馬娘",
+      "effect": "因為感覺自己朝日本第一的賽馬娘更進一步而稍微變得容易發揮能力",
+      "category": "待確認",
+      "base": null,
+      "skillPt": null
+    }
+  ],
+  "todoToMakeUsable": [
+    "① 攞 SkillPt（GameTora 詳情頁有「獲得的技能點數」）",
+    "② 攞基礎評價分（遊戲內點技能畫面／計算器畫面）",
+    "③ 分清楚係「自己嘅固有技能」定「繼承・固有技能」—— 兩者計分唔同（★1~2 = 120×Lv、★3~5 = 170×Lv；繼承 = 每個 180）",
+    "⚠️ 三樣齊之前**唔准**加入 `data/skill-db-tw.json` 或者當「繼承固有 180」"
+  ]
+}
