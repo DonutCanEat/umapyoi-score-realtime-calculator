@@ -1,0 +1,79 @@
+{
+  "note": "GameTora 技能目錄嘅「…的固有技能」前提句（邊隻馬邊個版本有固有技）。⚠️ 只係**前提**，唔係技能名；亦唔代表技能庫缺呢啲技。machine-generated（src/umascore/skilllist-diff.js），唔准手改。",
+  "source": "data/gametora-paste-2026-09-27b.json（用戶 2026-09-27 貼上）",
+  "checkedAt": "2026-09-27",
+  "lines": [
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "雪之美人 (原版) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "雪之美人 (情人節) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "青竹回憶 (原版) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "青竹回憶 (夏季踏青) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "青雲天空 (原版) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "青雲天空 (禮服) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "高尚駿逸 (原版) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "高尚駿逸 (泳裝) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "魯道夫象徵 (原版) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "魯道夫象徵 (慶典) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "鶴丸強志 (原版) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "黃金城市 (原版) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "黃金城市 (慶典) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "黃金城市 (無人島) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "黃金巨匠 (原版) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "黃金船 (L'Arc計畫) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "黃金船 (原版) 的固有技能"
+    },
+    {
+      "from": "gametora-paste-2026-09-27b.json",
+      "line": "黃金船 (泳裝) 的固有技能"
+    }
+  ]
+}

@@ -1,9 +1,17 @@
 {
   "note": "技能庫（`data/skill-db-tw.json`，bwiki 計算器頁，1323 招）**未有**、但由 GameTora 技能目錄（zh-tw）核實存在嘅技能。⚠️ `base`（基礎評價分）同「係固有定進化／屬於邊隻馬邊個版本」一律留白**待確認** —— 唔准估、唔准填 0（0 係「劇本進化技能」嘅真值，見 AGENTS 地雷 #4）。評分計算**唔會**用呢個檔；要入計分就要先補齊 base ＋ 技能種類。",
-  "source": "GameTora 技能目錄 zh-tw（用戶 2026-09-27 貼上，原文存 `data/gametora-paste-2026-09-27.json`）；網站更新日期 2026-09-24",
+  "source": "GameTora 技能目錄 zh-tw（用戶 2026-09-27 貼上，原文存 `data/gametora-paste-2026-09-27.json`）；網站更新日期 2026-09-24；另有第二次貼上（`data/gametora-paste-2026-09-27b.json`，由字母區開始嘅真技能名表）",
   "verifiedBy": "逐名同 `data/skill-db-tw.json` 嘅 name／simplifiedName 正規化後比對（`tools/diff-skill-names.js`）",
   "checkedAt": "2026-09-27",
   "skills": [
+    {
+      "name": "113跌倒114爬起",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
     {
       "name": "奔向理想的景色",
       "effect": "拚命追逐想看見的景色會稍微變得容易發揮能力",
@@ -19,11 +27,27 @@
       "skillPt": null
     },
     {
-      "name": "對短距離競賽的意志",
-      "effect": "變得擅長草地．短距離競賽　此技能為活動專用",
-      "category": "待確認（效果明講「活動專用」→ 可能係活動限定技）",
+      "name": "抬頭挺胸打比賽馬娘",
+      "effect": "因為感覺自己朝日本第一的賽馬娘更進一步而稍微變得容易發揮能力",
+      "category": "待確認",
       "base": null,
       "skillPt": null
+    },
+    {
+      "name": "飛向星辰彼端",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "飛駒全力！",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
     },
     {
       "name": "展現追尋未知的跑姿",
@@ -33,11 +57,147 @@
       "skillPt": null
     },
     {
-      "name": "抬頭挺胸打比賽馬娘",
-      "effect": "因為感覺自己朝日本第一的賽馬娘更進一步而稍微變得容易發揮能力",
+      "name": "雪光，追上去吧",
+      "effect": null,
       "category": "待確認",
       "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "雷霆的揚棄",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "對短距離競賽的意志",
+      "effect": "變得擅長草地．短距離競賽　此技能為活動專用",
+      "category": "待確認（效果明講「活動專用」→ 可能係活動限定技）",
+      "base": null,
       "skillPt": null
+    },
+    {
+      "name": "驅光馳騁，追獵繁星",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "顯靈了要顯靈了請顯靈吧！",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "Breezy Treat",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "Call me KING",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "Celeste Oath",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "CHERRY☆亂擊",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "Crystal Mist",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "Fairy tale",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "G00 1st.F∞;",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "GALmem.直到永遠♪",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "GET DOWN",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "Guiding Sea",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "Hephaistos",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "Lame de vent",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
+    },
+    {
+      "name": "Nemesis",
+      "effect": null,
+      "category": "待確認",
+      "base": null,
+      "skillPt": null,
+      "from": "gametora-paste-2026-09-27b.json"
     }
   ],
   "todoToMakeUsable": [
