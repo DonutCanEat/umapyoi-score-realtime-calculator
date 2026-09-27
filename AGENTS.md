@@ -273,7 +273,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
 npm.cmd test              # 單元測試（402 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ electron/main.js
-                                     #    ＋ src/**（34 檔）＋ tools/**（36 檔）—— 見 §8 4b
+                                     #    ＋ src/**（36 檔）＋ tools/**（41 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
                                      #    喺 HEAD 已經爆 SyntaxError 都冇人知（見 §8 4b）
 node tools/collect-diagnostics.js    # ⭐ D2 一鍵診斷包 → diagnostics/diag-<時間>/report.md
