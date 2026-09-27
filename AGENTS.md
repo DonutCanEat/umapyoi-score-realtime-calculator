@@ -135,8 +135,11 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
   種類（實測）：**唔准淨靠 `rarity`** —— GameTora 更新之後 `rarity` 分佈係
   `{1:598, 2:346, 3:22, 4:22, 5:250, 6:672}`，`6` 已經係**普通稀有度**；
   ✅ 真正嘅進化標記係 **`pre_evo`**（672 項）、固有係 `rarity === 5`（250 項，同 `gene_version` 對得上）。
-  ⭐ **交叉驗證（2026-09-27）**：用 bwiki 逐頁 cache 獨立核 523 招嘅 `base`／`skillPt`
-  → **523/523 一致**（`node tools/verify-skill-bases.js`）。
+  ⭐ **交叉驗證（2026-09-27，bwiki 逐頁已抓齊 2404/2404）**：用逐頁 cache 獨立核 `base`／`skillPt`
+  → 可比 1319 項：**一致 1318（99.9%）**、已知有理由 1、**真正有問題 0**（`node tools/verify-skill-bases.js`）。
+  · 逐頁 cache：`繁/` 2135（技能 1838 ＋**比賽等非技能 199**）＋ `继承技/` 269；0 失敗。
+  · ⚠️ 本庫有 **270 招搵唔到對應嘅 `繁/` 頁**（例 `強襲のラン`、`私だけの世界`）—— 佢哋係
+    **日服新招**（GameTora／計算器頁有，但繁中服未出獨立頁）→ 唔係我哋漏抓（實測 `繁/` 而家仲係 2135 頁）。
   `tools/gametora-skill.js` 一句話查一招（名／`--id`／`--kind=unique|evolution|normal`／`--stats`）。
   ⚠️ 缺口一律 `base=null`／`skillPt=null`（GameTora **冇**基礎評價分）→ 計分前要另外攞，**唔准**估、唔准當「繼承固有 180」（地雷 #4）。
 
@@ -289,7 +292,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
 npm.cmd test              # 單元測試（484 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ electron/main.js
-                                     #    ＋ src/**（44 檔）＋ tools/**（53 檔）—— 見 §8 4b
+                                     #    ＋ src/**（44 檔）＋ tools/**（54 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
                                      #    喺 HEAD 已經爆 SyntaxError 都冇人知（見 §8 4b）
 node tools/collect-diagnostics.js    # ⭐ D2 一鍵診斷包 → diagnostics/diag-<時間>/report.md
@@ -524,7 +527,7 @@ src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔�
 electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／ipc-channels.cjs（channel 名唯一來源）／
                 #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
 test/           # 484 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
-tools/          # 53 個 CLI（＋ tools/lib/ 2 個共用模組）：診斷／建模板／對答案／what-if／advice／
+tools/          # 54 個 CLI（＋ tools/lib/ 2 個共用模組）：診斷／建模板／對答案／what-if／advice／
                 #   診斷包／renderer 實載閘／讀技能名（`read-skills` 等 5 個）／
                 #   外部名單比對（`diff-skill-names`）／GameTora 抓取＋查詢＋缺口（`fetch-gametora`／
                 #   `gametora-skill`／`skill-gaps`／`analyze-gametora-skills`）／
