@@ -33,6 +33,13 @@ export function parseRarity(text) {
   if (/独特|固有/.test(first)) return { rarity: '独特', kind: 'unique' };
   if (/进化/.test(first)) return { rarity: '进化', kind: 'evolution' };
   if (/继承/.test(first)) return { rarity: '继承', kind: 'inherited' };
+  // ⭐ 2026-09-27 實測：bwiki 仲有兩種**本專案未見過**嘅稀有度 ——
+  //    `剧情`（劇情技能，base = 0，例：`繁/浮上心頭的擔憂`）同
+  //    `活动`（活動技能，base 508 甚至 **−500**，例：`繁/超愛玩之心`）。
+  //    ⚠️ 以前呢兩種會 fall through 去 `kind: 'unknown'` → 計分時靜默當「冇 base」。
+  //    呢兩種都係**真技能頁**（有稀有度、有评价分），所以唔准當佢哋係雜訊。
+  if (/剧情/.test(first)) return { rarity: '剧情', kind: 'story' };
+  if (/活动/.test(first)) return { rarity: '活动', kind: 'event' };
   if (/普通|传说|稀有/.test(first)) return { rarity: first, kind: 'normal' };
   return { rarity: first || null, kind: 'unknown' };
 }

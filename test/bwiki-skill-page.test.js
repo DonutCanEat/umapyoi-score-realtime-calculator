@@ -27,6 +27,19 @@ test('parseRarity：只睇第一個詞（⚠️ take:2 會變「传说 条件限
   assert.notEqual(parseRarity('传说 条').rarity, '传说 条');
 });
 
+test('parseRarity：劇情／活動 兩種稀有度（2026-09-27 實測新增）', () => {
+  // ⚠️ 以前呢兩種會 fall through 去 `unknown` → 計分時靜默當「冇 base」
+  assert.deepEqual(parseRarity('剧情'), { rarity: '剧情', kind: 'story' });
+  assert.deepEqual(parseRarity('活动'), { rarity: '活动', kind: 'event' });
+  // 真頁面樣本：`繁/浮上心頭的擔憂`（剧情）、`繁/超愛玩之心`（活动，base −500）
+  const story = parseSkillPage(html('稀有度 剧情 条件限制 通用 评价分 0'));
+  assert.equal(story.kind, 'story');
+  assert.equal(story.base, 0);
+  const event = parseSkillPage(html('稀有度 活动 条件限制 通用 评价分 -500'));
+  assert.equal(event.kind, 'event');
+  assert.equal(event.base, -500, '負數 base 唔准當「冇值」');
+});
+
 test('parseRarity：唔認識嘅值唔准假裝認識', () => {
   assert.deepEqual(parseRarity('神秘'), { rarity: '神秘', kind: 'unknown' });
   assert.deepEqual(parseRarity(''), { rarity: null, kind: 'unknown' });

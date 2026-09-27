@@ -153,6 +153,10 @@ export function mergeable(page) {
   if (page.kind === 'inherited') return { ok: true, reason: '繼承版本：base 固定 180' };
   if (page.kind === 'normal') return { ok: true, reason: '一般技能' };
   if (page.kind === 'evolution') return { ok: true, reason: '進化技能' };
+  // ⭐ 劇情技能 base = 0（實測），活動技能可以係 508 甚至 **−500** —— 兩者都係**真 base**
+  //    （同 `AGENTS.md` §4.3「劇本進化技能可以係負數」一致）→ 入得庫。
+  if (page.kind === 'story') return { ok: true, reason: '劇情技能（base 實測 0）' };
+  if (page.kind === 'event') return { ok: true, reason: '活動技能（base 可以負，實測 −500）' };
   return { ok: false, reason: `種類唔明（kind=${page.kind}）` };
 }
 

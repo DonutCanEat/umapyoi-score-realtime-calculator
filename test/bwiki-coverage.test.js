@@ -97,6 +97,14 @@ test('mergeable：一般／進化／繼承入得庫，固有唔入得', () => {
   assert.match(u.reason, /★ × Lv/, '要講明為何唔入得');
 });
 
+test('mergeable：劇情／活動技能入得庫（base 可以係 0 或者負數）', () => {
+  // 實測：`繁/浮上心頭的擔憂` 剧情 base=0、`繁/超愛玩之心` 活动 base=−500
+  assert.equal(mergeable(canon('劇情技', { kind: 'story', base: 0 })).ok, true);
+  const ev = mergeable(canon('活動技', { kind: 'event', base: -500 }));
+  assert.equal(ev.ok, true);
+  assert.match(ev.reason, /負/);
+});
+
 test('mergeable：冇 base 一律唔入得（唔准填 0，地雷 #4）', () => {
   const m = mergeable(canon('無分', { base: null }));
   assert.equal(m.ok, false);
