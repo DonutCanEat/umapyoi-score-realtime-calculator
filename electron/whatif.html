@@ -39,6 +39,12 @@
         background: #12161a; color: #e6e9ec; font-variant-numeric: tabular-nums;
       }
       input[type="number"] { width: 66px; }
+      textarea {
+        flex: 1 1 100%; box-sizing: border-box; resize: vertical;
+        padding: 4px 6px; border-radius: 4px; border: 1px solid #3d454d;
+        background: #12161a; color: #e6e9ec;
+        font: 12px/1.45 "Consolas", "Microsoft JhengHei", monospace;
+      }
       #q { flex: 1 1 260px; }
       button {
         padding: 5px 12px; border-radius: 6px; border: 1px solid #3d454d;
@@ -103,6 +109,23 @@
     <h2>試算</h2>
     <div id="picked">（未揀技能）</div>
 
+    <h2>批量試算（貼一串技能名）</h2>
+    <p class="hint">
+      ⭐ <b>一行一招</b>（同遊戲清單一樣，複製落嚟天然就係咁）。
+      ⚠️ <b>唔准用逗號分</b> —— 技能庫有 17 招自己個名含逗號（例「好，要上啦！」），
+      用逗號切會靜默認成另一招。認唔到嘅行會<b>原樣列出</b>（唔會當 0 分）。
+      適性一律當 <b>A</b>（要改就上面逐招揀）。
+    </p>
+    <div class="row">
+      <textarea id="batchText" rows="6" placeholder="弧線的教授&#10;直線加速&#10;好，要上啦！"></textarea>
+    </div>
+    <div class="row" style="margin-top: 6px">
+      <button id="batchGo">計一計</button>
+      <button id="batchClear">清空</button>
+      <span id="batchHint" class="muted"></span>
+    </div>
+    <div id="batchOut"></div>
+
     <script>
       const { ipcRenderer } = require('electron');
       // ⭐ channel 名嘅唯一來源（`electron/ipc-channels.cjs`，同 `main.js` 同一個檔）。
@@ -124,6 +147,9 @@
       const pickedEl = document.getElementById('picked');
       const adviceEl = document.getElementById('advice');
       const searchHintEl = document.getElementById('searchHint');
+      const batchTextEl = document.getElementById('batchText');
+      const batchHintEl = document.getElementById('batchHint');
+      const batchOutEl = document.getElementById('batchOut');
 
       // ── 狀態 ────────────────────────────────────────────────
       let live = null;        // 主程序報返嚟嘅實機狀態（可能係 null：未讀到）
@@ -304,10 +330,94 @@
         bannersEl.append(div);
       }
 
+      // ── ⭐ 批量清單（貼一串技能名）────────────────────────────
+      // ⚠️ 呢邊**唔計任何分數**：`whatIfBatchList()` 喺主程序算好，
+      //    回落嚟嘅係淨數字同名（見 `AGENTS` §6.3「算式只可以喺主程序」）。
+      /** 顯示批量結果（`payload` = `whatIfBatchList()` 嘅輸出）。 */
+      function renderBatch(r) {
+        batchOutEl.textContent = '';
+        if (!r) { batchHintEl.textContent = ''; return; }
+        batchHintEl.textContent =
+          `${r.resolved}/${r.total} 招認得到` + (r.unresolved.length ? `　⚠️ ${r.unresolved.length} 行認唔到` : '');
+
+        const head = document.createElement('div');
+        head.className = 'big';
+        const sign = r.delta >= 0 ? '+' : '';
+        head.innerHTML =
+          `總分 ${r.before.total}（${r.before.rank}） → <b>${r.after.total}</b>（<b>${r.after.rank}</b>）`
+          + `　<span class="delta${r.delta < 0 ? ' neg' : ''}">${sign}${r.delta}</span>`
+          + `${r.rankUp ? ' <span class="up">⭐ 升級！</span>' : ''}`;
+        batchOutEl.append(head);
+        // ⚠️ Σ 逐招邊際分 同 全量 Δ 理論上可以差 ≤1 分（逐招四捨五入 vs 全量先加後捨）
+        //    → 非 0 要**講出嚟**，唔准靜默當一致。
+        if (r.sumMismatch !== 0) {
+          const note = document.createElement('div');
+          note.className = 'muted';
+          note.textContent = `（Σ 逐招 = ${r.sumPoints}，同全量 Δ 差 ${r.sumMismatch} 分 —— 四捨五入次序，正常）`;
+          batchOutEl.append(note);
+        }
+
+        const table = document.createElement('table');
+        for (const e of r.entries) {
+          const tr = document.createElement('tr');
+          const td1 = document.createElement('td');
+          td1.style.width = '46%';
+          if (!e.resolved) {
+            td1.innerHTML = `<span class="delta neg">${e.query}</span>`;
+          } else {
+            td1.textContent = e.name ?? e.query;
+          }
+          const td2 = document.createElement('td');
+          if (!e.resolved) {
+            td2.className = 'muted';
+            td2.textContent = e.candidates.length
+              ? `認唔到（候選：${e.candidates.join('、')}）`
+              : '認唔到（技能庫冇）→ 唔計分';
+          } else if (e.duplicate) {
+            td2.className = 'muted';
+            td2.textContent = '重複（已計過）→ 唔再計分';
+          } else if (e.points === null) {
+            td2.className = 'muted';
+            td2.textContent = '冇邊際分（技能庫嘅 base 唔齊？）';
+          } else {
+            const s2 = e.points >= 0 ? '+' : '';
+            const apt = e.aptitudes.length ? `×${e.multiplier.toFixed(2)}（${e.aptitudes.join('、')}）` : '×1.00';
+            const pt = Number.isFinite(e.pt) ? `${e.pt} Pt` : 'Pt：冇資料';
+            td2.innerHTML = `<span class="delta${e.points < 0 ? ' neg' : ''}">${s2}${e.points}</span>`
+              + ` 分　<span class="muted">基礎 ${e.base}　${apt}　${pt}</span>`;
+          }
+          tr.append(td1, td2);
+          table.append(tr);
+        }
+        batchOutEl.append(table);
+
+        if (r.unresolved.length) {
+          const warn = document.createElement('div');
+          warn.className = 'banner warn';
+          warn.textContent = `⚠️ 有 ${r.unresolved.length} 行認唔到（冇計分）：${r.unresolved.map((u) => u.query).join('、')}`;
+          batchOutEl.append(warn);
+        }
+      }
+
+      /** 送批量請求（五維一變都會重算 —— 同單招試算一樣）。 */
+      function refreshBatch() {
+        const text = batchTextEl.value ?? '';
+        if (!text.trim()) { renderBatch(null); return; }
+        const stats = shownStats();
+        if (stats.some((n) => !Number.isFinite(n))) {
+          batchHintEl.textContent = '（五維未填齊）';
+          return;
+        }
+        // ⚠️ 批量一律用**預設適性 A**（`{}`）—— 逐招改適性要上面單招嗰邊揀。
+        //    呢個行為要喺 UI 講明（見上面 hint），唔准靜默當咗某個值。
+        ipcRenderer.send(IPC_CHANNELS.whatifBatch, { text, stats, grades: {} });
+      }
+
       // ── 每次有任何改變（五維／適性）都重新試算 ──────────────
       function evaluated() {
         const stats = shownStats();
         refreshAdvice(stats);
+        refreshBatch(); // ⭐ 批量清單跟住五維更新（唔使再撳掣）
         if (!picked || stats.some((n) => !Number.isFinite(n))) {
           renderPicked(null);
           return;
@@ -403,6 +513,21 @@
           return;
         }
         renderAdvice(payload.advice);
+      });
+
+      // ⭐ 批量清單：貼一串技能名（算式喺主程序，呢邊只排版）
+      document.getElementById('batchGo').addEventListener('click', refreshBatch);
+      document.getElementById('batchClear').addEventListener('click', () => {
+        batchTextEl.value = '';
+        renderBatch(null);
+      });
+      ipcRenderer.on(IPC_CHANNELS.whatifBatchResult, (_event, payload) => {
+        if (payload.error) {
+          banner(`批量試算失敗：${payload.error}`);
+          renderBatch(null);
+          return;
+        }
+        renderBatch(payload.result);
       });
 
       // 開窗即問一次（唔想等 2 秒）

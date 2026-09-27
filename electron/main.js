@@ -27,7 +27,7 @@ import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skil
 import { columnCounts } from '../src/vision/projection.js';
 import { encodePng } from '../src/vision/pngwrite.js';
 import { STAT_LABELS, STAT_KEYS } from '../src/umascore/evaluate.js';
-import { parseStatInput, skillSearchItems, whatIfAddSkill } from '../src/umascore/whatif.js';
+import { parseStatInput, skillSearchItems, whatIfAddSkill, whatIfBatchList } from '../src/umascore/whatif.js';
 import { trainingAdvice } from '../src/umascore/advice.js';
 import { anchorHud, contentRect, gameWindowRect, hudState, hudViewKey, clampLayout, layoutFromBounds, relativeFromBounds, HUD_ENV_KEYS } from '../src/hud/layout.js';
 import { loadConfig, saveConfig, resolveHudConfig, validateConfig, assertFullDisplay } from '../src/hud/config.js';
@@ -2125,6 +2125,36 @@ ipcMain.on(IPC_CHANNELS.whatifEval, (event, payload) => {
     const message = error?.message ?? String(error);
     console.error(`[what-if] ⚠️ 試算失敗：${message}`);
     event.sender.send(IPC_CHANNELS.whatifResult, { result: null, error: message });
+  }
+});
+
+/**
+ * ⭐ 批量清單：用戶貼一串技能名 → 逐招邊際分 ＋ 總分 Δ。
+ *
+ * ⚠️ 算式係**同一個** `src/umascore/whatif.js`（`whatIfBatchList()`），唔可能同 CLI 算出唔同答案。
+ * ⚠️ `text` 係唔可信輸入 → 長度設上限（貼錯一整個網頁會令主程序卡住，而主程序係
+ *    擷取迴圈嘅同一條 thread）。
+ * ⚠️ 回落 renderer 嘅係**淨數字同名**（`whatIfBatchList()` 已經剝走庫項 object）——
+ *    renderer 冇任何嘢可以自己計分。
+ */
+const WHATIF_BATCH_MAX_CHARS = 20000;
+ipcMain.on(IPC_CHANNELS.whatifBatch, (event, payload) => {
+  try {
+    loadWhatifDb();
+    if (whatifDbError) throw new Error(`技能庫未載入：${whatifDbError}`);
+    const text = String(payload?.text ?? '');
+    if (text.length > WHATIF_BATCH_MAX_CHARS) {
+      throw new Error(`貼得太多字（${text.length} 字，上限 ${WHATIF_BATCH_MAX_CHARS}）—— 分幾次試`);
+    }
+    const stats = parseStatInput(payload?.stats);
+    const grades = payload?.grades && typeof payload.grades === 'object' ? payload.grades : {};
+    event.sender.send(IPC_CHANNELS.whatifBatchResult, {
+      result: whatIfBatchList(whatifDb, text, { stats }, grades), error: null,
+    });
+  } catch (error) {
+    const message = error?.message ?? String(error);
+    console.error(`[what-if] ⚠️ 批量試算失敗：${message}`);
+    event.sender.send(IPC_CHANNELS.whatifBatchResult, { result: null, error: message });
   }
 });
 

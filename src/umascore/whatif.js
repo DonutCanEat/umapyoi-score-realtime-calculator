@@ -233,6 +233,103 @@ export function resolveSkillList(skills, text) {
 }
 
 /**
+ * ⭐ **批量清單**（what-if 窗用）：用戶貼一串技能名 → 逐招邊際分 ＋ 總分 Δ。
+ *
+ * ## 為何要一個「乾淨」嘅包裝
+ *
+ * `resolveSkillList()` 出嘅 `items` 帶住**庫項 object**（`skill`）—— 經過 IPC 送落 renderer
+ * 係可以（同 `whatifSearch` 一樣送 `skillSearchItems()` 嘅輸出），但 renderer 就
+ * **有機會自己計分**。本專案嘅底線係「算式只可以喺主程序」（`AGENTS` §6.3）→
+ * 呢個函數回嘅嘢**淨係數字同名**，renderer 冇任何嘢可以計。
+ *
+ * ⚠️ `unresolved` 一律**唔計分**（`whatIfSkillList()` 已經略過），而且要原樣列出
+ *    俾用戶知「邊幾行認唔到」—— 唔准靜默當佢哋加咗 0 分。
+ * ⚠️ `sumMismatch` 要原樣回報：Σ 逐招邊際分 同 全量 Δ 理論上可以差 ≤1 分
+ *    （逐招四捨五入 vs 全量先加後捨）→ 非 0 唔係 bug，但**要俾人睇得到**。
+ *
+ * @param {Array<object>} skills 技能庫
+ * @param {string} text 用戶貼嘅技能名（**一行一招**；見 `splitSkillList()`）
+ * @param {{stats:number[]}} player 現況
+ * @param {Record<string,string>} [grades] 適性等級
+ * @returns {{
+ *   total:number, resolved:number, queryCount:number,
+ *   entries:Array<{query:string, name:string|null, resolved:boolean, ambiguous:boolean,
+ *     candidates:string[], points:number|null, base:number|null, multiplier:number|null,
+ *     aptitudes:string[], pt:number|null}>,
+ *   unresolved:Array<{query:string, candidates:string[]}>,
+ *   duplicates:string[],
+ *   before:object, after:object, delta:number, sumPoints:number, sumMismatch:number, rankUp:boolean
+ * }}
+ */
+export function whatIfBatchList(skills, text, player = {}, grades = {}) {
+  const resolved = resolveSkillList(skills, text);
+  const list = whatIfSkillList(player, resolved.items, grades);
+  const byQuery = new Map();
+  for (const e of list.entries) if (!byQuery.has(e.query)) byQuery.set(e.query, e);
+  // 重複項：`resolveSkillList()` 唔會將佢哋放入 `items`（因為 `whatIfSkillList()` 要逐招計分）
+  // ⚠️ 但用戶貼咗兩次就要睇到兩行 —— 靜默唔見一行比「顯示 0 分」更差。
+  //    所以喺 `duplicates` 嗰個位置插返一行 `duplicate: true, points: null`。
+  const dupSet = new Set(resolved.duplicates);
+  const dupNames = new Map();
+  for (const q of resolved.duplicates) {
+    const needle = normalizeSkillName(q);
+    const hit = (skills ?? []).find((s) => [s?.name, s?.simplifiedName]
+      .filter(Boolean).some((n) => normalizeSkillName(n) === needle));
+    dupNames.set(q, hit?.name ?? null);
+  }
+  const dupRow = (q) => ({
+    query: q, name: dupNames.get(q) ?? null, resolved: true, duplicate: true, ambiguous: false,
+    candidates: [], points: null, base: null, multiplier: null, aptitudes: [], pt: null,
+  });
+  // ⚠️ 逐行決定，而且**正常項要出喺第一次出現嗰個位置**（唔係最後）——
+  //    實測 bug：先出重複行會令表格變成「第一行重複、第二行 508 分」，同用戶貼嘅次序唔一致。
+  const emittedNormal = new Set();
+  const entries = [];
+  for (const q of splitSkillList(text)) {
+    const it = resolved.items.find((x) => x.query === q && !emittedNormal.has(x.query));
+    if (!it) { entries.push(dupRow(q)); continue; }
+    emittedNormal.add(q);
+    if (!it.skill) {
+      entries.push({
+        query: it.query, name: null, resolved: false, duplicate: false, ambiguous: it.ambiguous,
+        candidates: it.candidates, points: null, base: null, multiplier: null, aptitudes: [], pt: null,
+      });
+      continue;
+    }
+    // ⚠️ 同一招出現兩次 → `whatIfSkillList()` 只計一次；第二個 entry 冇 `result`
+    //    → 呢度要回 `points: null` 而**唔係**當佢 0 分（0 分會令人以為「加咗但冇加分」）。
+    const e = byQuery.get(it.query);
+    entries.push({
+      query: it.query,
+      name: it.skill.name ?? null,
+      resolved: true,
+      duplicate: false,
+      ambiguous: false,
+      candidates: [],
+      points: e ? e.result.points : null,
+      base: Number.isFinite(Number(it.skill.base)) ? Number(it.skill.base) : null,
+      multiplier: e ? e.result.multiplier : null,
+      aptitudes: e ? e.result.aptitudes : [],
+      pt: e ? e.result.pt : (it.skill.skillPt ?? null),
+    });
+  }
+  return {
+    entries,
+    unresolved: entries.filter((e) => !e.resolved).map((e) => ({ query: e.query, candidates: e.candidates })),
+    duplicates: resolved.duplicates,
+    total: entries.length,
+    resolved: entries.filter((e) => e.resolved && !e.duplicate).length,
+    queryCount: entries.length,
+    before: list.before,
+    after: list.after,
+    delta: list.delta,
+    sumPoints: list.sumPoints,
+    sumMismatch: list.sumMismatch,
+    rankUp: list.rankUp,
+  };
+}
+
+/**
  * 一個技能（＋用戶揀嘅適性）→ 佢自己嘅評價分。
  *
  * @param {{base:number, condition?:string}} skill

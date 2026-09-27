@@ -58,10 +58,15 @@ const IPC_CHANNELS = Object.freeze({
   whatifSearch: 'whatif-search',             // renderer → main：技能名搜尋
   whatifAdvice: 'whatif-advice',             // renderer → main：升級建議（C4）
   whatifEval: 'whatif-eval',                 // renderer → main：加一招試算（C1）
+  // ⭐ 批量清單（2026-09-27）：貼一串技能名 → 逐招邊際分 ＋ 總分 Δ。
+  // ⚠️ 算式一律喺主程序（`src/umascore/whatif.js` `whatIfBatchList()`）——
+  //    renderer 收到嘅係**淨數字同名**，冇任何庫項 object（見 AGENTS §6.3）。
+  whatifBatch: 'whatif-batch',               // renderer → main：貼一串技能名試算
   whatifLive: 'whatif-live',                 // main → renderer：即時五維／分數
   whatifResults: 'whatif-results',           // main → renderer：搜尋結果
   whatifAdviceResult: 'whatif-advice-result', // main → renderer：升級建議結果
   whatifResult: 'whatif-result',             // main → renderer：試算結果
+  whatifBatchResult: 'whatif-batch-result',  // main → renderer：批量清單結果
 });
 
 module.exports = { IPC_CHANNELS };

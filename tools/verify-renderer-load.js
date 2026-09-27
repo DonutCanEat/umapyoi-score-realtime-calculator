@@ -169,15 +169,25 @@ const SCENARIOS = [
   {
     file: 'whatif.html',
     waitFor: [IPC_CHANNELS.whatifGet],
+    batch: true,
     afterLoad: async (win) => {
       check(
         (await text(win, 'typeof IPC_CHANNELS')) === 'object',
         'whatif.html：require 攞到 IPC_CHANNELS',
       );
-      win.webContents.send(IPC_CHANNELS.whatifLive, { dbCount: 1323, stats: null, live: null });
+      win.webContents.send(IPC_CHANNELS.whatifLive, { dbCount: 1589, stats: [1200, 600, 600, 600, 600], live: null });
       await sleep(300);
       const db = await text(win, "document.getElementById('db').textContent");
-      check(/1323/.test(db), 'whatif.html：收到 whatif-live（main → renderer 通）', db);
+      check(/1589/.test(db), 'whatif.html：收到 whatif-live（main → renderer 通）', db);
+      // ⭐ 批量清單（2026-09-27）：新加嘅元素真係砌得出嚟（唔係得個 HTML 字串）
+      check(
+        (await text(win, "!!document.getElementById('batchText') && !!document.getElementById('batchGo')"))
+          === true,
+        'whatif.html：批量清單嘅輸入框同掣喺 DOM 入面',
+      );
+      // ⭐ 真係送一次批量請求（證明 renderer → main 嗰條新 channel 通）
+      await text(win, "document.getElementById('batchText').value='弧線的教授\\n唔存在嘅招'");
+      win.webContents.executeJavaScript("document.getElementById('batchGo').click()");
     },
   },
 ];
@@ -193,6 +203,49 @@ function waitForChannel(channel, ms = 2000) {
   });
 }
 
+/**
+ * ⭐ 等 `whatif-batch` 到，**順手回一個真形狀嘅結果** → 一次過驗三件事：
+ *   ① renderer → main 嗰條新 channel 通；② 回落去嘅 channel 通；
+ *   ③ 排版真係砌得出（表格有兩行）。
+ *
+ * ⚠️ 回嘅 payload 形狀係真嘅 `whatIfBatchList()` 輸出（唔准自己編一個唔同形狀 —— 咁就係假閘）。
+ */
+function waitForBatch(ms = 3000) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), ms);
+    ipcMain.once(IPC_CHANNELS.whatifBatch, (event, payload) => {
+      clearTimeout(timer);
+      event.sender.send(IPC_CHANNELS.whatifBatchResult, {
+        error: null,
+        result: {
+          entries: [
+            {
+              query: '弧線的教授', name: '弧線的教授', resolved: true, duplicate: false, ambiguous: false,
+              candidates: [], points: 508, base: 508, multiplier: 1, aptitudes: [], pt: 360,
+            },
+            {
+              query: '唔存在嘅招', name: null, resolved: false, duplicate: false, ambiguous: false,
+              candidates: [], points: null, base: null, multiplier: null, aptitudes: [], pt: null,
+            },
+          ],
+          unresolved: [{ query: '唔存在嘅招', candidates: [] }],
+          duplicates: [],
+          total: 2,
+          resolved: 1,
+          queryCount: 2,
+          before: { statScore: 8413, skillScore: 0, total: 8413, rank: 'B+', nextRank: null },
+          after: { statScore: 8413, skillScore: 508, total: 8921, rank: 'B+', nextRank: null },
+          delta: 508,
+          sumPoints: 508,
+          sumMismatch: 0,
+          rankUp: false,
+        },
+      });
+      resolve(payload);
+    });
+  });
+}
+
 async function main() {
   await app.whenReady();
 
@@ -203,6 +256,7 @@ async function main() {
   for (const scenario of SCENARIOS) {
     // ⚠️ 一定要**載入之前**就掛好 listener（settings／whatif 係「開窗即問」）
     const waited = (scenario.waitFor ?? []).map((ch) => waitForChannel(ch).then((ok) => ({ ch, ok })));
+    const batchPromise = scenario.batch ? waitForBatch() : null;
     const { win, errors } = await loadPage(scenario.file);
     windows.push(win);
 
@@ -217,6 +271,26 @@ async function main() {
 
     for (const { ch, ok } of await Promise.all(waited)) {
       check(ok, `${scenario.file}：renderer → main「${ch}」有送到（send 通）`);
+    }
+
+    if (batchPromise) {
+      // ⭐ 批量清單：一炮過驗「send 通 → 回落去通 → 排版砌得出」
+      const payload = await batchPromise;
+      check(payload !== null, 'whatif.html：renderer → main「whatif-batch」有送到（send 通）',
+        payload === null ? '等唔到（撳咗掣但冇送到？）' : '');
+      if (payload) {
+        check(Array.isArray(payload.stats) && payload.stats.length === 5,
+          'whatif.html：送上去嘅 payload 帶住五維', JSON.stringify(payload.stats));
+        check(typeof payload.text === 'string' && payload.text.includes('弧線的教授'),
+          'whatif.html：送上去嘅 payload 帶住貼嘅字', JSON.stringify(payload.text));
+        await sleep(300);
+        const hint = await text(win, "document.getElementById('batchHint').textContent");
+        const rows = await text(win, "document.querySelectorAll('#batchOut table tr').length");
+        const warn = await text(win, "document.querySelectorAll('#batchOut .banner.warn').length");
+        check(rows === 2, 'whatif.html：批量結果表砌出兩行（main → renderer 通 ＋ 排版得）', `rows=${rows}`);
+        check(/1\/2/.test(hint), 'whatif.html：批量摘要顯示認得到幾多招', hint);
+        check(warn === 1, 'whatif.html：認唔到嘅行有出警告橫額', `warn=${warn}`);
+      }
     }
   }
 

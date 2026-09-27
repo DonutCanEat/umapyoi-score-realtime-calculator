@@ -21,6 +21,7 @@ import {
   resolveSkillList,
   splitSkillList,
   whatIfAddSkill,
+  whatIfBatchList,
   whatIfSkillList,
 } from '../src/umascore/whatif.js';
 
@@ -173,4 +174,60 @@ test('真庫：全部 1323 招「自己個名」都要解析得返自己（唔�
   });
   assert.ok(checked > 1000, `應該驗過 1000 招以上，實得 ${checked}`);
   assert.deepEqual(misses, [], `有招解析唔返自己：${misses.slice(0, 10).join('／')}`);
+});
+
+// ─────────────────── ⭐ 批量清單（what-if 窗用；renderer 唔准自己計分）───────────────────
+
+test('whatIfBatchList：回嘅嘢淨係數字同名（唔准漏庫項 object 落 renderer）', { skip: !hasDb }, () => {
+  const out = whatIfBatchList(db.skills, '弧線的教授', { stats: [1200, 600, 600, 600, 600] });
+  assert.equal(out.entries.length, 1);
+  const e = out.entries[0];
+  assert.equal(e.name, '弧線的教授');
+  assert.equal(e.resolved, true);
+  assert.equal(typeof e.points, 'number');
+  assert.equal(typeof e.base, 'number');
+  // ⛔ 唔准有任何欄位係庫項 object（renderer 一有 object 就會自己計分）
+  for (const [k, v] of Object.entries(e)) {
+    assert.ok(
+      v === null || typeof v !== 'object' || Array.isArray(v),
+      `欄位「${k}」係 object（${JSON.stringify(v).slice(0, 60)}）—— renderer 唔准有庫項`,
+    );
+  }
+});
+
+test('whatIfBatchList：認唔到嘅行要原樣列出（唔准靜默當 0 分）', { skip: !hasDb }, () => {
+  const out = whatIfBatchList(db.skills, '弧線的教授\n完全唔存在嘅技能名XYZ', { stats: [1200, 600, 600, 600, 600] });
+  assert.equal(out.resolved, 1);
+  assert.equal(out.total, 2);
+  assert.deepEqual(out.unresolved.map((u) => u.query), ['完全唔存在嘅技能名XYZ']);
+  const bad = out.entries.find((e) => !e.resolved);
+  assert.equal(bad.points, null, '認唔到 → points 一定要 null（唔准 0）');
+  assert.equal(bad.name, null);
+});
+
+test('whatIfBatchList：重複招要出一行 `duplicate`（points = null，唔准當 0 分）', { skip: !hasDb }, () => {
+  const out = whatIfBatchList(db.skills, '弧線的教授\n弧線的教授', { stats: [1200, 600, 600, 600, 600] });
+  assert.deepEqual(out.duplicates, ['弧線的教授']);
+  assert.equal(out.total, 2, '用戶貼咗兩行就要見到兩行（唔准靜默唔見一行）');
+  assert.equal(out.resolved, 1, '只計一次分');
+  assert.equal(out.entries[0].duplicate, false);
+  assert.equal(out.entries[1].duplicate, true, '第二行要標明係重複');
+  assert.equal(out.entries[1].points, null, '⛔ 唔准當 0 分');
+  assert.equal(out.entries[1].name, '弧線的教授', '重複行都要顯示到係邊招');
+  assert.ok(Math.abs(out.sumMismatch) <= 1);
+});
+
+test('whatIfBatchList：`delta` 一定要係全量重算（唔准 Σ 逐招邊際分）', { skip: !hasDb }, () => {
+  const stats = [1200, 600, 600, 600, 600];
+  const out = whatIfBatchList(db.skills, '弧線的教授\n直線加速', { stats });
+  assert.equal(out.before.statScore, out.before.total, '冇技能 → 總分 ＝ 五維分');
+  assert.equal(out.after.total - out.before.total, out.delta);
+  assert.ok(Math.abs(out.sumMismatch) <= 1, `Σ 邊際分 同 全量 Δ 差 ${out.sumMismatch}（>1 就係 bug）`);
+});
+
+test('whatIfBatchList：空清單唔准爆', { skip: !hasDb }, () => {
+  const out = whatIfBatchList(db.skills, '', { stats: [600, 600, 600, 600, 600] });
+  assert.equal(out.total, 0);
+  assert.equal(out.delta, 0);
+  assert.deepEqual(out.unresolved, []);
 });

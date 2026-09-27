@@ -87,6 +87,46 @@ test('what-if 窗：channel 一個都唔可以少（get／search／eval／advice
   }
 });
 
+// ─────────────── ⭐ 批量清單（2026-09-27；backlog C1 嗰條「窗未加批量」）───────────────
+
+test('⭐ 批量清單：接線兩邊齊（send／on／handler／push 四樣都要有）', () => {
+  assert.ok(SENT.includes('whatif-batch'), 'whatif.html 要送 whatif-batch');
+  assert.ok(HANDLED.includes('whatif-batch'), 'main.js 要收 whatif-batch');
+  assert.ok(LISTENED.includes('whatif-batch-result'), 'whatif.html 要聽 whatif-batch-result');
+  assert.ok(PUSHED.includes('whatif-batch-result'), 'main.js 要推 whatif-batch-result');
+});
+
+test('⭐ 批量清單：算式一定要喺主程序（窗唔准自己切字串／自己計）', () => {
+  // ⚠️ 同「窗唔准自己計分」一條道理：`whatIfBatchList()` 有 `node --test` 覆蓋，
+  //    窗自己砌一份就係繞過嗰啲測試（而偏差係靜默嘅）。
+  assert.match(MAIN, /whatIfBatchList\(whatifDb, text, \{ stats \}, grades\)/,
+    'main.js 要用核心庫嘅 whatIfBatchList()');
+  assert.match(MAIN, /import \{[^}]*whatIfBatchList[^}]*\} from '\.\.\/src\/umascore\/whatif\.js'/,
+    'whatIfBatchList 要由核心庫 import');
+  assert.match(WHATIF, /renderBatch\(payload\.result\)/, '窗只可以排版主程序傳落嚟嘅結果');
+  // 窗唔准自己切技能名清單（`splitSkillList()` 嘅「一行一招、逗號唔切」規則只可以有一份）
+  assert.ok(!/splitSkillList|\.split\(/.test(WHATIF), '窗唔准自己切清單（規則只可以一份，見 splitSkillList 註釋）');
+});
+
+test('⭐ 批量清單：貼太多字要擋（唔准令主程序卡住 —— 擷取迴圈同一條 thread）', () => {
+  assert.match(MAIN, /WHATIF_BATCH_MAX_CHARS = \d+/, '要有一個字數上限常數');
+  assert.match(MAIN, /text\.length > WHATIF_BATCH_MAX_CHARS/, '要真嘅擋（唔係得個常數）');
+});
+
+test('⭐ 批量清單：窗要講明「一行一招、逗號唔切、適性當 A」（唔准靜默）', () => {
+  assert.match(WHATIF, /一行一招/, '要講明一行一招');
+  assert.match(WHATIF, /唔准用逗號分/, '要講明逗號唔切（技能名自己含逗號）');
+  assert.match(WHATIF, /適性一律當 ?<b>A<\/b>/, '要講明適性假設');
+  // 認唔到嘅行一定要顯示出嚟（唔准靜默當 0 分）
+  assert.match(WHATIF, /認唔到（技能庫冇）→ 唔計分/, '認唔到要有明確字眼');
+  assert.match(WHATIF, /重複（已計過）→ 唔再計分/, '重複要有明確字眼');
+});
+
+test('⭐ 批量清單：五維一變就要重算（唔使再撳掣）', () => {
+  assert.match(WHATIF, /function evaluated\(\)[\s\S]*?refreshBatch\(\)/,
+    'evaluated() 要叫 refreshBatch()（五維／適性一變就更新）');
+});
+
 test('C4：升級建議要喺主程序計（renderer 唔准自己計邊際效率）', () => {
   // ⚠️ 同「窗唔准自己計分」一條道理：`advice.js` 有 `node --test` 覆蓋，
   //    窗自己砌一份就係繞過測試（而且冇人會發現）。
