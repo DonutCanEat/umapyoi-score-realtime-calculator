@@ -19,6 +19,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { reconcile, describeCoverage, mergeable } from '../src/umascore/bwiki-coverage.js';
 import { shapeSkill } from '../src/umascore/gametora-skills.js';
+// ⭐ 收空白（獨立審計 M7）：以前呢度自己寫一份 `replace(/\s+/g,' ').trim()`。
+import { collapseSpaces } from '../src/umascore/skill-name-key.js';
 import { bareFlags, flagValue, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -57,8 +59,8 @@ const r = reconcile({ pages, localSkills, gametoraSkills });
 const rows = r.newPages.map(({ page, inGametora }) => {
   const m = mergeable(page);
   return {
-    name: String(page.nameTw ?? '').replace(/\s+/g, ' ').trim(),
-    nameCn: String(page.nameCn ?? '').replace(/\s+/g, ' ').trim() || null,
+    name: collapseSpaces(page.nameTw),
+    nameCn: collapseSpaces(page.nameCn) || null,
     pageTitle: page.pageTitle,
     rarity: page.rarity ?? null,
     kind: page.kind ?? 'unknown',

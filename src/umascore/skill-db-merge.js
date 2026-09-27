@@ -51,10 +51,11 @@
  *    ⚠️ 舊頁嘅 `技能名` 係**繁體**，但**唔係**日文名 —— 日文名要由新頁嗰個 id 攞。
  */
 
-import { normalizeSkillName } from './whatif.js';
 import { decodeEntities } from './gametora-skills.js';
+// ⭐ 對帳 key（獨立審計 M7）：以前呢度自己砌一份，同其餘四處逐字一樣。
+import { collapseSpaces, skillNameKey } from './skill-name-key.js';
 
-const keyOf = (s) => normalizeSkillName(decodeEntities(String(s ?? '').replace(/\s+/g, ' ').trim()));
+const keyOf = (s) => skillNameKey(s);
 
 /** GameTora 一項嘅三個名（繁體／日文／英文）＋ 種類。 */
 export function gametoraNames(row) {
@@ -252,7 +253,7 @@ export function mergeSkillDb({ calcSkills = [], dbSkills = [], gametoraRows = []
     //    bwiki 逐頁繁體名 > GameTora 繁體名 > 日文名（標明來源）
     const page = bLookup(c.name, c.nameCn, g?.names?.jp);
     const jp = g?.names?.jp ?? c.name;
-    const pageTw = page?.nameTw ? String(page.nameTw).replace(/\s+/g, ' ').trim() : null;
+    const pageTw = page?.nameTw ? collapseSpaces(page.nameTw) : null;
     const gtTw = g?.names?.tw ?? null;
     const candidates = [
       pageTw && keyOf(pageTw) !== keyOf(jp) ? { name: pageTw, src: 'bwiki-tw' } : null,

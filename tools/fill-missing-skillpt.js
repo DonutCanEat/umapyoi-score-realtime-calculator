@@ -20,14 +20,14 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { normalizeSkillName } from '../src/umascore/whatif.js';
-import { decodeEntities } from '../src/umascore/gametora-skills.js';
+import { skillNameKey } from '../src/umascore/skill-name-key.js';
 import { bareFlags, toolArgs } from './lib/args.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const args = toolArgs();
 const flags = bareFlags(args);
-const key = (s) => normalizeSkillName(decodeEntities(String(s ?? '').replace(/\s+/g, ' ').trim()));
+// ⭐ 對帳 key（獨立審計 M7）：以前呢度自己砌一份，同其餘四處逐字一樣。
+const key = (s) => skillNameKey(s);
 
 const dir = join(ROOT, 'data', 'bwiki-pages');
 const pages = existsSync(dir)

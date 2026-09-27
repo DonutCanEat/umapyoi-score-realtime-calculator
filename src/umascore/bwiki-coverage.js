@@ -19,14 +19,13 @@
  *    所以呢個模組會回 `basePoints: false` 提醒呼叫方：呢類唔准用 page base 直接計分。
  */
 
-import { normalizeSkillName } from './whatif.js';
-import { decodeEntities } from './gametora-skills.js';
+import { skillNameKey } from './skill-name-key.js';
 
 /** 一頁嘅正規化 key（繁體名 ＋ 簡體名；兩者都可能命中本庫）。 */
 export function pageKeys(page) {
   const out = new Set();
   for (const raw of [page?.nameTw, page?.nameCn]) {
-    const n = normalizeSkillName(decodeEntities(String(raw ?? '').replace(/\s+/g, ' ').trim()));
+    const n = skillNameKey(raw);
     if (n) out.add(n);
   }
   return [...out];
@@ -36,7 +35,7 @@ export function pageKeys(page) {
 function keySet(names) {
   const s = new Set();
   for (const raw of names ?? []) {
-    const n = normalizeSkillName(decodeEntities(String(raw ?? '').replace(/\s+/g, ' ').trim()));
+    const n = skillNameKey(raw);
     if (n) s.add(n);
   }
   return s;
