@@ -154,6 +154,85 @@ export function parseStatInput(raw) {
 }
 
 /**
+ * 把「用戶打／貼上嘅一大串技能名」切開做一項一項。
+ *
+ * ⚠️⚠️ **逗號唔可以當分隔符**：技能庫實測有 **17 招自己個名含逗號**
+ * （全形 `，` 同半形都有：`好，要上啦！`、`來，跟我一起做吧！`、`看過來，好戲開始了！`、
+ * `小菜一碟，輕而易舉♪`、`我不會、放棄的～！`、`不焦急、不逞強`…）——
+ * 一用逗號切，呢啲招就會**靜默變咗另一招或者認唔到**（實測 bug：`好，要上啦！` → `好` → `好鬥`）。
+ * 所以採用嘅慣例係「**一行一招**」（遊戲清單本來就係一行一招，複製落嚟天然係咁）。
+ *
+ * 規則：按 換行／tab／分號 切 → trim → 丟空項（保留重複項，交由 `resolveSkillList()`
+ * 按「庫項」去重 —— 因為 `直線` 同 `直线` 係同一招，用字串比對會當兩招）。
+ *
+ * @param {string} text
+ * @returns {string[]} 每一項技能名（原樣，未正規化、未去重）
+ */
+export function splitSkillList(text) {
+  return String(text ?? '')
+    .split(/[;；\t\r\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * 逐項技能名 → 技能庫條目。
+ *
+ * ⚠️ **唔准亂猜**（三條規則，全部都要有測試守住）：
+ *   ① 正規化後**完全相等** → 用嗰個（唯一解）；
+ *   ② 冇完全相等、而**只有一個**候選，而且用戶打嘅字係候選名嘅一部分 → 用嗰個（＝縮寫）；
+ *   ③ 其餘（零候選／多個候選）→ `unresolved: true` ＋ 列出候選，**唔計分**。
+ *      ⚠️ 以前「冇完全相等就當第一個命中」係**靜默認錯招**（實測：`好` → `好鬥`）。
+ *
+ * @param {Array<object>} skills 技能庫（`data/skill-db-tw.json` 嘅 `skills`）
+ * @param {string} text 用戶打／貼嘅一串技能名（一行一招）
+ * @returns {{
+ *   items: Array<{query:string, skill:object|null, resolved:boolean, ambiguous:boolean, candidates:string[]}>,
+ *   duplicates: string[], unresolved: string[]
+ * }}
+ */
+export function resolveSkillList(skills, text) {
+  const items = [];
+  const unresolved = [];
+  const duplicates = [];
+  const seenSkill = new Set();
+
+  for (const query of splitSkillList(text)) {
+    const needle = normalizeSkillName(query);
+    // ① 正規化後完全相等 —— ⚠️ **一定要喺全庫搵**，唔可以淨係睇 `searchSkills()` 嘅前幾個：
+    //    實測 `直線加速` 因為「開頭命中優先」嘅排序，會被「中距離直線◎」等名擠出前 10 名
+    //    → 用前幾個嚟判「完全相等」會靜默認成另一招。
+    const exact = needle
+      ? (skills ?? []).filter((s) => [s?.name, s?.simplifiedName]
+        .filter(Boolean)
+        .some((n) => normalizeSkillName(n) === needle))
+      : [];
+    const hits = searchSkills(skills, query, { limit: 10 });
+    // ② 唯一候選 ＋ 係候選名嘅一部分（縮寫，例：`弧線的教授` → `弧線的教授` 嘅前綴）
+    const typed = hits.length === 1
+      && [hits[0].name, hits[0].simplifiedName].filter(Boolean)
+        .some((n) => normalizeSkillName(n).includes(needle));
+    const skill = exact[0] ?? (typed ? hits[0] : null);
+    const candidates = hits.slice(0, 5).map((s) => s?.name ?? '');
+    const ambiguous = !skill && hits.length > 1;
+    if (!skill) unresolved.push(query);
+
+    // 同一招出現兩次 → 第二個當重複（唔准計兩次分）。
+    // ⚠️ 用**庫項名**做 key（唔係用 query 字串）：`直線` 同 `直线` 係同一招，
+    //    用字串比對會當兩招 → 靜默計兩次分。
+    if (!skill) { items.push({ query, skill: null, resolved: false, ambiguous, candidates }); continue; }
+
+    const key = normalizeSkillName(skill.name);
+    if (seenSkill.has(key)) { duplicates.push(query); continue; }
+    seenSkill.add(key);
+
+    items.push({ query, skill, resolved: true, ambiguous: false, candidates: [] });
+  }
+
+  return { items, duplicates, unresolved };
+}
+
+/**
  * 一個技能（＋用戶揀嘅適性）→ 佢自己嘅評價分。
  *
  * @param {{base:number, condition?:string}} skill
@@ -231,5 +310,52 @@ export function whatIfAddSkill(player = {}, skill, grades = {}) {
     gapAfter,
     // 加呢招之後已經係最高ランク（`after.nextRank === null`）—— 同「仲差幾多」係兩件事
     reached: after.nextRank === null,
+  };
+}
+
+/**
+ * ⭐ 文字批量版：`--skills=`／貼上一大串技能名 → **一次過**算總分同每招嘅邊際分。
+ *
+ * 為何唔係「逐招叫 `whatIfAddSkill()` 加埋」就算：
+ *   ① 總分一定要由 `evaluate()` **全量重算一次**（單一公式來源，同 `whatIfAddSkill` 一樣做法）
+ *      → 順便令「Σ 邊際分 vs 全量 Δ」變成一個測得到嘅不變式（走樣即刻紅）；
+ *   ② 適性係**逐招**計（唔同招條件唔同），所以 `grades` 照舊逐招傳落 `whatIfAddSkill()`。
+ *
+ * ⚠️ `pointsByIdx` 只計 `normalSkillPoints`（普通技能路線）；技能庫有 `base` 嘅招全部適用。
+ * ⚠️ 「Σ 邊際分」同「全量 Δ」理論上會有 ≤1 分差距（逐招四捨五入 vs 全量先加後捨）——
+ *    所以 `sumMismatch` 係一個**會回報**嘅欄位，唔准靜默當佢一定係 0。
+ *
+ * @param {object} [player] 現況（最少 `{stats:[…]}`；有 `skills` 就一齊計）
+ * @param {Array<{skill:object|null}>} items 由 `resolveSkillList()` 嚟（未解析嘅項會被略過）
+ * @param {Record<string,string>} [grades] 適性等級（例：`{腳質:'S', 距離:'A'}`）
+ * @returns {{
+ *   skills: object[], entries: object[],
+ *   before: object, after: object, delta: number, sumPoints: number, sumMismatch: number,
+ *   rankUp: boolean
+ * }}
+ */
+export function whatIfSkillList(player = {}, items = [], grades = {}) {
+  const usable = (items ?? []).filter((it) => it?.skill && Number.isFinite(Number(it.skill.base)));
+  const entries = usable.map((it) => ({
+    query: it.query ?? null,
+    assumed: [],
+    result: whatIfAddSkill(player, it.skill, grades),
+  }));
+  const built = entries.map(({ result }) => ({ base: result.base, aptitudes: result.aptitudes }));
+
+  const before = scoreOf(player);
+  // ⚠️ 全量一次過（唔係用 `whatIfAddSkill` 嘅 after 疊埋）
+  const after = scoreOf({ ...player, skills: [...(player.skills ?? []), ...built] });
+  const sumPoints = entries.reduce((sum, e) => sum + e.result.points, 0);
+
+  return {
+    skills: usable.map((it) => it.skill),
+    entries,
+    before,
+    after,
+    delta: after.total - before.total,
+    sumPoints,
+    sumMismatch: (after.total - before.total) - sumPoints,
+    rankUp: before.rank !== after.rank,
   };
 }
