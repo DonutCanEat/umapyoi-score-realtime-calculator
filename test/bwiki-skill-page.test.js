@@ -142,3 +142,19 @@ test('parseSkillPage：名抽唔到但**有 `title`** → 用 `pageTitle` 剝前
   // ⛔ 冇 title 就照 null（唔准編）
   assert.equal(parseSkillPage(html('完全冇關係嘅內容')).nameTw, null);
 });
+
+test('parseSkillPage：⭐ 冇「简中服」嘅頁都要抽到名（實測 31 頁）', () => {
+  // 實測：`繁/Beat the Stars` 等 31 頁**冇繁體↔簡體對照**（連「简中服」都冇）
+  // → 以前三個寫法都要「简中服」出現 → **全部中唔到** → nameTw 靜默變 null。
+  const p = parseSkillPage(html(
+    '按右上角“WIKI功能→编辑”即可修改页面内容。 服务器切换 日服 繁中服 '
+    + 'Beat the Stars / Beat the Stars 稀有度 进化 条件限制 中距離 评价分 633 共需技能PT 360',
+  ), { title: '繁/Beat the Stars' });
+  assert.equal(p.nameTw, 'Beat the Stars');
+  assert.equal(p.nameCn, null, '⛔ 唔准當第二個名係簡體名（兩邊一樣）');
+  assert.equal(p.kind, 'evolution');
+  assert.equal(p.base, 633);
+  // 名有空格都要抽到
+  const q = parseSkillPage(html('服务器切换 日服 繁中服 Adventure of 564 / Adventure of 564 稀有度 进化'), { title: '繁/Adventure of 564' });
+  assert.equal(q.nameTw, 'Adventure of 564');
+});
