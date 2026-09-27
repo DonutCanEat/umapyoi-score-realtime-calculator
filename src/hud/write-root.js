@@ -26,11 +26,13 @@
 
 import { join } from 'node:path';
 
+// ⭐ 獨立審計 M2：同 `config-path.js` 逐項一樣嘅決策收斂成一支。
+//    ⚠️ `why` 文案仍然由呢度提供（dump 嘅解釋同設定檔嘅**刻意唔同**，見檔頭）。
+import { WRITABLE_ROOT_WHERE, resolveWritableRoot } from './writable-root.js';
+
 /** `writeRootFor()` 回嘅「用咗邊條規則」（方便 log 同測試斷言）。 */
-export const WRITE_ROOT_WHERE = Object.freeze({
-  devRoot: 'dev-root',
-  packagedUserData: 'packaged-userData',
-});
+// ⚠️ 同 `config-path.js` **同一個 object**。
+export const WRITE_ROOT_WHERE = WRITABLE_ROOT_WHERE;
 
 /**
  * 決定「執行時寫入」嘅根目錄。
@@ -43,27 +45,14 @@ export const WRITE_ROOT_WHERE = Object.freeze({
  * @returns {{root:string, where:string, why:string}} `why` 係一句繁中解釋，直接 log 得
  */
 export function writeRootFor({ isPackaged = false, rootDir, userDataDir } = {}) {
-  const inAsar = typeof rootDir === 'string' && /\.asar([\\/]|$)/i.test(rootDir);
-
-  if (!isPackaged && !inAsar) {
-    if (!rootDir) throw new Error('開發模式（isPackaged=false）要提供 rootDir —— 唔准靜默用其他位置');
-    return {
-      root: rootDir,
-      where: WRITE_ROOT_WHERE.devRoot,
-      why: '開發模式 → dump／連拍寫喺專案根（睇得到、`tools/raw-to-png.js` 直接用）',
-    };
-  }
-
-  if (!userDataDir) {
-    throw new Error('已打包／asar 模式要提供 userDataDir（app.getPath("userData")）—— 唔准靜默用其他位置');
-  }
-  return {
-    root: userDataDir,
-    where: WRITE_ROOT_WHERE.packagedUserData,
-    why: inAsar
-      ? '專案目錄喺 app.asar 入面（唯讀）→ dump／連拍寫喺 userData'
-      : '已打包（app.isPackaged=true）→ dump／連拍寫喺 userData（專案目錄可能唯讀）',
-  };
+  return resolveWritableRoot({
+    isPackaged,
+    rootDir,
+    userDataDir,
+    whyDev: '開發模式 → dump／連拍寫喺專案根（睇得到、`tools/raw-to-png.js` 直接用）',
+    whyPackaged: '已打包（app.isPackaged=true）→ dump／連拍寫喺 userData（專案目錄可能唯讀）',
+    whyAsar: '專案目錄喺 app.asar 入面（唯讀）→ dump／連拍寫喺 userData',
+  });
 }
 
 /** 由根目錄砌出一個寫入子目錄（純函數，只為免兩邊各寫一次 `join`）。 */

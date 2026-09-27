@@ -25,12 +25,13 @@ import { HUD_CONFIG_FILENAME } from './config.js';
 // ⭐ 獨立審計 M1：「值 → 可讀文字」以前喺呢度**又**寫咗一份（同 util.js 逐個分支一樣）
 //    → 收斂成一支，唔然兩邊走樣就會同一份壞值出唔同訊息。
 import { describe } from './util.js';
+// ⭐ 獨立審計 M2：同 `write-root.js` 逐項一樣嘅「可寫根目錄」決策收斂成一支
+//    （同一個 .asar 判斷、同一個分支、同一句 throw）。⚠️ `why` 文案由呢度提供。
+import { WRITABLE_ROOT_WHERE, resolveWritableRoot } from './writable-root.js';
 
 /** `configPathFor()` 會回嘅「用咗邊條規則」（方便 log 同測試斷言）。 */
-export const CONFIG_PATH_WHERE = Object.freeze({
-  devRoot: 'dev-root',
-  packagedUserData: 'packaged-userData',
-});
+// ⚠️ 同 `write-root.js` **同一個 object**（以前兩份，走樣就會 log 出唔同嘅規則名）。
+export const CONFIG_PATH_WHERE = WRITABLE_ROOT_WHERE;
 
 /**
  * 決定 HUD 設定檔嘅完整路徑。
@@ -56,24 +57,14 @@ export function configPathFor({
     throw new Error(`設定檔名唔可以有路徑分隔符（只係一個檔名），實得「${filename}」`);
   }
 
-  const inAsar = typeof rootDir === 'string' && /\.asar([\\/]|$)/i.test(rootDir);
-  if (!isPackaged && !inAsar) {
-    if (!rootDir) throw new Error('開發模式（isPackaged=false）要提供 rootDir —— 唔准靜默用其他位置');
-    return {
-      path: join(rootDir, filename),
-      where: CONFIG_PATH_WHERE.devRoot,
-      why: '開發模式（app.isPackaged=false）→ 擺喺專案根目錄（睇得到、改得到、唔入 git）',
-    };
-  }
-
-  if (!userDataDir) {
-    throw new Error('已打包／asar 模式要提供 userDataDir（app.getPath("userData")）—— 唔准靜默用其他位置');
-  }
-  return {
-    path: join(userDataDir, filename),
-    where: CONFIG_PATH_WHERE.packagedUserData,
-    why: inAsar
-      ? '專案目錄喺 app.asar 入面（唯讀）→ 擺喺 userData'
-      : '已打包（app.isPackaged=true）→ 擺喺 userData（專案目錄可能唯讀）',
-  };
+  const { root, where, why } = resolveWritableRoot({
+    isPackaged,
+    rootDir,
+    userDataDir,
+    whyDev: '開發模式（app.isPackaged=false）→ 擺喺專案根目錄（睇得到、改得到、唔入 git）',
+    whyPackaged: '已打包（app.isPackaged=true）→ 擺喺 userData（專案目錄可能唯讀）',
+    whyAsar: '專案目錄喺 app.asar 入面（唯讀）→ 擺喺 userData',
+  });
+  // ⚠️ 呢度只負責「根目錄 ＋ 檔名」；「揀邊個根目錄（連 throw）」一律由 `resolveWritableRoot()` 決定。
+  return { path: join(root, filename), where, why };
 }
