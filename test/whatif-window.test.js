@@ -29,6 +29,11 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 const MAIN = read('electron/main.js');
 const WHATIF = read('electron/whatif.html');
+// ⭐ 獨立審計 M3：設定窗／what-if 窗嘅**窗行為**（loadFile／contentProtection／ready-to-show）
+//    搬去 `electron/panel-window.js` 嘅工廠 —— 所以呢個閘一定要**兩邊一齊**斷言：
+//    `main.js` 講「what-if 窗真係傳 file: 'whatif.html'」，工廠講「真係 loadFile(join(__dirname, file))」。
+//    ⛔ 唔准只斷言工廠（咁樣「工廠改壞 + main.js 傳錯檔」會照過）。
+const PANEL = read('electron/panel-window.js');
 
 // ⚠️ channel 名嘅唯一來源（獨立審計 H1）：`main.js` 而家用 `IPC_CHANNELS.<key>`，
 //    而 4 個 renderer 暫時仲係字面值 → 呢個閘兩種寫法都要支援，統一化成 **channel 值** 再比。
@@ -141,12 +146,13 @@ test('C4：升級建議要喺主程序計（renderer 唔准自己計邊際效率
 });
 
 test('⭐ 標題唔准含遊戲關鍵字（地雷 #27：會令擷取揀到自己個窗，全黑畫面）', () => {
-  const mainTitle = /title:\s*'([^']*)'/.exec(
-    // 只抽 what-if 窗嗰段（`createWhatifWindow()`），免得撞到其他窗嘅 title
-    /function createWhatifWindow\(\)[\s\S]*?\n\}/.exec(MAIN)?.[0] ?? '',
-  )?.[1];
+  // 只抽 what-if 窗嗰段（`createWhatifWindow()`），免得撞到其他窗嘅 title。
+  // ⚠️ M3 之後呢段係「傳畀工廠嘅參數」（`title: '…'`），所以仍然要喺**嗰段**搵到。
+  const section = /function createWhatifWindow\(\)[\s\S]*?\n\}/.exec(MAIN)?.[0] ?? '';
+  const mainTitle = /title:\s*'([^']*)'/.exec(section)?.[1];
   const htmlTitle = /<title>([^<]*)<\/title>/.exec(WHATIF)?.[1];
   assert.ok(mainTitle, 'main.js 嘅 what-if 窗要寫明 title');
+  assert.equal(mainTitle, 'Umapyoi what-if 模擬', '標題值唔准改（同 whatif.html 嘅 <title> 一致）');
   assert.ok(htmlTitle, 'whatif.html 要有 <title>');
   for (const hint of GAME_TITLE_HINTS) {
     assert.ok(!mainTitle.includes(hint), `main.js 嘅窗標題唔准含「${hint}」：${mainTitle}`);
@@ -179,13 +185,16 @@ test('what-if 窗：算式唔准喺 renderer（窗只可以 send／聽，唔可�
 });
 
 test('what-if 窗：主程序要載入得到 whatif.html，而嗰個檔真係存在（路徑打錯＝靜默白窗）', () => {
-  assert.match(MAIN, /win\.loadFile\(join\(__dirname, 'whatif\.html'\)\)/,
-    'createWhatifWindow() 要 loadFile whatif.html');
+  // ⚠️ M3 之後窗係經工廠開：**兩邊一齊**斷言（main.js 傳咩檔／工廠點 load）。
+  const section = /function createWhatifWindow\(\)[\s\S]*?\n\}/.exec(MAIN)?.[0] ?? '';
+  assert.match(section, /file:\s*'whatif\.html'/, 'createWhatifWindow() 要傳 file: \'whatif.html\'');
+  assert.match(section, /createPanelWindow\(/, 'createWhatifWindow() 要經共用工廠開窗');
+  assert.match(PANEL, /win\.loadFile\(join\(__dirname, file\)\)/, '工廠要 loadFile(join(__dirname, file))');
   assert.ok(existsSync(join(ROOT, 'electron', 'whatif.html')), 'electron/whatif.html 要存在');
   // 窗一定要開得成（`show: false` ＋ `ready-to-show` 先 show，唔會閃白框）
-  assert.match(MAIN, /function createWhatifWindow\(\)[\s\S]*?win\.once\('ready-to-show', \(\) => win\.show\(\)\)/);
+  assert.match(PANEL, /win\.once\('ready-to-show', \(\) => win\.show\(\)\)/, '工廠要 ready-to-show 先 show()');
   // 同其他窗一致：唔會入到自己嘅擷取畫面
-  assert.match(MAIN, /function createWhatifWindow\(\)[\s\S]*?win\.setContentProtection\(true\)/);
+  assert.match(PANEL, /win\.setContentProtection\(true\)/, '工廠要 setContentProtection(true)');
 });
 
 test('what-if 窗：搜尋／驗五維要用核心庫嘅純函數（main.js 唔准自己砌一次）', () => {

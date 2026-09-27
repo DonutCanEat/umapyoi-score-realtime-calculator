@@ -41,6 +41,9 @@ import { stampForFilename } from '../src/hud/stamp.js';
 import { envFlag, envIsSet, envNumber } from '../src/hud/env-flag.js';
 // ⭐ 四個窗共用嘅 `webPreferences`（**唯一一份**）——見獨立審計 M2 同嗰個檔嘅註釋。
 import { APP_WEB_PREFERENCES } from './web-preferences.js';
+// ⭐ 普通面板窗嘅共用建立器（獨立審計 M3）：設定窗／what-if 窗以前逐行一樣。
+//    ⛔ HUD overlay 同擷取窗**刻意唔合**入去（語意唔同，見嗰個檔嘅檔頭）。
+import { createPanelWindow } from './panel-window.js';
 import { MAX_HISTORY, pushSample } from '../src/hud/history.js';
 // ⭐ 「dump／連拍要寫邊」嘅決策（A9 打包）：打包之後 `ROOT` 係唯讀 asar，
 //    寫入會 throw ENOTDIR/EROFS → 同「設定檔位置」一樣要集中一個決策（`src/hud/write-root.js`）。
@@ -874,31 +877,21 @@ function placeHud(game) {
  * 開一個獨立普通窗就完全唔影響 HUD 嘅穿透。
  */
 function createSettingsWindow() {
-  const win = new BrowserWindow({
-    width: 560,
-    height: 780,
-    minWidth: 460,
-    minHeight: 520,
+  return createPanelWindow({
+    file: 'settings.html',
     // ⚠️ 標題**唔准**含遊戲關鍵字（`src/capture/source.js` 嘅 `GAME_TITLE_HINTS`）：
     //    原本係「賽馬娘即時評價分 — HUD 設定」，含「賽馬娘」→ 舊嘅來源挑選邏輯
     //    （靠標題 `includes`）會**擷取自己個設定窗**（全黑畫面 ＋ HUD 幾何全錯）。
     //    而家已經有 HWND 硬排除，但呢個標題係第二重保險（萬一 handle 攞唔到）。
     title: 'Umapyoi HUD 設定',
-    frame: true,
-    transparent: false,
-    resizable: true,
-    focusable: true, // 要打字（⚠️ HUD overlay 剛剛相反：focusable:false）
-    show: false,
-    backgroundColor: '#1b1f24',
-    webPreferences: { ...APP_WEB_PREFERENCES },
+    width: 560,
+    height: 780,
+    minWidth: 460,
+    minHeight: 520,
+    onClosed: () => {
+      settingsWindow = null;
+    },
   });
-  win.setContentProtection(true); // 同其他窗一致：唔會入到自己嘅擷取畫面
-  win.loadFile(join(__dirname, 'settings.html'));
-  win.once('ready-to-show', () => win.show());
-  win.on('closed', () => {
-    settingsWindow = null;
-  });
-  return win;
 }
 
 /**
@@ -910,29 +903,19 @@ function createSettingsWindow() {
  * ⚠️ 呢個窗**完全唔碰** HUD 嘅 `setIgnoreMouseEvents` 狀態（穿透底線見 §6.4）。
  */
 function createWhatifWindow() {
-  const win = new BrowserWindow({
+  return createPanelWindow({
+    file: 'whatif.html',
+    // ⚠️ 標題**唔准**含遊戲關鍵字（`src/capture/source.js` 嘅 `GAME_TITLE_HINTS`），
+    //    同 `whatif.html` 嘅 <title> 一定要一致（Electron 跟文件標題，見地雷 #27）。
+    title: 'Umapyoi what-if 模擬',
     width: 640,
     height: 820,
     minWidth: 520,
     minHeight: 520,
-    // ⚠️ 標題**唔准**含遊戲關鍵字（`src/capture/source.js` 嘅 `GAME_TITLE_HINTS`），
-    //    同 `whatif.html` 嘅 <title> 一定要一致（Electron 跟文件標題，見地雷 #27）。
-    title: 'Umapyoi what-if 模擬',
-    frame: true,
-    transparent: false,
-    resizable: true,
-    focusable: true, // 要打字／揀選項（⚠️ HUD overlay 剛剛相反：focusable:false）
-    show: false,
-    backgroundColor: '#1b1f24',
-    webPreferences: { ...APP_WEB_PREFERENCES },
+    onClosed: () => {
+      whatifWindow = null;
+    },
   });
-  win.setContentProtection(true); // 同其他窗一致：唔會入到自己嘅擷取畫面
-  win.loadFile(join(__dirname, 'whatif.html'));
-  win.once('ready-to-show', () => win.show());
-  win.on('closed', () => {
-    whatifWindow = null;
-  });
-  return win;
 }
 
 /**

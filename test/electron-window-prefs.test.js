@@ -25,7 +25,14 @@ import { APP_WEB_PREFERENCES } from '../electron/web-preferences.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MAIN_FILE = 'electron/main.js';
+/**
+ * ⭐ 掃描範圍（獨立審計 M3）：設定窗／what-if 窗搬去 `electron/panel-window.js` 之後，
+ * `main.js` 只剩 HUD ＋ 擷取兩個窗嘅 `webPreferences` —— 所以閘一定要連工廠檔一齊掃，
+ * 唔然「搬走就冇人守」。
+ */
+const SCANNED = ['electron/main.js', 'electron/panel-window.js'];
 const readMain = (text) => text ?? readFileSync(join(ROOT, MAIN_FILE), 'utf8');
+const readScanned = () => SCANNED.map((rel) => ({ rel, src: stripComments(readFileSync(join(ROOT, rel), 'utf8')) }));
 
 /**
  * 剝走註釋之後才檢查。
@@ -48,29 +55,50 @@ test('webPreferences：形狀要同本專案嘅刻意設計一致（nodeIntegrat
   assert.ok(Object.isFrozen(APP_WEB_PREFERENCES), '常數要凍結（唔准任何窗偷偷改佢）');
 });
 
-test('webPreferences：main.js 唔准自己寫第二套（冇字面值 nodeIntegration，註釋唔計）', () => {
-  const src = stripComments(readMain());
+test('webPreferences：唔准自己寫第二套（冇字面值 nodeIntegration／contextIsolation，註釋唔計）', () => {
   // 先證明「剝註釋」係真做緊嘢（唔靠真檔有冇嗰句註釋 —— 咁樣會令清理註釋變假 fail）
   assert.ok(/\bnodeIntegration\s*:/.test('// nodeIntegration: true'), '突變樣本冇生效');
   assert.ok(!/\bnodeIntegration\s*:/.test(stripComments('// nodeIntegration: true')), '剝註釋冇生效');
-  assert.ok(
-    !/\bnodeIntegration\s*:/.test(src),
-    '⛔ `main.js` 出現咗字面值 `nodeIntegration:` —— 有人喺某個窗自己寫一套 '
-    + '（要改就改 `electron/web-preferences.js`，四個窗一次過）',
-  );
-  assert.ok(
-    !/\bcontextIsolation\s*:/.test(src),
-    '⛔ `main.js` 出現咗字面值 `contextIsolation:` —— 同上，唔准有第二套',
-  );
+  for (const { rel, src } of readScanned()) {
+    assert.ok(
+      !/\bnodeIntegration\s*:/.test(src),
+      `⛔ ${rel} 出現咗字面值 \`nodeIntegration:\` —— 有人喺某個窗自己寫一套 `
+      + '（要改就改 `electron/web-preferences.js`，四個窗一次過）',
+    );
+    assert.ok(
+      !/\bcontextIsolation\s*:/.test(src),
+      `⛔ ${rel} 出現咗字面值 \`contextIsolation:\` —— 同上，唔准有第二套`,
+    );
+  }
 });
 
 test('webPreferences：每個窗都要用共用常數（數目要對得上，唔准有窗漏咗）', () => {
-  const src = stripComments(readMain());
-  const windows = [...src.matchAll(/webPreferences\s*:/g)].length;
-  const shared = [...src.matchAll(/\.\.\.APP_WEB_PREFERENCES/g)].length;
-  assert.ok(windows >= 4, `main.js 應該至少 4 個窗，實得 ${windows} 個 webPreferences`);
-  assert.equal(shared, windows, `每個 webPreferences 都要係共用常數（webPreferences ${windows} 個 vs 共用 ${shared} 個）`);
-  assert.match(src, /import\s*\{[^}]*APP_WEB_PREFERENCES[^}]*\}\s*from\s*'\.\/web-preferences\.js'/, '要用 import（唔准自己砌一個同名 object）');
+  for (const { rel, src } of readScanned()) {
+    const windows = [...src.matchAll(/webPreferences\s*:/g)].length;
+    const shared = [...src.matchAll(/\.\.\.APP_WEB_PREFERENCES/g)].length;
+    assert.equal(
+      shared,
+      windows,
+      `${rel}：每個 webPreferences 都要係共用常數（webPreferences ${windows} 個 vs 共用 ${shared} 個）`,
+    );
+  }
+
+  // ⚠️ 窗嘅**數目**唔可以靜靜地縮水：`main.js` 自己開嘅（HUD ＋ 擷取）＋
+  //    經 `createPanelWindow()` 開嘅（設定窗 ＋ what-if 窗）＝ 至少 4 個。
+  const mainSrc = stripComments(readMain());
+  const own = [...mainSrc.matchAll(/new BrowserWindow\(/g)].length;
+  const viaFactory = [...mainSrc.matchAll(/createPanelWindow\(/g)].length;
+  assert.ok(own + viaFactory >= 4, `應該至少 4 個窗（自己開 ${own} 個 ＋ 經工廠 ${viaFactory} 個）`);
+
+  // 工廠檔本身：真係開窗 ＋ 真係用共用常數（唔准自己砌一個同名 object）
+  const factory = readScanned().find((f) => f.rel === 'electron/panel-window.js').src;
+  assert.match(factory, /new BrowserWindow\(/, '工廠檔要真係開窗（唔然「窗嘅數目」係假嘅）');
+  assert.match(
+    factory,
+    /import\s*\{[^}]*APP_WEB_PREFERENCES[^}]*\}\s*from\s*'\.\/web-preferences\.js'/,
+    '工廠檔要用共用常數（唔准自己砌一個同名 object）',
+  );
+  assert.match(mainSrc, /import\s*\{[^}]*APP_WEB_PREFERENCES[^}]*\}\s*from\s*'\.\/web-preferences\.js'/, '要用 import');
 });
 
 test('webPreferences：閘自己要有用（改一個字就一定要報）', () => {
