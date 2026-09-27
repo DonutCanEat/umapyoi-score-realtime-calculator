@@ -21,9 +21,11 @@ const ROWS = [
   { id: 998, name_tw: '中距離直線◎', name_en: null, rarity: 1, desc_tw: '效果戊' },
 ];
 
-test('kindOfRarity：6 = 進化、5 = 固有、其餘 = 一般（實測對應）', () => {
-  assert.equal(kindOfRarity(6), 'evolution');
+test('kindOfRarity：⚠️ 唔准淨靠 rarity（實測 rarity 6 已經唔係進化）', () => {
+  // 2026-09-27 實測分佈 {1:598,2:346,3:22,4:22,5:250,6:672}
   assert.equal(kindOfRarity(5), 'unique');
+  assert.equal(kindOfRarity(6), 'normal', 'rarity 6 已經係普通稀有度');
+  assert.equal(kindOfRarity(6, { pre_evo: { card_id: 1 } }), 'evolution', '有 pre_evo 才係進化');
   assert.equal(kindOfRarity(2), 'normal');
   assert.equal(kindOfRarity(undefined), 'unknown');
 });

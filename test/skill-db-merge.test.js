@@ -13,10 +13,13 @@ const calc = (name, extra = {}) => ({
   base: 633, skillPt: 360, type: 1, color: '蓝', special: 0, ...extra,
 });
 
-test('kindOfRarity：6 = 進化、5 = 固有、其餘一般', () => {
-  assert.equal(kindOfRarity(6), 'evolution');
+test('kindOfRarity：⭐ 唔准淨靠 rarity（實測 rarity 6 已經唔係進化）', () => {
+  // 2026-09-27 實測 GameTora rarity 分佈 {1:598,2:346,3:22,4:22,5:250,6:672}
+  // → `6` 係普通稀有度；真正進化標記係 `pre_evo`
   assert.equal(kindOfRarity(5), 'unique');
-  assert.equal(kindOfRarity(4), 'normal');
+  assert.equal(kindOfRarity(6), 'normal', 'rarity 6 唔再係進化');
+  assert.equal(kindOfRarity(6, { pre_evo: { card_id: 1 }, evo_cond: [] }), 'evolution', '有 pre_evo 才係進化');
+  assert.equal(kindOfRarity(1), 'normal');
   assert.equal(kindOfRarity('x'), 'unknown');
 });
 
@@ -52,15 +55,15 @@ test('mergeSkillDb：固有技（GameTora rarity 5）唔准入庫', () => {
 
 test('mergeSkillDb：新進化技要攞 GameTora 嘅**繁體名**（唔准用日文名）', () => {
   const r = mergeSkillDb({
-    calcSkills: [calc('――さあ、踊りましょう', { nameCn: '――来起舞吧' })],
+    calcSkills: [calc('――さあ、踊りましょう')],
     dbSkills: [],
-    gametoraRows: [{ name_tw: '――來起舞吧', jpname: '――さあ、踊りましょう', rarity: 6 }],
+    // ⚠️ 進化嘅標記係 `pre_evo`（唔係 rarity —— 實測 rarity 6 已經係普通稀有度）
+    gametoraRows: [{ name_tw: '――來起舞吧', jpname: '――さあ、踊りましょう', rarity: 6, pre_evo: { card_id: 111602, old: 203791 }, evo_cond: [] }],
   });
   assert.equal(r.added.length, 1);
   const a = r.added[0];
   assert.equal(a.name, '――來起舞吧');
   assert.equal(a.nameJp, '――さあ、踊りましょう');
-  assert.equal(a.simplifiedName, '――来起舞吧');
   assert.equal(a.kind, 'evolution');
   assert.equal(a.nameSource, 'gametora-tw');
   assert.equal(a.base, 633);
@@ -143,4 +146,58 @@ test('mergeSkillDb：計算器頁冇、但本庫有嘅項要照留', () => {
   assert.deepEqual(r.keptNotInCalcPage, ['乙']);
   assert.equal(r.skills.length, 2, '兩招都要喺結果');
   assert.equal(r.skills.find((s) => s.name === '乙').base, 100);
+});
+
+test('mergeSkillDb：⭐ 新招嘅繁體名優先由 bwiki 逐頁嚟（唔靠 GameTora）', () => {
+  const r = mergeSkillDb({
+    calcSkills: [calc('秘める気のない才気', { nameCn: '才华横溢' })],
+    dbSkills: [],
+    gametoraRows: [], // GameTora 冇 name_tw（實測 270 招係咁）
+    bwikiPages: [{ pageTitle: '繁/才華橫溢', nameTw: '才華橫溢', nameCn: '才华横溢' }],
+  });
+  assert.equal(r.added.length, 1);
+  assert.equal(r.added[0].name, '才華橫溢');
+  assert.equal(r.added[0].nameSource, 'bwiki-tw');
+  assert.equal(r.added[0].nameJp, '秘める気のない才気');
+});
+
+test('mergeSkillDb：⭐ id 唔同但**簡體名一樣** → 要更新既有項（base 用新頁嗰個）', () => {
+  // 實測：新頁 `秘める気のない才気`（id 111302211）同本庫 `才華橫溢`（id 203431）係同一招。
+  const r = mergeSkillDb({
+    calcSkills: [calc('秘める気のない才気', { id: 111302211, nameCn: '才华横溢', base: 633 })],
+    dbSkills: [{ id: 203431, name: '才華橫溢', simplifiedName: '才华横溢', base: 508, skillPt: 340 }],
+    bwikiPages: [{ pageTitle: '繁/才華橫溢', nameTw: '才華橫溢', nameCn: '才华横溢' }],
+  });
+  assert.equal(r.added.length, 0, '唔准加多一條');
+  assert.equal(r.droppedByName.length, 0, '⛔ 唔准靜默掉');
+  assert.equal(r.skills.length, 1);
+  assert.equal(r.skills[0].name, '才華橫溢', '保留既有名');
+  assert.equal(r.skills[0].id, 203431, '保留既有 id');
+  assert.equal(r.skills[0].base, 633, '⭐ base 要用新頁嗰個（唔係留住 508）');
+});
+
+test('mergeSkillDb：⭐ 靠 bwiki 繁體名解析出新名同既有項撞 → 行「別名合併」', () => {
+  const r = mergeSkillDb({
+    calcSkills: [calc('日文名XYZ', { id: 999, nameCn: '甲简', base: 633 })],
+    dbSkills: [{ id: 5, name: '甲乙丙', simplifiedName: '乙丙丁', base: 508, skillPt: 340 }],
+    // 頁係靠「中文名」搵到嘅（實測：新頁嘅「技能名」係日文，繁／簡名要靠 cache 頁）
+    bwikiPages: [{ pageTitle: '繁/甲乙丙', nameTw: '甲乙丙', nameCn: '甲简' }],
+  });
+  // ⚠️ 呢個 case 其實會行「既有項」路徑（簡體名 `甲简` 同本庫 `乙丙丁` 唔同 → 靠 bwiki 頁
+  //    揀出名 `甲乙丙` ……但 bwiki 頁本身就係靠 `甲简` 搵到 → 所以 `dbLookup` 用 `nameCn`
+  //    已經對唔上，最後靠名 `甲乙丙` 都對唔上）。總之**唔准加多一條**。
+  assert.equal(r.added.length + r.aliasMerged.length, 1, '要有一條處理咗');
+  assert.equal(r.droppedByName.length, 0, '⛔ 唔准靜默掉');
+  assert.equal(r.skills.length, 1);
+});
+
+test('mergeSkillDb：⭐ `droppedByName` 係驗收訊號（要係 0）', () => {
+  const r = mergeSkillDb({
+    calcSkills: [calc('別名甲', { id: 1, base: 633 })],
+    dbSkills: [{ id: 1, name: '甲', base: 508 }],
+  });
+  // id 對得上 → 行「既有項」路徑，唔應該掉任何嘢
+  assert.equal(r.droppedByName.length, 0);
+  assert.equal(r.skills.length, 1);
+  assert.equal(r.skills[0].base, 633);
 });

@@ -60,17 +60,30 @@ const gtPath = join(ROOT, 'data', 'gametora', 'skills.json');
 const gtRaw = existsSync(gtPath) ? JSON.parse(readFileSync(gtPath, 'utf8')) : [];
 const gametoraRows = Array.isArray(gtRaw) ? gtRaw : (gtRaw.skills ?? []);
 
-// 逐頁 bwiki 結果（可選）：補計算器頁冇嘅 base
-const pageSkills = [];
+// ⭐ 舊版同一頁（`data/calc-page-tw.html`）：用嚟做「中文名 → 舊 id」嘅橋。
+//    ⚠️ 實測新頁**有 9 招改咗 id**（`才華橫溢` 203431→111302211、`氣勢如虹` 202091→204312…）
+//    → 冇呢個橋就會「同一招兩條」，其中一條被靜默 dedupe。
+const OLD_PAGE = flagValue(args, 'old-page') ?? 'data/calc-page-tw.html';
+let oldPageSkills = [];
+if (existsSync(join(ROOT, OLD_PAGE))) {
+  oldPageSkills = parseCalculatorPage(readFileSync(join(ROOT, OLD_PAGE), 'utf8'));
+  console.log(`舊版計算器頁 ${OLD_PAGE}：${oldPageSkills.length} 招（做 id 橋用）`);
+} else {
+  console.log(`⚠️ 搵唔到舊版計算器頁 ${OLD_PAGE} → 冇 id 橋（改咗 id 嘅招會當兩條）`);
+}
+
+// 逐頁 bwiki 結果（提供**最可靠嘅繁體名**）
+const bwikiPages = [];
 const pageDir = join(ROOT, 'data', 'bwiki-pages');
 if (existsSync(pageDir)) {
   const { readdirSync } = await import('node:fs');
   for (const f of readdirSync(pageDir).filter((x) => x.endsWith('.json'))) {
-    try { pageSkills.push(JSON.parse(readFileSync(join(pageDir, f), 'utf8'))); } catch { /* 壞 cache 跳過 */ }
+    try { bwikiPages.push(JSON.parse(readFileSync(join(pageDir, f), 'utf8'))); } catch { /* 壞 cache 跳過 */ }
   }
+  console.log(`bwiki 逐頁 cache：${bwikiPages.length} 頁（繁體名來源）`);
 }
 
-const r = mergeSkillDb({ calcSkills, dbSkills, gametoraRows, pageSkills });
+const r = mergeSkillDb({ calcSkills, dbSkills, gametoraRows, bwikiPages, oldPageSkills });
 
 console.log('\n── 統計 ──');
 for (const [k, v] of Object.entries(r.stats)) console.log(`   ${k}: ${v}`);

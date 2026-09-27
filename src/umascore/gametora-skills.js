@@ -35,13 +35,23 @@ export function decodeEntities(s) {
     .replace(/&amp;/g, '&');
 }
 
-/** rarity → 種類（實測：6 = 進化、5 = 固有；其餘係一般技能）。 */
-export function kindOfRarity(rarity) {
+/**
+ * rarity → 種類。
+ *
+ * ⚠️ **唔准淨靠 rarity**：實測（2026-09-27）GameTora 更新之後
+ * `rarity` 分佈係 `{1:598, 2:346, 3:22, 4:22, 5:250, 6:672}` —— `6` 已經係**普通稀有度**
+ * （1901 項裡面 672 項），唔再係「進化」。舊假設 `6 = 進化` 會令 668 招被錯標。
+ * ✅ 真正嘅進化標記係 **`pre_evo`**（進化前提）。
+ * ✅ 固有係 `rarity === 5`（實測 250 項）。
+ *
+ * @param {number|string} rarity
+ * @param {object} [row] GameTora 原始 row（有 `pre_evo` 就係進化）
+ */
+export function kindOfRarity(rarity, row = null) {
+  if (row && (row.pre_evo !== undefined || row.evo_cond !== undefined)) return 'evolution';
   const n = Number(rarity);
-  if (n === 6) return 'evolution';
   if (n === 5) return 'unique';
-  if (Number.isFinite(n)) return 'normal';
-  return 'unknown';
+  return Number.isFinite(n) ? 'normal' : 'unknown';
 }
 
 /**
@@ -58,7 +68,7 @@ export function shapeSkill(row) {
     nameJp: decodeEntities(row.jpname ?? null),
     desc: row.desc_tw ?? null,
     rarity: row.rarity ?? null,
-    kind: kindOfRarity(row.rarity),
+    kind: kindOfRarity(row.rarity, row),
     iconId: row.iconid ?? null,
     preEvo: row.pre_evo ?? null, // 進化技能：前提（base 技 / 卡）
     evoCond: row.evo_cond ?? null, // 進化技能：進化條件
