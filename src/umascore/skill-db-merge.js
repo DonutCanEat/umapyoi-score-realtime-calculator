@@ -170,15 +170,20 @@ export function mergeSkillDb({ calcSkills = [], dbSkills = [], gametoraRows = []
     if (Number.isFinite(n) && dbById.has(n)) dbByOldId.set(n, dbById.get(n));
   }
   const dbLookup = (c, jp) => {
-    // ① **先靠名**（名係最可靠嘅身分證）：新頁嘅「中文名」／「技能名(日文)」對本庫繁／簡名。
+    // ① ⭐ **舊頁 id 優先**：本庫嘅 `id` 同舊頁（`data/calc-page-tw.html`）一樣。
+    //    呢個係**最強嘅身分證明**（實測舊頁 id 對新頁 id 1314/1323 對得上）。
+    //    ⚠️ 一定要排第一：用名優先會**揀錯** —— 實測新頁嘅「中文名」**唔係唯一**
+    //       （`賭徒` 同 `博打うち` 都叫「赌徒」、`竭盡全力` 同 `ふり絞り` 都叫「竭尽全力」、
+    //       `閃光` 同 `ルミネセンス` 都叫「闪光」）→ 單靠名會把**另一招**嘅 base 寫入本庫項。
+    const oldId = Number.isFinite(Number(c?.id)) ? oldById.get(Number(c.id)) : null;
+    if (oldId && dbByOldId.has(Number(c.id))) return dbByOldId.get(Number(c.id));
+    // ② **本庫自己嘅名**（名係第二強嘅證據）
     for (const n of [c?.nameCn, c?.name, jp]) {
       const k = keyOf(n);
       if (k && dbByName.has(k)) return dbByName.get(k);
     }
-    // ② 名對唔上 → 逐個名 key 查**舊頁**，攞嗰條舊 id，再用舊 id 查本庫。
-    //    ⚠️ 唔准**直接**用新頁 id 配本庫 id：實測新頁有 9 招換咗 id
-    //       （`才華橫溢` 203431→111302211），新頁嘅 203431 已經係另一招（`才気煥発`）。
-    //    ⚠️ 都要靠**名**去搵舊頁項 —— 直接用新頁 id 查舊頁會犯同一個錯。
+    // ③ 逐個名查**舊頁**，攞嗰條舊 id，再用舊 id 查本庫
+    //    （新頁改咗 id 嘅招：`才華橫溢` 203431→111302211）
     for (const n of [c?.nameCn, c?.name, jp]) {
       const k = keyOf(n);
       if (!k) continue;
@@ -186,23 +191,16 @@ export function mergeSkillDb({ calcSkills = [], dbSkills = [], gametoraRows = []
       const oid = Number(o?.id);
       if (Number.isFinite(oid) && dbByOldId.has(oid)) return dbByOldId.get(oid);
     }
-    // ③ 最後：新頁 id 直接配本庫 id。
-    //    ⚠️ 呢一步**冇名做證據**，所以只可以喺「新頁 id 空間同本庫一樣」嗰陣信 ——
-    //       實測 `喝啊！氣勢十足！`：舊頁 id 105301211 ↔ 新頁同一個 id（同一個 skill_id）
-    //       但新頁嗰條係 `押忍ッ！気合十分ッス！`（中文名一樣係「喝唉！气势十足！」）→
-    //       名對唔上但 id 一樣 → 要信 id。
-    //    ⚠️ 但有啲 id 喺新頁**已經換咗招**（202091 `氣勢如虹` → `気炎万丈`）→
-    //       `oldPageStrict` 就係防呢種：有舊頁資料嗰陣，id 唔一致（新頁 id 唔喺舊頁、
-    //       或者舊頁同名項嘅 id 唔同）就唔准硬配。
+    // ④ 最後：新頁 id 直接配本庫 id。⚠️ 冇名做證據，所以只可以喺「新頁 id 空間同舊頁一樣」嗰陣信 ——
+    //    新頁 id 唔喺舊頁，而且舊頁有同名但唔同 id 嘅項 → 代表呢個 id 已經換咗招，唔准硬配。
     const byId = Number.isFinite(Number(c?.id)) ? dbById.get(Number(c.id)) : null;
     if (!byId) return null;
     if (!oldPageStrict || oldById.size === 0) return byId;
     const oid = Number(c.id);
-    if (oldById.has(oid)) return byId; // 呢個 id 喺舊頁都有 → id 空間一致
-    // 呢個 id 唔喺舊頁 → 要名嘅旁證（舊頁有冇一條同名嘅、但 id 唔同）
+    if (oldById.has(oid)) return byId;
     for (const n of [c?.nameCn, c?.name, jp]) {
       const k = keyOf(n);
-      if (k && (oldByCn.has(k) || oldByName.has(k))) return null; // 舊頁有同名但 id 唔同 → 換咗招
+      if (k && (oldByCn.has(k) || oldByName.has(k))) return null;
     }
     return byId;
   };

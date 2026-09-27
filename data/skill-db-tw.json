@@ -1547,6 +1547,21 @@
    "kind": "evolution"
   },
   {
+   "id": 101602211,
+   "groupId": 10160221,
+   "name": "渴望的怪物",
+   "simplifiedName": "渴望的怪物",
+   "condition": "前列, 長距離",
+   "base": 633,
+   "skillPt": 360,
+   "special": 0,
+   "type": 1,
+   "color": "黃色",
+   "icon": "https://patchwiki.biligame.com/images/umamusume/1/1d/dalaad7jbnqt9ywtgnzgg5tinh591n5.png",
+   "kind": "evolution",
+   "nameJp": "渇望する怪物"
+  },
+  {
    "id": 101701111,
    "groupId": 10170111,
    "name": "皇帝的眼神",
@@ -14763,19 +14778,19 @@
    "kind": "normal"
   },
   {
-   "id": 203082,
-   "groupId": 20308,
-   "name": "竭盡全力",
-   "simplifiedName": "竭尽全力",
-   "condition": "前列, 沙地",
+   "id": 201621,
+   "groupId": 20162,
+   "name": "使盡全力",
+   "simplifiedName": "使尽全力",
+   "condition": "通用",
    "base": 217,
    "skillPt": 100,
    "special": 0,
    "type": 1,
-   "color": "黃色",
-   "icon": "https://patchwiki.biligame.com/images/umamusume/b/b9/k9n6280t2k2xi3bsev2jz60bvy3lw1q.png",
-   "nameJp": "ふり絞り",
-   "kind": "normal"
+   "color": "藍色",
+   "icon": "https://patchwiki.biligame.com/images/umamusume/8/8f/ix9f83u7b3vipaznxlyzzmxya4lhjfq.png",
+   "kind": "normal",
+   "nameJp": "ふり絞り"
   },
   {
    "id": 201631,
@@ -15138,19 +15153,19 @@
    "kind": "normal"
   },
   {
-   "id": 202441,
-   "groupId": 20244,
-   "name": "賭徒",
-   "simplifiedName": "赌徒",
+   "id": 202031,
+   "groupId": 20203,
+   "name": "好賭之徒",
+   "simplifiedName": "好赌之徒",
    "condition": "通用",
    "base": 334,
    "skillPt": 240,
    "special": 0,
    "type": 2,
-   "color": "綠色",
-   "icon": "https://patchwiki.biligame.com/images/umamusume/a/ab/cfef12e141h34v9o12gsjv7kj04jqm0.png",
-   "nameJp": "博打うち",
-   "kind": "normal"
+   "color": "黃色",
+   "icon": "https://patchwiki.biligame.com/images/umamusume/f/f0/azkvhv5tuhvp2npwg40r4s8fgkturcm.png",
+   "kind": "normal",
+   "nameJp": "博打うち"
   },
   {
    "id": 202032,
@@ -16443,6 +16458,21 @@
    "kind": "normal"
   },
   {
+   "id": 202441,
+   "groupId": 20244,
+   "name": "賭徒",
+   "simplifiedName": "赌徒",
+   "condition": "通用",
+   "base": 508,
+   "skillPt": 360,
+   "special": 0,
+   "type": 2,
+   "color": "綠色",
+   "icon": "https://patchwiki.biligame.com/images/umamusume/a/ab/cfef12e141h34v9o12gsjv7kj04jqm0.png",
+   "nameJp": "博打うち",
+   "kind": "normal"
+  },
+  {
    "id": 202442,
    "groupId": 20244,
    "name": "投機取巧",
@@ -16878,10 +16908,10 @@
    "kind": "normal"
   },
   {
-   "id": 203311,
-   "groupId": 20331,
-   "name": "閃光",
-   "simplifiedName": "闪光",
+   "id": 202601,
+   "groupId": 20260,
+   "name": "冷性發光",
+   "simplifiedName": "冷性发光",
    "condition": "中距離",
    "base": 508,
    "skillPt": 320,
@@ -16889,8 +16919,8 @@
    "type": 2,
    "color": "黃色",
    "icon": "https://patchwiki.biligame.com/images/umamusume/f/f0/azkvhv5tuhvp2npwg40r4s8fgkturcm.png",
-   "nameJp": "ルミネセンス",
-   "kind": "normal"
+   "kind": "normal",
+   "nameJp": "ルミネセンス"
   },
   {
    "id": 202602,
@@ -17885,6 +17915,21 @@
    "kind": "normal"
   },
   {
+   "id": 202952,
+   "groupId": 20295,
+   "name": "先驅者",
+   "simplifiedName": "先驱者",
+   "condition": "沙地",
+   "base": 217,
+   "skillPt": 160,
+   "special": 0,
+   "type": 1,
+   "color": "黃色",
+   "icon": "https://patchwiki.biligame.com/images/umamusume/7/71/9p6keo1437q179tzlxptaazb89u60cu.png",
+   "kind": "normal",
+   "nameJp": "パイオニア"
+  },
+  {
    "id": 202961,
    "groupId": 20296,
    "name": "熱情",
@@ -18242,6 +18287,21 @@
    "color": "黃色",
    "icon": "https://patchwiki.biligame.com/images/umamusume/8/8e/6qi15srg72qlvmr75wi0ds0mzvo45ua.png",
    "nameJp": "踏みしめる大地",
+   "kind": "normal"
+  },
+  {
+   "id": 203082,
+   "groupId": 20308,
+   "name": "竭盡全力",
+   "simplifiedName": "竭尽全力",
+   "condition": "前列, 沙地",
+   "base": 217,
+   "skillPt": 170,
+   "special": 0,
+   "type": 1,
+   "color": "黃色",
+   "icon": "https://patchwiki.biligame.com/images/umamusume/b/b9/k9n6280t2k2xi3bsev2jz60bvy3lw1q.png",
+   "nameJp": "ふり絞り",
    "kind": "normal"
   },
   {
@@ -18813,6 +18873,21 @@
    "color": "黃色",
    "icon": "https://patchwiki.biligame.com/images/umamusume/7/71/9p6keo1437q179tzlxptaazb89u60cu.png",
    "nameJp": "熱狂的",
+   "kind": "normal"
+  },
+  {
+   "id": 203311,
+   "groupId": 20331,
+   "name": "閃光",
+   "simplifiedName": "闪光",
+   "condition": "中距離",
+   "base": 508,
+   "skillPt": 280,
+   "special": 0,
+   "type": 2,
+   "color": "黃色",
+   "icon": "https://patchwiki.biligame.com/images/umamusume/f/f0/azkvhv5tuhvp2npwg40r4s8fgkturcm.png",
+   "nameJp": "ルミネセンス",
    "kind": "normal"
   },
   {
@@ -23932,81 +24007,6 @@
    "nameSource": "jp"
   },
   {
-   "id": 101602211,
-   "groupId": 10160221,
-   "name": "渴望的怪物",
-   "simplifiedName": "渴望的怪物",
-   "condition": "前列, 長距離",
-   "base": 633,
-   "skillPt": 360,
-   "special": 0,
-   "type": 1,
-   "color": "黃色",
-   "icon": "https://patchwiki.biligame.com/images/umamusume/1/1d/dalaad7jbnqt9ywtgnzgg5tinh591n5.png",
-   "kind": "evolution",
-   "nameJp": "渇望する怪物"
-  },
-  {
-   "id": 201621,
-   "groupId": 20162,
-   "name": "使盡全力",
-   "simplifiedName": "使尽全力",
-   "condition": "通用",
-   "base": 217,
-   "skillPt": 100,
-   "special": 0,
-   "type": 1,
-   "color": "藍色",
-   "icon": "https://patchwiki.biligame.com/images/umamusume/8/8f/ix9f83u7b3vipaznxlyzzmxya4lhjfq.png",
-   "kind": "normal",
-   "nameJp": "ふり絞り"
-  },
-  {
-   "id": 202031,
-   "groupId": 20203,
-   "name": "好賭之徒",
-   "simplifiedName": "好赌之徒",
-   "condition": "通用",
-   "base": 334,
-   "skillPt": 240,
-   "special": 0,
-   "type": 2,
-   "color": "黃色",
-   "icon": "https://patchwiki.biligame.com/images/umamusume/f/f0/azkvhv5tuhvp2npwg40r4s8fgkturcm.png",
-   "kind": "normal",
-   "nameJp": "博打うち"
-  },
-  {
-   "id": 202601,
-   "groupId": 20260,
-   "name": "冷性發光",
-   "simplifiedName": "冷性发光",
-   "condition": "中距離",
-   "base": 508,
-   "skillPt": 320,
-   "special": 0,
-   "type": 2,
-   "color": "黃色",
-   "icon": "https://patchwiki.biligame.com/images/umamusume/f/f0/azkvhv5tuhvp2npwg40r4s8fgkturcm.png",
-   "kind": "normal",
-   "nameJp": "ルミネセンス"
-  },
-  {
-   "id": 202952,
-   "groupId": 20295,
-   "name": "先驅者",
-   "simplifiedName": "先驱者",
-   "condition": "沙地",
-   "base": 217,
-   "skillPt": 160,
-   "special": 0,
-   "type": 1,
-   "color": "黃色",
-   "icon": "https://patchwiki.biligame.com/images/umamusume/7/71/9p6keo1437q179tzlxptaazb89u60cu.png",
-   "kind": "normal",
-   "nameJp": "パイオニア"
-  },
-  {
    "id": 1200021,
    "groupId": 120002,
    "name": "對長距離競賽的意志",
@@ -24043,7 +24043,7 @@
    "simplifiedName": "激情英雄",
    "condition": "通用",
    "base": 0,
-   "skillPt": null,
+   "skillPt": 0,
    "special": 0,
    "type": 1,
    "color": "綠色",
@@ -24058,7 +24058,7 @@
    "simplifiedName": "旭日英雄",
    "condition": "通用",
    "base": 0,
-   "skillPt": null,
+   "skillPt": 0,
    "special": 0,
    "type": 1,
    "color": "綠色",
@@ -24073,7 +24073,7 @@
    "simplifiedName": "雨天英雄",
    "condition": "通用",
    "base": 0,
-   "skillPt": null,
+   "skillPt": 0,
    "special": 0,
    "type": 1,
    "color": "綠色",
@@ -24118,7 +24118,7 @@
    "simplifiedName": "连锁英雄",
    "condition": "通用",
    "base": 0,
-   "skillPt": null,
+   "skillPt": 0,
    "special": 0,
    "type": 1,
    "color": "綠色",
@@ -24133,7 +24133,7 @@
    "simplifiedName": "冲刺英雄",
    "condition": "通用",
    "base": 0,
-   "skillPt": null,
+   "skillPt": 0,
    "special": 0,
    "type": 1,
    "color": "綠色",
@@ -24142,6 +24142,6 @@
    "nameJp": "スパートヒーロー"
   }
  ],
- "mergedAt": "2026-09-27T10:34:07.124Z",
+ "mergedAt": "2026-09-27T11:25:49.185Z",
  "mergeSource": "data/calc-page-tw-2026-09-27.html + data/gametora/skills.json"
 }
