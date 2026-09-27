@@ -102,7 +102,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 | 階段 | 內容 | 狀態 |
 |---|---|---|
 | Phase 0 | 評價分運算核心 | ✅ **誤差 = 0**（5 條實機樣本）|
-| Phase 0 | 技能資料庫（1323 招）＋ 進化技能 override | ✅ |
+| Phase 0 | 技能資料庫（**1589 招**，2026-09-27 由 1323 補上）＋ 進化技能 override | ✅ |
 | Phase 1 | 畫面擷取 | ✅ 已實機跑過（含兩粒手動掣）|
 | Phase 1 | **五維數字辨識（零校準）** | ✅ 面板 **30/30**、實機面板條 **15/15**、負樣本 **5/5 唔出數** |
 | Phase 1 | **培育結束確認（基礎能力）讀取** | ✅ 2/2 完全命中；✅ 用戶實機驗過 |
@@ -122,13 +122,14 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 - ✅ **誤差 = 0**：**5 條**實機樣本全部吻合。
 - 第 5 條 `05-東海帝皇-超越地平線-UD1.json` 係**第一次用遊戲自己顯示嘅評價點**做真值
   —— 35,050 ＝ 五維 26,702 ＋ 技能 8,348。
-- ✅ 技能資料庫 **1323 招** ＋ 進化技能 override。
+- ✅ 技能資料庫 **1589 招**（2026-09-27 由 1323 補上）＋ 進化技能 override。
 - ⭐ **2026-09-27：外部對照來源搞定（唔使瀏覽器、唔使人手貼）**：
   `tools/fetch-gametora.js` 由 GameTora 抓 **1910 項技能** —— 反推自佢 webpack 模組 50840：
   `/data/manifests/umamusume.json`（get hash）→ `/data/umamusume/skills.<hash>.json`。
   `tools/skill-gaps.js` 逐個名比對（**唔做文字過濾**，所以唔會誤殺長英文名）：
-  本庫 1323 招幾乎全部對得上 GameTora（只 3 招係 bwiki 未解碼 entity，例如 `打call&amp;回應`，比較時已解碼）；
-  **GameTora 有、本庫冇 = 590 招**（r1×103、r2×62、r3×22、r4×22、**r5 固有×250**、**r6 進化×131**）。
+  本庫（補庫前 1323 招）幾乎全部對得上 GameTora（只 3 招係 bwiki 未解碼 entity，例如 `打call&amp;回應`，比較時已解碼）；
+  **GameTora 有、本庫冇**：補庫前 **590 招**（r1×103、r2×62、r3×22、r4×22、**r5 固有×250**、**r6 進化×131**）
+  → ⭐ **2026-09-27 補庫之後跌到 324 招**（unique×250、normal×71、evolution×3）。
   種類（實測）：`rarity 6` = **進化技能**（全部有 `pre_evo` 前提 ＋ `evo_cond` 條件）、`rarity 5` = **固有技能**（分數 = ★ × Lv，**唔需要 base**；
   246 個帶 `gene_version` ＝「繼承版本」，遊戲收 Pt 但計分係**固定 180**）。
   `tools/gametora-skill.js` 一句話查一招（名／`--id`／`--kind=unique|evolution|normal`／`--stats`）。
@@ -281,9 +282,9 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（455 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（479 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ electron/main.js
-                                     #    ＋ src/**（42 檔）＋ tools/**（50 檔）—— 見 §8 4b
+                                     #    ＋ src/**（44 檔）＋ tools/**（51 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
                                      #    喺 HEAD 已經爆 SyntaxError 都冇人知（見 §8 4b）
 node tools/collect-diagnostics.js    # ⭐ D2 一鍵診斷包 → diagnostics/diag-<時間>/report.md
@@ -483,7 +484,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **455 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **479 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 15/15**、**負樣本 5/5 唔出數**），全部都要中
@@ -517,14 +518,14 @@ src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔�
                 #   env-flag.js（環境變數唯一讀法）／history.js（C3 成長曲線核心）
 electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／ipc-channels.cjs（channel 名唯一來源）／
                 #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 455 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
-tools/          # 50 個 CLI（＋ tools/lib/ 2 個共用模組）：診斷／建模板／對答案／what-if／advice／
+test/           # 479 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+tools/          # 51 個 CLI（＋ tools/lib/ 2 個共用模組）：診斷／建模板／對答案／what-if／advice／
                 #   診斷包／renderer 實載閘／讀技能名（`read-skills` 等 5 個）／
                 #   外部名單比對（`diff-skill-names`）／GameTora 抓取＋查詢＋缺口（`fetch-gametora`／
                 #   `gametora-skill`／`skill-gaps`／`analyze-gametora-skills`）／
                 #   ⭐ bwiki 每招一頁（`fetch-bwiki-skill-pages` 抓 + `bwiki-coverage` 三方對帳）…
                 #   （見 §2；逐個工具嘅用途睇 `docs/file-map.md`）
-data/           # skill-db-tw.json（1323 招）：`name` 繁體、**`simplifiedName` 刻意保留簡體**
+data/           # skill-db-tw.json（**1589 招**）：`name` 繁體、**`simplifiedName` 刻意保留簡體**
                 #   （`whatif.js` 用嚟俾人用簡體字搜技能 —— ⛔ 唔准「統一」佢）／`color` 已轉繁體
                 #   calc-page-tw.html ＝ bwiki 原始 cache（簡體來源，唔准手改）
                 #   glyph-templates.json／live-truth.json／ground-truth/
@@ -669,12 +670,12 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **455 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **479 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
    （歷史：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js` 要求 repo 根
-   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹同乾淨 HEAD 都係 **455／0**（2026-09-27 進度：批量 what-if +17 → 394 → `skillread` 14 → `nameseg` 8 → 402 → `skilllist-diff` 8 → 410 → `gametora-data` 5 → 415 → `gametora-skills` 8 → 423 → `bwiki-skill-page` 12 → 435 → `bwiki-coverage` 12 → **455**）。
+   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹同乾淨 HEAD 都係 **479／0**（2026-09-27 進度：批量 what-if +17 → 394 → `skillread` 14 → `nameseg` 8 → 402 → `skilllist-diff` 8 → 410 → `gametora-data` 5 → 415 → `gametora-skills` 8 → 423 → `bwiki-skill-page` 12 → 435 → `bwiki-coverage` 12 → 455 → `bwiki-calc-page` 8 → 463 → `skill-db-merge` 14 → **479**）。
    逐步累積過程（2026-09-19，僅供回溯）：H1 之後乾淨 HEAD 327／0 vs 工作樹 328／0 →
    A9 `write-root` +5 → 333 → 地雷 #31 +1 → 334 → `log-file` +5 → 339 → 擷取凍結 +3 → 342
    → 診斷掣 +4 → 346 → 培育結束確認 reader +5 → 351 → 確認閘 +3 → 354 →

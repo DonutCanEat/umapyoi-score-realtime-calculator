@@ -209,7 +209,7 @@ tools/
                          #    ⚠️ 靜態閘捉唔到「page 開頭 throw → listener 靜默唔註冊」（見 §8 4c）
 
 data/
-  skill-db-tw.json       # 1323 招技能（繁中）
+  skill-db-tw.json       # **1589 招**技能（繁中；2026-09-27 由 1323 補上，見 AGENTS §1.1 Phase 0）
   skill-overrides.json   # 主 DB 冇收錄嘅技能（繼承技）
   glyph-templates.json   # ⭐ 10 個數字字形模板（16×24，NCC 用）
   live-truth.json        # ⭐ 實機面板條真值（values ＋ 每張圖 perShot 例外；`roi-*` = 已剪 ROI）
