@@ -4,7 +4,10 @@
  * ## 為何要抽
  *
  * `main.js` 嘅 `createSettingsWindow()` 同 `createWhatifWindow()` **除
- * `width/height/min*/title/loadFile` 之外逐行一樣**：
+ * `width`／`height`／`minWidth`／`minHeight`／`title`／`loadFile` 之外逐行一樣**：
+ * ⚠️ 上面嗰行**唔准**把 `minWidth` 縮寫成「`min` ＋ 星號 ＋ 斜號」—— 嗰兩隻字元
+ *    會提早收咗呢個 block comment（2026-09-27 實測：噉樣寫令 `npm.cmd start` 直接
+ *    `SyntaxError: Unexpected token 'new'`，程式完全開唔到）。
  * `new BrowserWindow({ …, webPreferences: { ...APP_WEB_PREFERENCES } })` →
  * `setContentProtection(true)` → `loadFile(join(__dirname, <file>))` →
  * `once('ready-to-show', () => win.show())` → `on('closed', …)`。
