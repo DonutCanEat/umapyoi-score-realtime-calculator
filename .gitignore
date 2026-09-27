@@ -29,3 +29,8 @@ diagnostics/
 
 # ── 診斷快照（擷取窗撳掣／設 UMAPYOI_SNAPSHOT_AFTER 產生）：runtime 一次性資料 ──
 snapshots/
+
+# ── bwiki 逐頁 cache（tools/fetch-bwiki-skill-pages.js）：2404 頁 ≈ 70MB 原始 HTML 文字 ──
+# ⚠️ 呢啲係**中間產物**，唔入 git（入咗每次抓都改一大批檔）。要留嘅係**解析結果**
+#    `data/bwiki-skill-pages.json`（幾百 KB），同埋最終合併出嚟嘅技能庫。
+data/bwiki-pages/
