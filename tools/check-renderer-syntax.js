@@ -19,8 +19,19 @@
  *
  * 做法：由每個 HTML 抽出唯一一個 inline `<script>`，寫去臨時檔，用
  * `node --check` 驗語法（**只驗語法，唔執行** → 唔需要 DOM／Electron）。
- * `electron/main.js`／`src/**`／`tools/**` 一樣照驗（ESM；`--check` **唔會 resolve import**，
+ * `electron/**`／`src/**`／`tools/**` 一樣照驗（ESM；`--check` **唔會 resolve import**，
  * 所以唔需要有 electron 或者任何依賴）。
+ *
+ * ## ⚠️ 2026-09-27：`electron/**` **一定要**喺掃描範圍（實測走漏過，真係搞到開唔到程式）
+ *
+ * 實例：`electron/panel-window.js`（去重 M3 新增）嘅**檔頭註釋**把
+ * 「`min` ＋ 星號 ＋ 斜號 ＋ `title`」連續寫埋一齊 —— 嗰兩隻字元
+ * **提早收咗個 block comment** → 之後幾行變咗程式碼 → `node --check` 一驗就爆
+ * `Unexpected token 'new'`。
+ * 但嗰陣 `JS_FILES` 只有 `electron/main.js` ＋ `ipc-channels.cjs` → **呢個閘驗唔到佢**，
+ * `npm.cmd test` 亦只係用文字斷言（唔會 parse）→ 結果用戶 `npm.cmd start` 直接
+ * `App threw an error during load / SyntaxError`，**開唔到程式**。
+ * → 所以 `electron/` 目錄一律遞歸掃（唔准淨係列死幾個檔名）。
  *
  * ⚠️ 呢個閘**唔會**捉到邏輯錯（例如 IPC channel 打錯字）—— 嗰啲要靠
  * `test/hud-settings-html.test.js` 嗰類「由 HTML 抽嘢出嚟比對」嘅測試。
@@ -43,10 +54,14 @@ const CLI_DIRS = process.argv.slice(2);
 
 /** 要驗嘅檔（順序 = 報告順序）。 */
 const HTML_FILES = ['electron/settings.html', 'electron/hud.html', 'electron/whatif.html', 'electron/capture.html'];
-/** 另外淨係驗語法嘅 Node 檔（ESM ＋ 一個 CommonJS）——`.cjs` 要 `--check` 當 CJS 驗。 */
-const JS_FILES = ['electron/main.js', 'electron/ipc-channels.cjs'];
-/** 遞歸掃 `.js` 嘅目錄（有 CLI 參數就當係呼叫者指定嘅路徑）。 */
-const JS_DIRS = CLI_DIRS.length ? CLI_DIRS : ['src', 'tools'];
+/**
+ * 遞歸掃 `.js`／`.cjs` 嘅目錄（有 CLI 參數就當係呼叫者指定嘅路徑）。
+ *
+ * ⚠️ `electron` **一定要喺度**（唔准改成「淨係列死 `main.js`」）：見檔頭 2026-09-27 嗰段 ——
+ *    新增嘅 `electron/panel-window.js` 就係因為唔喺掃描範圍，帶住一個 syntax error
+ *    入到 commit，令程式**完全開唔到**。`test/renderer-syntax-gate.test.js` 會釘住呢一點。
+ */
+const JS_DIRS = CLI_DIRS.length ? CLI_DIRS : ['electron', 'src', 'tools'];
 
 let failed = 0;
 
@@ -83,17 +98,8 @@ for (const file of HTML_FILES) {
   }
 }
 
-for (const file of JS_FILES) {
-  try {
-    execFileSync(process.execPath, ['--check', join(ROOT, file)], { stdio: 'inherit' });
-    console.log(`✓ ${file}：語法 OK`);
-  } catch {
-    console.error(`✗ ${file}：語法錯誤（上面有 node 嘅報告）`);
-    failed += 1;
-  }
-}
-
-// ── `src/**` ＋ `tools/**`（ESM）：逐個檔 `--check`（唔 resolve import，所以唔需要依賴）──
+// ── `electron/**` ＋ `src/**` ＋ `tools/**`（ESM／CJS）：逐個檔 `--check`
+//    （唔 resolve import，所以唔需要 electron 或者任何依賴）──
 for (const dir of JS_DIRS) {
   const abs = dir.startsWith(ROOT) || /^[A-Za-z]:/.test(dir) ? dir : join(ROOT, dir);
   let files;

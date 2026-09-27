@@ -174,6 +174,14 @@ test/
                       #    鎖住「規則同 frame 封包各自只有一份」
   skill-name-key.test.js # ⭐ 技能名對帳 key（審計 M7，5 條）：entity／全形半形標點／
                       #    空白換行 tab／null→''／冇 entity 時逐字等於 normalizeSkillName()
+  panel-window.test.js # ⭐⭐ `electron/panel-window.js` **真載入 ＋ 真開窗**（地雷 #33，4 條）：
+                      #    喺 `os.tmpdir()` 砌一個假 `electron`（ESM，記低每個 call）→ 真 import
+                      #    真檔副本 → 驗參數（webPreferences 係共用常數嘅**副本**／show:false／
+                      #    focusable:true…）＋ 副作用次序（setContentProtection → loadFile →
+                      #    ready-to-show → closed）＋ `onClosed` 選填。⚠️ 唔需要 Electron
+  renderer-syntax-gate.test.js # ⭐ **語法閘自己嘅閘**（地雷 #33，3 條）：`JS_DIRS` 一定要有
+                      #    `electron`／`electron/` 之下每個 `.js`／`.cjs` 都被覆蓋／4 個 HTML
+                      #    都要驗（防止「新增檔走漏」再一次發生）
   write-root.test.js  # ⭐ A9 寫入根目錄決策（5 條）：開發 = 專案根／打包 = userData／
                       #    `ROOT` 落喺 .asar 就算 isPackaged=false 都用 userData／
                       #    缺 rootDir 或 userDataDir 一律 throw（唔准靜默 fallback）／
@@ -246,7 +254,11 @@ tools/
   check-renderer-syntax.js # ⭐ renderer inline script 嘅**語法閘**（抽出 `<script>` 再 `node --check`）——
                          #    四個 HTML 入唔到 `node --test`（classic script ＋ DOM），打錯一個字
                          #    就係「HUD 靜默唔郁」而冇錯誤訊息 → 呢個係最低成本嘅防線（見 §8 4b）
-                         #    ⚠️ 2026-09-19 擴充到 src/**（31）＋ tools/**（34）
+                         #    ⚠️ 2026-09-19 擴充到 src/** ＋ tools/**；
+                         #    ⚠️ 2026-09-27 再擴充到 **`electron/**`（目錄掃，唔准列死檔名）** ——
+                         #    之前只列 `main.js`／`ipc-channels.cjs`，令新檔 `panel-window.js`
+                         #    帶住 syntax error 入到 commit，用戶 `npm.cmd start` 完全開唔到
+                         #    （地雷 #33）。`test/renderer-syntax-gate.test.js` 釘住呢件事
   verify-renderer-load.js # ⭐ **renderer 實載閘**（H1 完成嗰陣加）：用 **Electron** 跑（唔係 node），
                          #    真開 4 個窗（show:false、唔需要遊戲）載入 4 個 HTML，斷言
                          #    ① page 冇 throw（＝ require('./ipc-channels.cjs') 解得開）
@@ -285,7 +297,7 @@ docs/
   formula.md             # 公式推導、驗證、來源
   vision-design.md       # 影像辨識設計（座標模型、畫面清單、邊界情況）
   design.md              # 設計細節（兩條路、三個畫面、為何 CV 放 Node、HUD overlay、what-if）
-  pitfalls.md            # ⭐ **32 條地雷**（改影像／計分／HUD 之前必讀；每條連住一個閘）
+  pitfalls.md            # ⭐ **33 條地雷**（改影像／計分／HUD 之前必讀；每條連住一個閘）
   known-issues.md        # 已知待辦 ＋ §9.1 **未修**嘅技術債（獨立審計發現）
   backlog.md             # 總 Backlog（A 唔使開遊戲／B 要開遊戲／C 新功能／D agent 提議）
   skill-screen.md        # ⭐ 技能畫面（Phase 2）實測版面 ＋ 識字嘅硬限制同可行路線

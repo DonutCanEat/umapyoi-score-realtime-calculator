@@ -22,7 +22,7 @@
 | [formula.md](formula.md) | 評價分公式：推導、來源、驗算、已知誤差 | 現行 |
 | [vision-design.md](vision-design.md) | 影像辨識設計：座標模型、畫面清單、邊界情況 | 現行 |
 | [design.md](design.md) | 設計細節：兩條路、三個畫面、為何 CV 放 Node、HUD overlay、技能畫面、what-if | 現行 |
-| [pitfalls.md](pitfalls.md) | **32 條地雷** —— 每條寫明「⛔ 舊寫法／錯假設」同「✅ 正解」，通常連住一個閘 | 現行 |
+| [pitfalls.md](pitfalls.md) | **33 條地雷** —— 每條寫明「⛔ 舊寫法／錯假設」同「✅ 正解」，通常連住一個閘 | 現行 |
 | [known-issues.md](known-issues.md) | 已知待辦 ＋ §9.1 **未修**嘅技術債（獨立審計發現） | 現行 |
 | [backlog.md](backlog.md) | 總 Backlog：**A** 唔使開遊戲／**B** 要開遊戲／**C** 新功能／**D** agent 提議 | 現行 |
 | [file-map.md](file-map.md) | 逐個檔案嘅用途、為何咁做、有咩閘（完整版） | 現行 |
