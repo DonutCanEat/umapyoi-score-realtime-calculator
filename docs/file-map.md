@@ -22,6 +22,11 @@ src/umascore/
   advice.js       # ⭐ C4 升級建議（純函數）：marginalPoints()（= statPoints(v+1) − statPoints(v)，
                   #    **差分**而唔係微分 → 同核心庫一致）／statEfficiency()（邊際排序）／
                   #    trainingAdvice()（差 N 分 → 每屬性約要幾多點；封頂屬性**唔准入建議**）
+  skill-name-key.js # ⭐ 技能名 → 對帳 key（純函數；審計 M7）：collapseSpaces()（連續空白／
+                  #    換行／tab → 單一空格）＋ skillNameKey()（收空白 → decodeEntities →
+                  #    normalizeSkillName）。⚠️ 呢個 key 係「bwiki 頁 ↔ 本庫 ↔ GameTora」
+                  #    三方對帳嘅**唯一**配對依據（五份實作收斂成一支）；走樣 = 假缺口／
+                  #    對帳數字靜靜地變。⚠️ decodeEntities 仍然住喺 gametora-skills.js（唔搬）
   calibrate.js    # 對答案邏輯
   index.js        # re-export
 
@@ -64,11 +69,25 @@ src/hud/
                   #    ⚠️ 語意（2026-09-19）：**size 為準**，x[1] = x[0] + size.w 由推導得出；
                   #       寫死嘅 x[1] 同推導值唔一致 → 警告（onWarn，唔 throw）；
                   #       只有「推導出嚟嘅範圍唔合法」才 throw（見 §2／§6.4）
-  config-path.js  # ⭐ 設定檔擺邊（純函數）：開發 = 專案根；打包／asar = app.getPath('userData')
+  config-path.js  # ⭐ 設定檔擺邊（純函數）：開發 = 專案根；打包／asar = app.getPath('userData')。
+                  #    ⚠️ 決策本體喺 writable-root.js（審計 M2）；呢度只加「非空字串／冇分隔符」嘅
+                  #       檔名檢查同 join(root, filename)
   write-root.js   # ⭐ A9：dump／連拍要**寫**邊（純函數）：開發 = 專案根（同以前一樣）；
                   #    打包／asar = app.getPath('userData')。⚠️ 為何要：打包後 ROOT 係唯讀
                   #    asar，原本文寫死 join(ROOT,'shots',…) → mkdirSync throw（ENOTDIR／EROFS），
                   #    而且係喺「讀唔清」出錯嗰陣才爆。underWriteRoot() 順手集中 join
+                  #    ⚠️ 決策本體喺 writable-root.js（審計 M2）；why 文案兩個模組**刻意唔同**
+  writable-root.js # ⭐ 可寫根目錄決策嘅**唯一**實作（審計 M2）：resolveWritableRoot({isPackaged,
+                  #    rootDir, userDataDir, whyDev, whyPackaged, whyAsar}) → {root, where, why}；
+                  #    WRITABLE_ROOT_WHERE = {devRoot:'dev-root', packagedUserData:'packaged-userData'}
+                  #    （config-path.js／write-root.js 共用**同一個 frozen object**）
+                  #    ⚠️ .asar 判斷（/\.asar([\\/]|$)/i）＋ 缺 rootDir／userDataDir 就 throw 都喺呢度
+  util.js         # ⭐ 「值 → 可讀文字」兩支（審計 M1）：describe()（**錯誤訊息**用：字串加「」、
+                  #    undefined 明寫）／describeLogArg()（**log mirror** 用：字串原樣、Error 特判
+                  #    `name: message`）。⚠️ 兩套措辭唔准合併（唔然 "0.3" 同 0.3 睇落一樣）
+  stamp.js        # ⭐ 時間戳（審計 L1）：safeIso()（唔合法 → 用「而家」，唔准 throw／唔准出
+                  #    `Invalid Date`）／stampForFilename()（`:`／`.` → `-`，Windows 檔名）。
+                  #    ⚠️ 同一個快照嘅 `.log` 同 `.png` 一定要餵**同一個 Date**（唔准差一秒）
   log-file.js     # ⭐ 執行時 log 檔（`<writeRoot>/umapyoi.log`，2 MB 輪替成 `.1`）：
                   #    formatLogLine()／shouldRotate()／openLogFile()。⚠️ 為何要：打包版係
                   #    GUI 程式 → `console.log` 冇地方去（實測 redirect stdout 都係空）→
@@ -88,12 +107,24 @@ electron/
   main.js         # 主程序：視窗列舉 → statbar.readStatBar()（cropped）／reader.readStats()
                   #    → evaluate() → console log ＋ **推落 HUD**（見 §6.4）
                   #    另有：HUD 設定窗管理、滑鼠穿透 funnel（setHudInteractive）、拖位 IPC
+                  #    ⚠️ 兩條計分路徑（面板條／培育結束確認欄）共用 imageFromFrame()／
+                  #       templatesReady()／applyScore()（審計 M8）；lastGold 同 score.source
+                  #       **刻意唔入 helper**（兩條路語意唔同）
+  panel-window.js # ⭐ 普通面板窗建立器（審計 M3）：createPanelWindow({file, title, width, height,
+                  #    minWidth, minHeight, onClosed}) → BrowserWindow ＋ webPreferences
+                  #    ＋ setContentProtection ＋ loadFile ＋ ready-to-show → show。
+                  #    ⛔ HUD overlay 同擷取窗**刻意唔入呢度**（透明／穿透 funnel／show:true／
+                  #       closed 直接 app.quit() —— 語意唔同）
+  web-preferences.js # ⭐ 四個窗共用嘅 webPreferences（**唯一一份**）：nodeIntegration:true ＋
+                  #    contextIsolation:false ＋ backgroundThrottling:false（屬刻意設計，見 §6.3）
   capture.html    # 擷取 renderer：getUserMedia → **1:1 剪面板 ROI**（冇 ROI 就退回 640px 縮圖）
                   #    ⭐ 兩粒手動掣（用戶 2026-09-19 要求）：「強制更新」（送 `refresh` →
                   #    重新揀來源 ＋ 重開擷取）同「寫入診斷 log」（送 `snapshot` → 快照＋最後一幀 PNG）；
                   #    掣嘅結果經 `notice` 顯示喺狀態列（唔准靜默）
                   #    ⚠️ `start` handler **不准早退**：主程序靠再叫一次 start 去救「凍結」
                   #    ⚠️ 串流 track ended／3 秒冇畫面都要報 `capture-error`
+                  #    ⚠️ ROI→像素換算**只有一份** regionFor()（＋封包 sendFrame()；審計 H1）：
+                  #       `rect = null`（冇 ROI）＝ {0,0,vw,vh}，**唔扣**標題列
   hud.html        # HUD overlay renderer：透明無邊框，只畫主程序推落嚟嘅 view（＋對位模式拖位
                   #    ＋ C3 成長曲線嘅 SVG polyline —— **只畫唔計**，座標由 `src/hud/history.js` 嚟）
   settings.html   # ⭐ HUD 設定窗（**普通視窗**，classic script）：8 個數值 slider ＋ 9 個顯示選項
@@ -129,6 +160,20 @@ test/
                       #    （冇檔 → 回預設、唔准 throw；有檔 → 真係讀到嗰個檔）—— 理由：唔准斷言
                       #    「repo 根有 `hud-position.json`」（嗰個檔唔入 git，乾淨 checkout 冇 → 見 §8）
   hud-config-path.test.js # ⭐ 設定檔路徑決策（開發 vs 打包 vs asar）
+  writable-root.test.js # ⭐ 可寫根目錄決策（審計 M2，4 條）：config-path／write-root 兩邊
+                      #    指向**同一個** frozen enum／三個分支／why 由呼叫方決定／
+                      #    唔夠資料要 throw
+  hud-util.test.js    # ⭐ 「值 → 可讀文字」兩支（審計 M1，6 條）：describe() 字串加引號 ＋
+                      #    undefined 明寫／describeLogArg() 字串原樣 ＋ Error 特判／
+                      #    循環參照兩支都唔准 throw
+  stamp.test.js       # ⭐ 時間戳（審計 L1，5 條）：固定時間 → 可預期檔名／唔合法 Date 唔准出
+                      #    NaN／結果冇 `:`「.」／同一個 now 嘅 `.log` 同 `.png` 名字一致
+  capture-region.test.js # ⭐⭐ `capture.html` ROI→像素規則（審計 H1，7 條）：**真係抽出
+                      #    `regionFor()` 執行**（實機 1920×1120 樣本 {1148,786,407,13}／
+                      #    冇 ROI 唔扣標題列／全內容區／邊界特例／crop 16px 夾位）＋
+                      #    鎖住「規則同 frame 封包各自只有一份」
+  skill-name-key.test.js # ⭐ 技能名對帳 key（審計 M7，5 條）：entity／全形半形標點／
+                      #    空白換行 tab／null→''／冇 entity 時逐字等於 normalizeSkillName()
   write-root.test.js  # ⭐ A9 寫入根目錄決策（5 條）：開發 = 專案根／打包 = userData／
                       #    `ROOT` 落喺 .asar 就算 isPackaged=false 都用 userData／
                       #    缺 rootDir 或 userDataDir 一律 throw（唔准靜默 fallback）／

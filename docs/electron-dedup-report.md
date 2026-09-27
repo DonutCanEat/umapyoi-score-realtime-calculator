@@ -3,6 +3,12 @@
 > ⚠️ **歷史存檔（2026-09-19）** —— 呢份報告記錄嗰一輪去重嘅**成因、修法同當時嘅驗收數據**，
 > 唔係待辦清單。簇編號中途改過一次 → 回溯舊 commit message 時**以簇標題為準，唔好靠編號**。
 > 現行規則一律睇 `AGENTS.md` 同 `docs/pitfalls.md`。
+>
+> ⭐ **下一輪（2026-09-27，7 簇全部做完）喺 `docs/dedup-next-steps.md`** ——
+> 測試 **495 → 522**（M1 +6／L1 +5／M7 +5／H1 +7／M2 +4），新增
+> `src/hud/util.js`／`src/hud/stamp.js`／`src/hud/writable-root.js`／
+> `src/umascore/skill-name-key.js`／`electron/panel-window.js`。
+> ⚠️ 嗰輪仲欠用戶自己終端跑嘅 `verify-renderer-load.js`（agent shell 開唔到 Electron）。
 
 > 版本：**2026-09-19 v5（執行紀錄：全部簇做完 —— M6／L2／L3 收尾）**
 > - 基準：commit `8febf94`（重核時 267 測試、`fit-score` 5/5 誤差 0）
