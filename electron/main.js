@@ -32,6 +32,10 @@ import { trainingAdvice } from '../src/umascore/advice.js';
 import { anchorHud, contentRect, gameWindowRect, hudState, hudViewKey, clampLayout, layoutFromBounds, relativeFromBounds, HUD_ENV_KEYS } from '../src/hud/layout.js';
 import { loadConfig, saveConfig, resolveHudConfig, validateConfig, assertFullDisplay } from '../src/hud/config.js';
 import { configPathFor } from '../src/hud/config-path.js';
+// ⭐ log mirror「值 → 文字」嘅**唯一一份**（獨立審計 M1）：以前呢度有個本地 closure，
+//    同 `src/hud/util.js` 各自一份。注意措辭**刻意唔同** `describe()`（呢個係 log、
+//    字串原樣唔加引號）→ 用 `describeLogArg()`，唔准改用 `describe()`。
+import { describeLogArg } from '../src/hud/util.js';
 import { envFlag, envIsSet, envNumber } from '../src/hud/env-flag.js';
 // ⭐ 四個窗共用嘅 `webPreferences`（**唯一一份**）——見獨立審計 M2 同嗰個檔嘅註釋。
 import { APP_WEB_PREFERENCES } from './web-preferences.js';
@@ -105,20 +109,11 @@ function initLogFile() {
     console.error(`[記錄] ⚠️ 開唔到 log 檔：${error?.message ?? error}（其餘功能照常）`);
     return;
   }
-  const describe = (value) => {
-    if (typeof value === 'string') return value;
-    if (value instanceof Error) return `${value.name}: ${value.message}`;
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value);
-    }
-  };
   for (const level of ['log', 'warn', 'error']) {
     const original = console[level].bind(console);
     console[level] = (...args) => {
       original(...args);
-      logFile.write(level, args.map(describe).join(' '));
+      logFile.write(level, args.map(describeLogArg).join(' '));
     };
   }
   console.log(`[記錄] 寫入 ${logFile.path}${logFile.rotated ? '（舊檔已輪替成 .1）' : ''}`);

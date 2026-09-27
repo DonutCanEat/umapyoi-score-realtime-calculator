@@ -34,6 +34,33 @@ export function describe(v) {
   }
 }
 
+/**
+ * 一個值 → **log 檔一行**用嘅可讀文字（`console.*` mirror 用；獨立審計 M1）。
+ *
+ * ⚠️ 同 `describe()` 係**兩套措辭**，唔准合併：
+ * - 呢個係 log：字串**原樣**（唔加引號）—— log 係讀嘅，唔係砌錯誤訊息；
+ * - `describe()` 係錯誤訊息：字串加 `「」`（唔然 `"0.3"` 同 `0.3` 睇落一樣）。
+ *
+ * `Error` 會特判成 `name: message`（`JSON.stringify(new Error('x'))` 係 `{}`，
+ * 直接串會令 log 完全冇咗出錯原因）。
+ *
+ * ⚠️ `undefined` 會照 `JSON.stringify` 回 `undefined`（**唔係**字串）——
+ *    呢個係 `main.js` 原本本地 closure 嘅行為，`args.map(...).join(' ')` 會當佢空字串。
+ *    ⚠️ 唔准順手「修」成 `'undefined'`（會令 log 多咗雜訊），亦唔准改成 throw。
+ *
+ * @param {unknown} v
+ * @returns {string|undefined}
+ */
+export function describeLogArg(v) {
+  if (typeof v === 'string') return v;
+  if (v instanceof Error) return `${v.name}: ${v.message}`;
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
+
 /** 係唔係「普通物件」（唔係 null、唔係陣列、唔係函數）。 */
 export function isPlainObject(v) {
   return typeof v === 'object' && v !== null && !Array.isArray(v);

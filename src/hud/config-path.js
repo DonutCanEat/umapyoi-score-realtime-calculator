@@ -22,6 +22,9 @@
 import { join } from 'node:path';
 
 import { HUD_CONFIG_FILENAME } from './config.js';
+// ⭐ 獨立審計 M1：「值 → 可讀文字」以前喺呢度**又**寫咗一份（同 util.js 逐個分支一樣）
+//    → 收斂成一支，唔然兩邊走樣就會同一份壞值出唔同訊息。
+import { describe } from './util.js';
 
 /** `configPathFor()` 會回嘅「用咗邊條規則」（方便 log 同測試斷言）。 */
 export const CONFIG_PATH_WHERE = Object.freeze({
@@ -73,14 +76,4 @@ export function configPathFor({
       ? '專案目錄喺 app.asar 入面（唯讀）→ 擺喺 userData'
       : '已打包（app.isPackaged=true）→ 擺喺 userData（專案目錄可能唯讀）',
   };
-}
-
-function describe(v) {
-  if (typeof v === 'string') return `「${v}」`;
-  if (v === undefined) return 'undefined';
-  try {
-    return JSON.stringify(v);
-  } catch {
-    return String(v);
-  }
 }
