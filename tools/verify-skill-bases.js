@@ -54,8 +54,23 @@ for (const s of db) {
 /** 逐頁 cache 入面「唔可以當 base」嘅種類（固有＝★ × Lv）。 */
 const NOT_BASE = new Set(['unique']);
 
+/**
+ * 已知而且**有理由**嘅唔一致（**唔係**「容許誤差」，係要寫明點解）。
+ *
+ * ⚠️ 加嘢入嚟之前一定要有證據。呢個 map 只可以放「已經查清楚邊個來源啱」嘅個案。
+ */
+const KNOWN_MISMATCH = new Map([
+  ['才華橫溢', {
+    pageBase: 508, dbBase: 633,
+    reason: '⭐ 計算器頁最新值係 633（`秘める気のない才気`，同 GameTora id 111302211 對得上）；'
+      + '`繁/才華橫溢` 嗰頁仲係**舊值 508**（未更新）→ 以計算器頁為準。'
+      + '2026-09-27 實測同一招喺新頁改咗 id（舊 203431 → 新 111302211）',
+  }],
+]);
+
 let compared = 0;
 let same = 0;
+let known = 0;
 const diffs = [];
 const skippedKind = [];
 let noDb = 0;
@@ -67,15 +82,23 @@ for (const p of pages) {
   compared += 1;
   const baseSame = (row.base ?? null) === p.base;
   const ptSame = (p.skillPt ?? null) === null || (row.skillPt ?? null) === p.skillPt;
-  if (baseSame && ptSame) same += 1;
-  else diffs.push({ name: row.name, page: p.pageTitle, dbBase: row.base ?? null, pageBase: p.base, dbPt: row.skillPt ?? null, pagePt: p.skillPt ?? null });
+  if (baseSame && ptSame) { same += 1; continue; }
+  // ⚠️ 已知個案：仍然要**計入分母**（唔准靜默當佢一致），但分開報。
+  const kn = KNOWN_MISMATCH.get(row.name);
+  if (kn && kn.pageBase === p.base && kn.dbBase === row.base) { known += 1; continue; }
+  diffs.push({ name: row.name, page: p.pageTitle, dbBase: row.base ?? null, pageBase: p.base, dbPt: row.skillPt ?? null, pagePt: p.skillPt ?? null });
 }
 
 console.log(`逐頁 cache ${pages.length} 頁`);
 console.log(`可比嘅（頁面種類唔係固有、而且本庫對得上名）：**${compared}**`);
-console.log(`　一致：**${same}**（${compared ? ((same / compared) * 100).toFixed(1) : '0'}%）　唔一致：**${diffs.length}**`);
+console.log(`　一致：**${same}**（${compared ? ((same / compared) * 100).toFixed(1) : '0'}%）`
+  + `　已知有理由嘅唔一致：${known}　**真正有問題：${diffs.length}**`);
 console.log(`跳過（固有技，頁面 base 唔可以當 base）：${skippedKind.length}`);
 console.log(`本庫對唔上名（唔比，唔准估）：${noDb}`);
+if (known && flags.has('--known')) {
+  console.log('\n已知而且有理由嘅唔一致：');
+  for (const [name, k] of KNOWN_MISMATCH) console.log(`   ${name}：頁 ${k.pageBase} vs 本庫 ${k.dbBase}\n      理由：${k.reason}`);
+}
 if (flags.has('--unmatched')) {
   console.log('\n對唔上名嘅逐頁：');
   const limit = Number(flagValue(args, 'limit') ?? 40);
