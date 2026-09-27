@@ -30,6 +30,10 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSyn
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hasFlag, toolArgs } from './lib/args.js';
+// ⭐ 時間戳（獨立審計 L1）：同 main.js 快照／dump 幀共用一支。
+//    ⚠️ `.slice(0, 19)` 係**刻意**嘅：目錄名要 `diag-2026-09-19T14-51-00`（冇毫秒）
+//       —— 咁樣一眼睇得出係幾點，而且同舊診斷包目錄一致。
+import { stampForFilename } from '../src/hud/stamp.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）——以前係 `new Set(process.argv.slice(2))`
@@ -96,7 +100,7 @@ function git(...argv) {
   return r.ok ? r.out : `（收集唔到：${r.out}）`;
 }
 
-const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+const stamp = stampForFilename().slice(0, 19);
 const outDir = join(ROOT, 'diagnostics', `diag-${stamp}`);
 const filesDir = join(outDir, 'files');
 mkdirSync(filesDir, { recursive: true });

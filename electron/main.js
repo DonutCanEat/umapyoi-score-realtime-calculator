@@ -36,6 +36,8 @@ import { configPathFor } from '../src/hud/config-path.js';
 //    同 `src/hud/util.js` 各自一份。注意措辭**刻意唔同** `describe()`（呢個係 log、
 //    字串原樣唔加引號）→ 用 `describeLogArg()`，唔准改用 `describe()`。
 import { describeLogArg } from '../src/hud/util.js';
+// ⭐ 時間戳（獨立審計 L1）：dump 幀檔名同快照檔名以前各自一份。
+import { stampForFilename } from '../src/hud/stamp.js';
 import { envFlag, envIsSet, envNumber } from '../src/hud/env-flag.js';
 // ⭐ 四個窗共用嘅 `webPreferences`（**唯一一份**）——見獨立審計 M2 同嗰個檔嘅註釋。
 import { APP_WEB_PREFERENCES } from './web-preferences.js';
@@ -1146,10 +1148,9 @@ function ensureDir(dir) {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 }
 
-/** dump 檔名用嘅時間戳（`:`／`.` 換成 `-`：Windows 檔名唔可以有 `:`）。 */
-function dumpStamp() {
-  return new Date().toISOString().replace(/[:.]/g, '-');
-}
+// ⚠️ 時間戳而家喺 `src/hud/stamp.js`（獨立審計 L1）：以前呢度有 `dumpStamp()`，
+//    而 `writeDiagnosticSnapshot()` 又內聯寫咗一次逐字一樣嘅 —— 兩份走樣就會出現
+//    「快照 .log 同 .png 差一秒」或者唔合法檔名。
 
 function dumpSkillPage(image, meta) {
   if (skillPages >= SKILL_MAX) return null;
@@ -1192,7 +1193,7 @@ function dumpSkillPage(image, meta) {
 function dumpFrame(image, meta) {
   if (dumpCount >= MAX_DUMPS) return null;  try {
     ensureDir(debugDir()); // ⚠️ 共用（審計 L3）
-    const stamp = dumpStamp();
+    const stamp = stampForFilename();
     const base = join(debugDir(), `${stamp}-${meta.kind}`);
     const bytes = Buffer.from(image.data.buffer, image.data.byteOffset, image.width * image.height * 4);
     writeFileSync(`${base}.raw`, bytes);
@@ -1271,7 +1272,9 @@ let lastDumpPath = null;
  */
 function writeDiagnosticSnapshot() {
   const now = new Date();
-  const stamp = now.toISOString().replace(/[:.]/g, '-');
+  // ⚠️ 一定要用**同一個 `now`**：`.log` 同 `.png` 係同一個快照，
+  //    再叫一次 `new Date()` 就會有機會差一秒（兩個唔同時間戳）。
+  const stamp = stampForFilename(now);
   const dir = underWriteRoot(writeRoot().root, 'snapshots');
   mkdirSync(dir, { recursive: true });
   const logPath = join(dir, `${stamp}-snapshot.log`);

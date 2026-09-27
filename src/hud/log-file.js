@@ -20,6 +20,9 @@
 import { existsSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+// ⭐ 時間戳（獨立審計 L1）：以前呢度同 `snapshot.js` 各自寫咗一份「唔合法 → 用而家」。
+import { safeIso } from './stamp.js';
+
 /** log 檔名（同 `hud-position.json` 一樣擺喺 writable root）。 */
 export const LOG_FILENAME = 'umapyoi.log';
 
@@ -42,7 +45,7 @@ export function logFilePathFor(root) {
  * @param {Date} [at]
  */
 export function formatLogLine(level, text, at = new Date()) {
-  const stamp = Number.isNaN(at.getTime()) ? new Date().toISOString() : at.toISOString();
+  const stamp = safeIso(at);
   return `${stamp} [${level}] ${String(text)}\n`;
 }
 

@@ -9,6 +9,9 @@
  *    （`String()`／`JSON.stringify()` 都可能爆 —— 全部包住。）
  */
 
+// ⭐ 時間戳（獨立審計 L1）：以前呢度同 `log-file.js` 各自寫咗一份「唔合法 → 用而家」。
+import { safeIso } from './stamp.js';
+
 /** 快照第一行嘅標記（方便日後用 `grep` 摷返出嚟）。 */
 export const SNAPSHOT_HEADER = '=== umapyoi snapshot';
 
@@ -36,7 +39,7 @@ export function describeValue(value) {
  * @returns {string}
  */
 export function formatSnapshot(meta = {}, sections = [], at = new Date()) {
-  const stamp = Number.isNaN(at.getTime()) ? new Date().toISOString() : at.toISOString();
+  const stamp = safeIso(at);
   const out = [`${SNAPSHOT_HEADER} ${stamp} ===`];
   const bits = [];
   if (meta.kind) bits.push(`模式=${meta.kind}`);
