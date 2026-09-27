@@ -260,6 +260,60 @@ let statHistory = [];
  * **唔係**逐格 5 個 → HUD 只可以標「有金色格」，唔可以標係邊一格。
  */
 let lastGold = false;
+
+/**
+ * Renderer 傳過嚟嘅 raw RGBA → 影像物件（**唯一一份**；獨立審計 M8）。
+ *
+ * 為何要抽：同一個 `{ data: new Uint8ClampedArray(buffer), width, height }` 出現喺
+ * 三個地方（連拍／正常幀／「培育結束確認」欄）。走樣嘅症狀係**完全靜默** ——
+ * 例如 `width`／`height` 對調就會讀到一格亂數，或者 `buffer` 冇包 `Uint8ClampedArray`
+ * 就會喺讀像素嗰刻 throw（而嗰刻通常已經係「出事之後」）。
+ *
+ * @param {{width:number, height:number, buffer:ArrayBuffer}} frame
+ */
+function imageFromFrame({ width, height, buffer }) {
+  return { data: new Uint8ClampedArray(buffer), width, height };
+}
+
+/**
+ * ⭐ 字形模板係唔係已經載入好（**唯一一份**判斷；獨立審計 M8）。
+ *
+ * ⚠️ 兩條讀數路（面板條／培育結束確認欄）**都一定要擋** —— 模板未載入就讀，
+ * `readStatBar()`／`readResultPanel()` 會回一堆冇意義嘅結果（甚至 throw）。
+ */
+function templatesReady() {
+  return Object.keys(templates).length > 0;
+}
+
+/**
+ * ⭐ 兩條計分路徑（面板條／培育結束確認）共用嘅「採用一個分數」步驟（獨立審計 M8）。
+ *
+ * 做四件事：更新 `lastScore`／`lastStats`／`lastScoreAt` → 餵一筆成長曲線樣本 →
+ * `pushHud()`（有新數即刻推，唔等 500ms 嗰個 interval）。
+ *
+ * ⚠️ **參數名一定要叫 `score`／`stats`／`at`**：`test/hud-history-wiring.test.js` **逐字**斷言
+ *    嗰句餵樣本嘅寫法（`pushSample(statHistory, …)` 用 `score.total`／`stats`／`lastScoreAt`）
+ *    —— ⚠️ 呢一句**唔准**照抄落註釋（否則閘會靠註釋通過，見 `AGENTS.md`「註釋唔計」原則）。
+ *
+ * ⛔ **`lastGold` 唔准入呢度**：frame 條路係 `Boolean(read.highlighted)`，
+ *    result 條路係硬性 `false` —— 兩者語意唔同，夾埋就會令 HUD 標錯「金色格」。
+ * ⛔ **`score.source = 'result'` 亦唔准入**：`layout.hudState()` 靠佢講
+ *    「技能分未讀 → 總分係下限」，只有 result 條路要 set。
+ *
+ * @param {{score:object, stats:number[], at?:number}} input
+ */
+function applyScore({ score, stats, at = Date.now() }) {
+  // ⭐ 每次都更新（唔理數值有冇變）：HUD 嘅「新鮮度」靠呢個時間戳，
+  //    數值一樣都要更新，否則 HUD 會以為數據過期而轉 `stale`。
+  lastScore = score;
+  lastStats = stats;
+  lastScoreAt = at;
+  // ⭐ C3：成長曲線記一筆（重複值／NaN 由 `pushSample()` 自己擋；冇變時回同一個參照
+  //    → `hudViewKey()` 嘅 dedupe 亦唔會因此多 send 一次）。
+  statHistory = pushSample(statHistory, { at: lastScoreAt, total: score.total, stats }, { max: MAX_HISTORY });
+  pushHud();
+}
+
 /**
  * HUD renderer 係唔係啱啱「死咗」（crash）而未載入返。
  *
@@ -1174,7 +1228,8 @@ function dumpSkillPage(image, meta) {
 }
 
 function dumpFrame(image, meta) {
-  if (dumpCount >= MAX_DUMPS) return null;  try {
+  if (dumpCount >= MAX_DUMPS) return null;
+  try {
     ensureDir(debugDir()); // ⚠️ 共用（審計 L3）
     const stamp = stampForFilename();
     const base = join(debugDir(), `${stamp}-${meta.kind}`);
@@ -1717,14 +1772,13 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
 
   // ⭐ 技能連拍模式：唔做五維辨識，只逐幀存「新頁面」（見 SKILL_DUMP 註解）。
   if (SKILL_DUMP) {
-    const image = { data: new Uint8ClampedArray(buffer), width, height };
-    dumpSkillPage(image, `遊戲 ${fullWidth}×${fullHeight}`);
+    dumpSkillPage(imageFromFrame({ width, height, buffer }), `遊戲 ${fullWidth}×${fullHeight}`);
     return;
   }
 
-  if (Object.keys(templates).length === 0) return;
+  if (!templatesReady()) return;
 
-  const image = { data: new Uint8ClampedArray(buffer), width, height };
+  const image = imageFromFrame({ width, height, buffer });
   // ⭐ 留住最後一幀（診斷快照會連佢一齊寫 PNG）——只喺正常（剪咗 ROI）路徑做：
   //    技能連拍模式一幀幾 MB，冇必要留住。
   lastFrame = { image, meta: { kind: 'frame', width, height, fullWidth, fullHeight, cropped } };
@@ -1812,15 +1866,11 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
   if (!stable) return;
 
   const score = scoreStats(stats);
-  // ⭐ 每次都更新（唔理 `changed`）：HUD 嘅「新鮮度」靠呢個時間戳，
-  //    數值一樣都要更新，否則 HUD 會以為數據過期而轉 `stale`。
-  lastScore = score;
-  lastStats = stats;
-  lastScoreAt = Date.now();
-  // ⭐ C3：成長曲線記一筆（重複值／NaN 由 `pushSample()` 自己擋；冇變時回同一個參照）
-  statHistory = pushSample(statHistory, { at: lastScoreAt, total: score.total, stats }, { max: MAX_HISTORY });
   // 金色格旗標跟「已採用嘅穩定值」一齊更新（讀唔到嗰陣保留上一個，同五維一樣唔閃走）。
+  // ⚠️ 一定要喺 `applyScore()` **之前**set：嗰度會 `pushHud()`，HUD 要即刻見到新旗標。
   lastGold = Boolean(read.highlighted);
+  // ⭐ 兩條計分路徑共用（獨立審計 M8）：更新分數 ＋ 餵成長曲線 ＋ pushHud()。
+  applyScore({ score, stats });
 
   if (!changed) return;
 
@@ -1836,7 +1886,7 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
   for (const [i, key] of STAT_KEYS.entries()) {
     console.log(`   ${STAT_LABELS[key]}　${stats[i]}`);
   }
-  pushHud(); // 有新數即刻推（唔等 500ms 嗰個 interval）
+  // ⚠️ 唔使喺呢度再 pushHud()：`applyScore()` 已經推咗（有數／有新樣本即刻推）。
 });
 
 /**
@@ -1857,8 +1907,8 @@ const resultGate = createResultGate();
 let lastResultLogAt = 0;
 
 function handleResultFrame({ width, height, buffer }) {
-  if (Object.keys(templates).length === 0) return;
-  const image = { data: new Uint8ClampedArray(buffer), width, height };
+  if (!templatesReady()) return;
+  const image = imageFromFrame({ width, height, buffer });
   const read = readResultPanel(image, templates);
   lastResultSummary = {
     at: Date.now(),
@@ -1897,24 +1947,20 @@ function handleResultFrame({ width, height, buffer }) {
 
   const score = scoreStats(read.stats);
   // ⭐ 標明來源（HUD 會照住講「技能分未讀 → 總分係下限」，見 `layout.hudState()`）。
+  //    ⛔ 唔准入 `applyScore()`：只有呢條路要 set（面板條嗰條路係普通分數）。
   score.source = 'result';
-  lastScore = score;
-  lastStats = read.stats;
-  lastScoreAt = now;
+  // ⛔ 呢條路硬性 `false`（面板條嗰條係 `Boolean(read.highlighted)`）→ 唔准入 applyScore()。
   lastGold = false;
-  statHistory = pushSample(
-    statHistory,
-    { at: lastScoreAt, total: score.total, stats: read.stats },
-    { max: MAX_HISTORY },
-  );
+  // ⭐ 同面板條共用（獨立審計 M8）：`at: now` —— 同上面嗰個「連續兩張一樣」嘅閘用同一個時間戳。
+  applyScore({ score, stats: read.stats, at: now });
   console.log(
     `[評価分] 五維 ${read.stats.join('/')} → 五維分 ${score.statScore}　評價點 ${score.total}（${score.rank}）` +
     `　信心 ${read.confidence.toFixed(2)}　來源 培育結束確認（基礎能力 數字欄 ${width}×${height}）`,
   );
-  pushHud();
 }
 
-ipcMain.on(IPC_CHANNELS.captureError, (_event, message) => {  console.error('[擷取失敗]', message);
+ipcMain.on(IPC_CHANNELS.captureError, (_event, message) => {
+  console.error('[擷取失敗]', message);
   // ⭐ 真失敗（唔係轉場）→ 即刻試救：重新叫 renderer 開一次擷取（有次數上限）。
   recoverCapture(`renderer 報錯：${message}`);
 });

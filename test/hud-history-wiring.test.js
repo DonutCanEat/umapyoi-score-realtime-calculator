@@ -25,6 +25,21 @@ const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 const MAIN = read('electron/main.js');
 const HUD = read('electron/hud.html');
 
+/**
+ * 剝註釋（同 `test/capture-freeze.test.js`／`test/electron-window-prefs.test.js` 同一招）。
+ *
+ * ⚠️ 為何要（獨立審計 M8 實測踩到）：下面嗰條「餵 `pushSample()`」嘅閘係**逐字**比對，
+ * 而 `main.js` 嘅**註釋**本身就會提到嗰句寫法（解釋參數名唔可以改）→ 唔剝註釋嘅話，
+ * **實作整句刪走咗閘都會照過**（用註釋冒充實作）。剝咗之後，呢條閘先真係守住實作。
+ */
+function stripComments(text) {
+  return String(text)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:'"\\])\/\/[^\n]*/g, '$1');
+}
+
+const MAIN_CODE = stripComments(MAIN);
+
 test('C3：`pushHud()` 嘅 dedupe key 一定要包含 `view.history`（唔加＝條線永遠唔郁）', () => {
   // ⭐ 2026-09-23（技術債 §9.1-4）：欄位清單**唔再**寫死喺 `main.js` —— 唯一來源係
   //    `src/hud/layout.js` 嘅 `HUD_VIEW_KEY_FIELDS`（純函數 `hudViewKey()`），
@@ -41,9 +56,12 @@ test('C3：`pushHud()` 嘅 dedupe key 一定要包含 `view.history`（唔加＝
 
 test('C3：主程序要真係每幀餵 `pushSample()`（而且用同一個上限常數）', () => {
   assert.match(MAIN, /import \{ MAX_HISTORY, pushSample \} from '\.\.\/src\/hud\/history\.js'/);
-  assert.match(MAIN, /statHistory = pushSample\(statHistory, \{ at: lastScoreAt, total: score\.total, stats \}/,
+  // ⚠️ 用剝咗註釋嘅原始碼（見 `stripComments()` 嘅註釋：唔剝就會「註釋冒充實作」）。
+  //    ⚠️ 呢句而家住喺 `applyScore()`（獨立審計 M8 兩條計分路徑共用）→ 參數名
+  //    `score`／`stats`／`at` **唔准改**（改咗就係改閘，要喺 commit message 講明理由）。
+  assert.match(MAIN_CODE, /statHistory = pushSample\(statHistory, \{ at: lastScoreAt, total: score\.total, stats \}/,
     '餵入點：收到穩定值嗰度');
-  assert.match(MAIN, /\{ max: MAX_HISTORY \}/, '上限要同 `hudState()` 計 `capped` 用嗰個一樣');
+  assert.match(MAIN_CODE, /\{ max: MAX_HISTORY \}/, '上限要同 `hudState()` 計 `capped` 用嗰個一樣');
   assert.match(MAIN, /let statHistory = \[\];/, '要有狀態');
   assert.match(MAIN, /history: statHistory,/, '要傳落 hudState()');
 });
