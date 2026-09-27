@@ -283,7 +283,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
 npm.cmd test              # 單元測試（423 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ electron/main.js
-                                     #    ＋ src/**（36 檔）＋ tools/**（41 檔）—— 見 §8 4b
+                                     #    ＋ src/**（38 檔）＋ tools/**（45 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
                                      #    喺 HEAD 已經爆 SyntaxError 都冇人知（見 §8 4b）
 node tools/collect-diagnostics.js    # ⭐ D2 一鍵診斷包 → diagnostics/diag-<時間>/report.md
@@ -699,7 +699,7 @@ oval > 0 → 再加 oval 部分；最後 floor
    ⚠️ 為何要：四個 HTML 係 classic script（`require('electron')` ＋ DOM）
    → **入唔到 `node --test`**，打錯一個字（少個括號、`await` 喺非 async）嘅後果係
    **renderer 一開頭 throw → 之後所有 IPC listener 都註冊唔到 → HUD／設定窗靜默唔郁**。
-   ⚠️ **2026-09-19 擴充**：而家連 `src/**`（34 檔）＋ `tools/**`（36 檔）一齊驗 ——
+   ⚠️ **2026-09-19 擴充**：而家連 `src/**`（38 檔）＋ `tools/**`（45 檔）一齊驗 ——
    因為去重審計期間一次過揭發**兩個工具喺 HEAD 已經爆 `SyntaxError`**
    （`tools/diag-skills.js` 用咗冇宣告嘅 `scale`；`tools/dump-namebox.js` 同一個 scope
    宣告咗兩次 `scale`）：兩者都係「冇測試、冇閘、冇人跑」嘅檔，靜默壞咗好耐 ——
