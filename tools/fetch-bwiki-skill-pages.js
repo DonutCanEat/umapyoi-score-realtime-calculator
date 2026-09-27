@@ -20,6 +20,7 @@
  *   node tools/fetch-bwiki-skill-pages.js --limit=50      # 只抓頭 50 頁（試跑）
  *   node tools/fetch-bwiki-skill-pages.js --only=繁/       # 只抓某個前綴
  *   node tools/fetch-bwiki-skill-pages.js --delay=1500    # 慢啲（被擋就用）
+ *   node tools/fetch-bwiki-skill-pages.js --titles=names.txt   # 只抓指定頁名（一行一個）
  *
  * ⚠️ 一次過抓 2400 頁大約 **40 分鐘**（900ms × 2400）→ 建議 `run_in_background: true`。
  */
@@ -75,12 +76,23 @@ async function listPages(prefix) {
 }
 
 const prefixes = ONLY ? [ONLY] : ['繁/', '继承技/'];
+const TITLES = flagValue(args, 'titles');
 const titles = [];
-for (const p of prefixes) {
-  const list = await listPages(p);
-  console.log(`「${p}」${list.length} 頁`);
-  titles.push(...list);
-  await sleep(DELAY);
+if (TITLES) {
+  // 由檔案讀指定頁名（一行一個；`#` 開頭同空行當註釋）—— 用嚟只補某批缺口。
+  const file = TITLES.includes('\\') || TITLES.includes('/') ? TITLES : join(ROOT, TITLES);
+  for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const t = line.trim();
+    if (t && !t.startsWith('#')) titles.push(t);
+  }
+  console.log(`由 ${TITLES} 讀到 ${titles.length} 個頁名`);
+} else {
+  for (const p of prefixes) {
+    const list = await listPages(p);
+    console.log(`「${p}」${list.length} 頁`);
+    titles.push(...list);
+    await sleep(DELAY);
+  }
 }
 const target = LIMIT > 0 ? titles.slice(0, LIMIT) : titles;
 console.log(`\n要抓 ${target.length} 頁（delay ${DELAY}ms → 約 ${(target.length * DELAY / 60000).toFixed(0)} 分鐘）`);
