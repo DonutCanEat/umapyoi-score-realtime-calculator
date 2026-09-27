@@ -132,3 +132,13 @@ test('parseSkillPage：抽唔到名就 null（唔准編一個出嚟）', () => {
   assert.equal(p.base, null);
   assert.equal(p.skillPt, null);
 });
+
+test('parseSkillPage：名抽唔到但**有 `title`** → 用 `pageTitle` 剝前綴做 fallback', () => {
+  // 實測 17 頁（`繁/Beat the Stars`、`繁/Ritter von Fuchu`… 全部進化技）
+  // 因為頁面格式唔同而三個寫法都中唔到 → 以前會令嗰頁「冇名」→ 下游對帳變假陰性。
+  const p = parseSkillPage(html('完全冇關係嘅內容'), { title: '繁/Beat the Stars' });
+  assert.equal(p.nameTw, 'Beat the Stars', '要由 pageTitle 剝返個名');
+  assert.equal(p.nameCn, null, '簡體名抽唔到就 null（唔准估）');
+  // ⛔ 冇 title 就照 null（唔准編）
+  assert.equal(parseSkillPage(html('完全冇關係嘅內容')).nameTw, null);
+});

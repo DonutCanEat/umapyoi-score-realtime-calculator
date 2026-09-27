@@ -99,8 +99,17 @@ export function parseSkillPage(html, meta = {}) {
   const nameMatch = text.match(/服务器切换 日服 繁中服 简中服 ([^\s]+) \/ ([^\s]+)/)
     ?? text.match(/([^\s]+) \/ ([^\s]+) 稀有度/)
     ?? text.match(/简中服 (.+?)\/(.+?) 稀有度/);
-  const nameTw = nameMatch?.[1] ?? null;
-  const nameCn = nameMatch?.[2] ?? null;
+  let nameTw = nameMatch?.[1] ?? null;
+  let nameCn = nameMatch?.[2] ?? null;
+  // ⚠️ 抽唔到名唔准就咁當 null：**用 `pageTitle` 做 fallback**。
+  //    實測有 17 頁（`繁/Beat the Stars`、`繁/Ritter von Fuchu`… 全部係進化技）
+  //    因為頁面格式唔同而三個寫法都中唔到 → 以前會令嗰頁「冇名」，
+  //    下游（逐頁 cache 對帳）就永遠對唔上，變成**假陰性**。
+  //    `pageTitle` 係 `繁/<名>`／`继承技/<名>` → 剝咗前綴就係一個可以搜嘅名。
+  if (!nameTw && meta.title) {
+    const m = String(meta.title).match(/^[^/]+\/(.+)$/);
+    if (m) nameTw = m[1];
+  }
 
   const { rarity, kind } = parseRarity(valueAfter(text, '稀有度') ?? '');
   const num = (label) => {
