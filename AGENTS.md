@@ -107,7 +107,8 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 | Phase 1 | **五維數字辨識（零校準）** | ✅ 面板 **30/30**、實機面板條 **15/15**、負樣本 **5/5 唔出數** |
 | Phase 1 | **培育結束確認（基礎能力）讀取** | ✅ 2/2 完全命中；✅ 用戶實機驗過 |
 | Phase 1 | HUD overlay ＋ 設定面板 | ✅ 可用；✅ 用戶實機驗過 |
-| Phase 2 | 技能 icon 識別 | ⏸️ **暫停中**（欄／行偵測 ＋ 名框抽取已做好）|
+| Phase 2 | 技能 icon 識別 | ⛔ **唔准接 UI**（欄／行偵測 ＋ 名框抽取已做好）|
+| Phase 2 | **讀技能名（`skillread.js` ＋ `read-skills.js --gate`）** | ⛔ **實測唔夠安全**：同名最高 **0.928** vs 唔同名最高 **0.986** → 盲測 3/3 配錯（見 `docs/skill-screen.md` §5.9）|
 | Phase 3 | what-if 模擬、成長曲線（C1／C3） | ✅ 已做；✅ 用戶實機驗過 |
 | Phase 4 | 事件選項助手（`docs/vision-design.md` §5.5）| 暫緩 |
 | Phase 5 | **打包（A9）** | ✅ portable 單檔 **95.7 MB** |
@@ -175,13 +176,19 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 - ⚠️ 對位模式期間切換仍然要重開程式（✅ **2026-09-19 用戶實機驗過**：新嗰行「升級 … 差 …」
   正常顯示；原話「呢兩樣都ok」）。
 
-**Phase 2 — 技能 icon 識別**
+**Phase 2 — 技能 icon 識別／讀技能名**
 
-- ⏸️ **暫停**（用戶 2026-09-19 指示：暫時唔處理技能呢一 part）—— 已經做好嘅部分隨時可以接返。
-- 🚧 **兩步做好**：① 技能畫面欄／行偵測器（`skillscreen.js`，8 張實機圖全部搵到 7 行）；
-  ② **名稱框抽取**（112 個全部抽到）＋ **影像比對可行性已量化**
-  （互相最佳配對中位數 **0.986**、撞分上限 **0.604** —— 見 `docs/skill-screen.md` §5）。
-- ⏳ **未做**：接上**候選名單**（見 §9）。
+- ⛔ **2026-09-27 量測結論：影像比對「唔夠安全」，唔准接 UI**（全條：`docs/skill-screen.md` §5.9）。
+- 🚧 **已做好**：① 技能畫面欄／行偵測器（`skillscreen.js`，8 張實機圖全部 7 行）；
+  ② **名框抽取**（112/112）；③ `skillread.js`（庫項特徵還原 ＋ 最近鄰 ＋ **唔准亂猜**：
+  `best < 0.95` 或者 `best − second < 0.05` → 唔出名）；④ **79 個庫項逐格肉眼配名**
+  （`data/skill-name-truth.json`）；⑤ `tools/read-skills.js --gate` 三道閘。
+- ⛔ **否定結果（實測）**：用庫項代表樣本互比 —— **同名最高 0.928**（n=29）、
+  **唔同名最高 0.986**（n=3,052）→ **冇任何門檻可以兩邊安全**；盲測 38 格認到 3 格，
+  **3 格全部配錯**（0.976–0.986，全部係**靜默錯**）。
+- ⚠️ 順手證實：舊 `data/skill-name-labels.json` **整體錯位**（同名配對中位數 0.609）→ 唔准再用。
+- ⏳ **下一步（要有新證據先做）**：庫項存多個樣本取 max／真字元 OCR／再收實拍 ——
+  每步都要用「同名 max vs 唔同名 max」量住有冇進步（`read-skills.js --gate --report`）。
 
 **Phase 3 — what-if 模擬 ＋ 成長曲線**
 
@@ -256,7 +263,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（363 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（380 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ electron/main.js
                                      #    ＋ src/**（34 檔）＋ tools/**（36 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
@@ -429,6 +436,17 @@ node tools/diag-namepairs.js --top=20 --dump  # 跨圖最佳配對 + 對照圖
 node tools/diag-nameocl.js --tol=3            # 幾何自標註（⚠️ 前提唔完全成立，見 docs §5.4）
 node tools/diag-namematch.js --dump           # ⭐ 唔需要真值嘅可行性檢定（互相最佳配對／假陰性）
 
+# ── Phase 2：讀技能名（⭐ 2026-09-27 量測結論：**唔夠安全，唔准接 UI**，見 docs/skill-screen.md §5.9）──
+node tools/read-skills.js shots/gt/uma1-p1-skills.png   # 讀一頁 → 逐格技能名（認唔到會講明原因）
+node tools/read-skills.js --all --trace        # 8 張真值圖 ＋ 每個候選嘅分數
+node tools/read-skills.js --gate               # ⭐ 驗收閘（G2 盲測準確率／G3 跨樣本一致性／G4 負樣本）
+                                               #    ⚠️ 而家**唔會過**（G2：3/3 配錯）—— 呢個係實情，唔准繞過
+node tools/read-skills.js --gate --report      # 只報告數字（探索用；**唔准**當驗收）
+node tools/nameboxes-sheet.js uma1-p1 --scale=4  # ⭐ 一頁一格一張放大圖（肉眼核名用；112 格）
+node tools/truth-template.js --list            # 79 個庫項 ＋ 首次出現位置（標名工作單）
+node tools/check-labels.js --top=20            # 核舊 label 檔內部一致性（同名配對分數分佈）
+node tools/verify-pairs.js "uma1-p1-skills.png:7:1@@uma3-p1-skills.png:6:1"  # 兩格像素相似度
+
 # ── Phase 2：收圖 → 建技能名影像庫 ──
 #   UMAPYOI_SKILL_DUMP=1 npm.cmd start   ⭐ 連拍模式：1:1 整個內容區、逐頁存 PNG（同一頁自動略過）
 #      ⚠️ 呢個都係「開關旗標」（2026-09-19 起）：經 `envFlag()` 讀 → 只認 1／true，
@@ -447,7 +465,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **363 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **380 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 15/15**、**負樣本 5/5 唔出數**），全部都要中
@@ -481,7 +499,7 @@ src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔�
                 #   env-flag.js（環境變數唯一讀法）／history.js（C3 成長曲線核心）
 electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／ipc-channels.cjs（channel 名唯一來源）／
                 #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 363 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+test/           # 380 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
 tools/          # 34 個 CLI（＋ tools/lib/ 2 個共用模組）：診斷／建模板／對答案／what-if／advice／
                 #   診斷包／renderer 實載閘…（見 §2；逐個工具嘅用途睇 `docs/file-map.md`）
 data/           # skill-db-tw.json（1323 招）：`name` 繁體、**`simplifiedName` 刻意保留簡體**
@@ -607,7 +625,7 @@ oval > 0 → 再加 oval 部分；最後 floor
 - **零校準**：唔准加手動框選（用戶明確要求即時偵測）。
 - **畫面 A（育成主畫面）走 `statbar.js`**：相對 ROI → 切「大數值行／上限行」→
   只按**右邊界間距**揀 5 個 → 讀數 ＋ 信心閘（地雷 #23）。
-- **畫面 B（技能）＝ Phase 2，暫停中**；**畫面 C（Pt）＝ what-if 用技能庫嘅 `skillPt`**。
+- **畫面 B（技能）＝ Phase 2，⛔ 2026-09-27 實測「影像比對唔夠安全」**（`docs/skill-screen.md` §5.9）；**畫面 C（Pt）＝ what-if 用技能庫嘅 `skillPt`**。
 - **CV 邏輯一律喺 Node 主程序**（renderer 由 `file://` 載入 → ESM 會被 CORS 擋）：
   renderer 只「擷取 → 1:1 剪 ROI → 傳 raw RGBA」→ 所以核心邏輯可以 `node --test`。
 - **HUD 底線：正常模式一定穿透**（`setIgnoreMouseEvents(true)`，四重保險；對位模式例外）。
@@ -629,12 +647,12 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **363 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **380 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
    （歷史：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js` 要求 repo 根
-   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹同乾淨 HEAD 都係 **363／0**。
+   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹同乾淨 HEAD 都係 **380／0**（2026-09-27：批量 what-if +17）。
    逐步累積過程（2026-09-19，僅供回溯）：H1 之後乾淨 HEAD 327／0 vs 工作樹 328／0 →
    A9 `write-root` +5 → 333 → 地雷 #31 +1 → 334 → `log-file` +5 → 339 → 擷取凍結 +3 → 342
    → 診斷掣 +4 → 346 → 培育結束確認 reader +5 → 351 → 確認閘 +3 → 354 →
@@ -688,7 +706,7 @@ oval > 0 → 再加 oval 部分；最後 floor
 > 呢一節連 §9.1「已知限制／技術債」已經搬去 `docs/known-issues.md`（D4，2026-09-19）。
 > ⚠️ **最緊要嘅三句**（唔准唔知）：
 > 1. **§9.1 嗰啲係「未修」**（獨立審計發現）—— 唔准當已修；改動前先讀。
-> 2. **Phase 2（技能識別）暫停中**（用戶 2026-09-19 指示）—— 已做好嘅部分喺 `docs/known-issues.md`，隨時接返。
+> 2. **Phase 2（技能識別）唔准接 UI**（2026-09-27 實測：同名最高 0.928 < 唔同名最高 0.986 → 靜默配錯）—— 詳情喺 `docs/known-issues.md` 同 `docs/skill-screen.md` §5.9。
 > 3. **HUD 跟遊戲視窗移動 = 唔做**（用戶 2026-09-19 決定；理由同量測數據都留住喺嗰份）。
 
 ---
@@ -698,5 +716,5 @@ oval > 0 → 再加 oval 部分；最後 floor
 > 完整清單（每項嘅內容、狀態、大細）搬咗去 `docs/backlog.md`（D4，2026-09-19）。
 > 快速記憶：**A** 唔使開遊戲（A8 清舊碼 ✅、**A9 打包 ✅（2026-09-19）**、A10 `shots/` 大掃除 ✅…）／
 > **B** 要開遊戲（B4 收數字樣本、B5 其他畫面負樣本，都係 🔄 做緊）／
-> **C** 新功能（C1 what-if ✅、C3 成長曲線 ✅、C4 升級建議 🚧、C5 ランク目標 ✅…）／
+> **C** 新功能（C1 what-if ✅ ＋ ⭐ 2026-09-27 批量 `--skills=`、C3 成長曲線 ✅、C4 升級建議 🚧、C5 ランク目標 ✅…）／
 > **D** agent 提議（D2 診斷包 ✅、D4 就係呢次拆章、D5 技能分進度 ✅…）。
