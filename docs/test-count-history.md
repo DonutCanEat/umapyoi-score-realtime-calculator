@@ -48,5 +48,6 @@
 - **L2** log 輪替改成「每一行都查上限」（`src/hud/log-file.js` ＋ `test/log-file.test.js` 2 條）+2 → **667**
 - **L3** `settings.html` 嘅 `MIN_SIZE`／`DECIMALS` 綁住 `layout.js` 常數（`test/hud-settings-html.test.js` 新閘）+1 → **668**
 - **L4** `tools/breakdown.js` 第三份倍率規則收斂成 `multiplierForGrades()`（`test/breakdown-wiring.test.js`）+3 → **671**
+- **L5** 8 條真庫測試唔准再 `{skip: !hasDb}`（缺失要紅）＋ 全 repo `skip` 閘（`test/verification-coverage.test.js`）+1 → **672**
 
 ⚠️ 每一項嘅 commit hash／驗收數據睇 `git log --oneline`（commit message 有寫實測數字）。

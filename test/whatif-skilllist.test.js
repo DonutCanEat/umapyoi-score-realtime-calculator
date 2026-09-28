@@ -9,11 +9,16 @@
  *
  * ⚠️ 大前提同 `whatif.test.js` 一樣：適性規則唔准走樣 → 兩招嘅邊際分加埋，
  *    一定要等於 `evaluate()` 全量重算嘅 Δ（唔准自己加）。
+ *
+ * ⚠️ **唔准用 `{ skip: !hasDb }` 迴避**（設計審查 L5；AGENTS §8 明文）：
+ *    `data/skill-db-tw.json` **有入 git** → 乾淨 checkout 一定有。
+ *    「DB 唔見／空」＝ 環境壞咗或者有人改壞咗個庫 → 一定要**大聲紅**，
+ *    唔可以「靜默當冇事」（以前 8 條真庫測試會全部靜默 skip → 整個檔綠燈但其實乜都冇驗）。
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
@@ -27,8 +32,28 @@ import {
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DB_PATH = join(ROOT, 'data', 'skill-db-tw.json');
-const db = existsSync(DB_PATH) ? JSON.parse(readFileSync(DB_PATH, 'utf8')) : { skills: [] };
-const hasDb = db.skills.length > 0;
+
+/**
+ * 讀真技能庫（**唔准靜默 fallback**）。
+ *
+ * 為何唔用 `existsSync(...) ? … : { skills: [] }`：嗰種寫法會令「DB 唔見」
+ * 變成「空陣列 → 下面全部 skip／assert 唔到」＝ 靜默通過（AGENTS §8 明文禁止）。
+ */
+function loadDb() {
+  let raw;
+  try {
+    raw = readFileSync(DB_PATH, 'utf8');
+  } catch (error) {
+    throw new Error(`讀唔到 ${DB_PATH}（呢個檔有入 git，唔見即係環境壞咗）：${error?.message ?? error}`);
+  }
+  const parsed = JSON.parse(raw);
+  const count = Array.isArray(parsed?.skills) ? parsed.skills.length : -1;
+  if (count <= 0) throw new Error(`${DB_PATH} 冇技能（實得 ${count} 招）—— 唔准靜默當冇 DB`);
+  return parsed;
+}
+
+const db = loadDb();
+const DB_SKILL_COUNT = db.skills.length;
 
 // ─────────────────────── 切串 ───────────────────────
 
@@ -141,7 +166,7 @@ test('批量：未解析嘅項唔會計入總分（但會照樣回報）', () =>
 
 // ─────────────────────── 真實技能庫（呢個才是「用戶實際會打嘅字」）───────────────────────
 
-test('真庫：用戶貼一串技能名（一行一招＋重複）→ 正確去重同計分', { skip: !hasDb }, () => {
+test('真庫：用戶貼一串技能名（一行一招＋重複）→ 正確去重同計分', () => {
   const { items, duplicates, unresolved } = resolveSkillList(
     db.skills,
     '弧線的教授\n直線加速\n弧線的教授',
@@ -157,13 +182,13 @@ test('真庫：用戶貼一串技能名（一行一招＋重複）→ 正確去�
   assert.ok(Math.abs(out.sumMismatch) <= 1);
 });
 
-test('真庫：名含逗號嘅招（`好，要上啦！`）要認得返自己', { skip: !hasDb }, () => {
+test('真庫：名含逗號嘅招（`好，要上啦！`）要認得返自己', () => {
   const { items, unresolved } = resolveSkillList(db.skills, '好，要上啦！\n來，跟我一起做吧！');
   assert.deepEqual(unresolved, []);
   assert.deepEqual(items.map((it) => it.skill.name), ['好，要上啦！', '來，跟我一起做吧！']);
 });
 
-test('真庫：全部 1323 招「自己個名」都要解析得返自己（唔准有招認唔到）', { skip: !hasDb }, () => {
+test(`真庫：全部 ${DB_SKILL_COUNT} 招「自己個名」都要解析得返自己（唔准有招認唔到）`, () => {
   const misses = [];
   let checked = 0;
   db.skills.forEach((skill, i) => {
@@ -172,13 +197,14 @@ test('真庫：全部 1323 招「自己個名」都要解析得返自己（唔�
     if (!items.length || !items[0].skill) { misses.push(skill.name); return; }
     if (db.skills.indexOf(items[0].skill) !== i) misses.push(`${skill.name} → ${items[0].skill.name}`);
   });
+  assert.equal(checked, DB_SKILL_COUNT, '要逐招驗（唔准偷偷減少 coverage）');
   assert.ok(checked > 1000, `應該驗過 1000 招以上，實得 ${checked}`);
   assert.deepEqual(misses, [], `有招解析唔返自己：${misses.slice(0, 10).join('／')}`);
 });
 
 // ─────────────────── ⭐ 批量清單（what-if 窗用；renderer 唔准自己計分）───────────────────
 
-test('whatIfBatchList：回嘅嘢淨係數字同名（唔准漏庫項 object 落 renderer）', { skip: !hasDb }, () => {
+test('whatIfBatchList：回嘅嘢淨係數字同名（唔准漏庫項 object 落 renderer）', () => {
   const out = whatIfBatchList(db.skills, '弧線的教授', { stats: [1200, 600, 600, 600, 600] });
   assert.equal(out.entries.length, 1);
   const e = out.entries[0];
@@ -195,7 +221,7 @@ test('whatIfBatchList：回嘅嘢淨係數字同名（唔准漏庫項 object 落
   }
 });
 
-test('whatIfBatchList：認唔到嘅行要原樣列出（唔准靜默當 0 分）', { skip: !hasDb }, () => {
+test('whatIfBatchList：認唔到嘅行要原樣列出（唔准靜默當 0 分）', () => {
   const out = whatIfBatchList(db.skills, '弧線的教授\n完全唔存在嘅技能名XYZ', { stats: [1200, 600, 600, 600, 600] });
   assert.equal(out.resolved, 1);
   assert.equal(out.total, 2);
@@ -205,7 +231,7 @@ test('whatIfBatchList：認唔到嘅行要原樣列出（唔准靜默當 0 分�
   assert.equal(bad.name, null);
 });
 
-test('whatIfBatchList：重複招要出一行 `duplicate`（points = null，唔准當 0 分）', { skip: !hasDb }, () => {
+test('whatIfBatchList：重複招要出一行 `duplicate`（points = null，唔准當 0 分）', () => {
   const out = whatIfBatchList(db.skills, '弧線的教授\n弧線的教授', { stats: [1200, 600, 600, 600, 600] });
   assert.deepEqual(out.duplicates, ['弧線的教授']);
   assert.equal(out.total, 2, '用戶貼咗兩行就要見到兩行（唔准靜默唔見一行）');
@@ -217,7 +243,7 @@ test('whatIfBatchList：重複招要出一行 `duplicate`（points = null，唔�
   assert.ok(Math.abs(out.sumMismatch) <= 1);
 });
 
-test('whatIfBatchList：`delta` 一定要係全量重算（唔准 Σ 逐招邊際分）', { skip: !hasDb }, () => {
+test('whatIfBatchList：`delta` 一定要係全量重算（唔准 Σ 逐招邊際分）', () => {
   const stats = [1200, 600, 600, 600, 600];
   const out = whatIfBatchList(db.skills, '弧線的教授\n直線加速', { stats });
   assert.equal(out.before.statScore, out.before.total, '冇技能 → 總分 ＝ 五維分');
@@ -225,7 +251,7 @@ test('whatIfBatchList：`delta` 一定要係全量重算（唔准 Σ 逐招邊�
   assert.ok(Math.abs(out.sumMismatch) <= 1, `Σ 邊際分 同 全量 Δ 差 ${out.sumMismatch}（>1 就係 bug）`);
 });
 
-test('whatIfBatchList：空清單唔准爆', { skip: !hasDb }, () => {
+test('whatIfBatchList：空清單唔准爆', () => {
   const out = whatIfBatchList(db.skills, '', { stats: [600, 600, 600, 600, 600] });
   assert.equal(out.total, 0);
   assert.equal(out.delta, 0);

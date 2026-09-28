@@ -85,3 +85,28 @@ test('M9：驗證廣度嘅風險界定要喺 known-issues 寫明（fit-score 有
   assert.match(text, /## 驗證廣度/, '`docs/known-issues.md` 要有「驗證廣度」一節');
   assert.match(text, /15\/40/, '要寫實際數字（唔准只講「有啲未驗」）');
 });
+
+test('L5：測試**唔准**用 `skip` 迴避（＝唔准把「驗唔到」變成「靜默通過」）', () => {
+  // 為何要一條閘：用戶明文 + `AGENTS.md` §8 「⚠️ 唔准用 skip／if (!existsSync(...)) return;
+  // 迴避 —— 咁樣只係把「驗唔到」變成「靜默通過」」。但呢條規則本身以前**冇任何閘**：
+  // 實測（設計審查 L5）`test/whatif-skilllist.test.js` 有 8 條真庫測試寫住 `{ skip: !hasDb }`
+  // —— 只要 `data/skill-db-tw.json` 一唔見（環境壞／改壞），嗰 8 條會**靜默消失**，
+  // 整個檔照樣綠燈，而佢哋正正係「用戶實際會打嘅字」嘅唯一驗證。
+  const files = readdirSync(join(ROOT, 'test')).filter((n) => n.endsWith('.test.js'));
+  assert.ok(files.length > 50, `測試檔數目唔正常（實得 ${files.length}）—— 呢條閘本身要驗得到嘢`);
+  const offenders = [];
+  const strip = (text) => text
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:'"\\])\/\/[^\n]*/g, '$1');
+  for (const name of files) {
+    const code = strip(readFileSync(join(ROOT, 'test', name), 'utf8'));
+    // 任何形式：`{ skip: … }`、`{ skip: true }`、`t.skip(...)`、`test.skip(...)`
+    if (/\bskip\s*:/.test(code) || /\b\w+\.skip\s*\(/.test(code)) offenders.push(name);
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    `呢啲測試檔用咗 skip：${offenders.join('、')} —— 要自己控制環境（例如 os.tmpdir() ＋ chdir），`
+    + '或者令佢大聲紅，唔准靜默跳過',
+  );
+});
