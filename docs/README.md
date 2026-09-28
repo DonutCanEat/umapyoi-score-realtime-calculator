@@ -31,7 +31,7 @@
 | [github.md](github.md) | 遠端、CI／Release 流程、公開前注意事項、踩過嘅 CI-only 問題 | 現行 |
 | [electron-dedup-report.md](electron-dedup-report.md) | 2026-09-19 Electron 去重審計：15 簇重複嘅成因、修法、逐 commit 驗收數據 | ⚠️ **歷史存檔**（嗰輪做完就完，簇編號已改過一次，唔好靠編號）|
 | [design-review-2026-09-28.md](design-review-2026-09-28.md) | 2026-09-28 全程式設計審查：5 嚴重（S1–S5）／11 中等（M1–M11）／11 輕微（L1–L11），每條都有證據同反證 | 現行（逐項修復中；邊項修好睇 `git log`）|
-| [test-count-history.md](test-count-history.md) | `npm.cmd test` 測試數量嘅逐個 commit 累積歷史 | ⚠️ **歷史存檔**（2026-09-28 由 `AGENTS.md` §8.1 搬出——嗰度爆 65,536 bytes 讀取預算，見 L11）|
+| [test-count-history.md](test-count-history.md) | `npm.cmd test` 測試數量嘅逐個 commit 累積歷史 | ⚠️ **歷史存檔**（2026-09-28 由 `AGENTS.md` §8 第 1 條搬出——嗰度爆 65,536 bytes 讀取預算，見 L11）|
 
 ## 維護規則
 

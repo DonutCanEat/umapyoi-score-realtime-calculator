@@ -337,7 +337,7 @@ docs/
   design-review-2026-09-28.md  # ⭐ 全程式設計審查（S1–S5／M1–M11／L1–L11）：每條有證據 ＋ 反證；
                               #    修復進度睇 `git log`（每一項一個 commit）
   test-count-history.md  # ⚠️ **歷史存檔**：`npm.cmd test` 測試數量嘅逐 commit 累積歷史
-                          #    （2026-09-28 由 `AGENTS.md` §8.1 搬出 —— 嗰度爆 65,536 bytes 預算，見 L11）
+                          #    （2026-09-28 由 `AGENTS.md` §8 第 1 條搬出 —— 嗰度爆 65,536 bytes 預算，見 L11）
   skill-screen.md        # ⭐ 技能畫面（Phase 2）實測版面 ＋ 識字嘅硬限制同可行路線
   packaging.md           # ⭐ A9 打包：指令／輸出大細／白名單／打包後嘅路徑規則／驗收紀錄／未驗清單
   github.md              # 遠端、CI／Release 流程、公開前注意事項、踩過嘅 CI-only 問題

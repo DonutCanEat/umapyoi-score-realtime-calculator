@@ -391,6 +391,13 @@ electron/whatif.html     窗（普通窗，唔碰 HUD 穿透）＋ `main.js` 三
   （症狀：`does not provide an export named 'BrowserWindow'`）。呢個**唔係**本專案嘅 bug
   —— 要睇真窗就要用戶自己喺正常 shell 跑 `npm.cmd start`。
   ✅ **2026-09-19 用戶實機驗過（原話「呢兩樣都ok」）**：what-if 窗開得到，搜尋／適性下拉／試算都正常。
+  ⭐ **2026-09-28（設計審查 M11）補完根因同「唔准再試」嘅結論**：唔係「環境漏咗」而係
+  PATH 上嘅 `node` ＝ DSH harness shim（`…\harness\.desktop-bin\node.cmd`，第一句
+  `@set ELECTRON_RUN_AS_NODE=1`）→ `Remove-Item Env:\ELECTRON_RUN_AS_NODE` **冇用**；
+  直接叫 `node_modules\electron\dist\electron.exe` 入到真 Electron 但**即刻 FATAL**
+  （`platform_channel.cc:108 Check failed: 存取被拒 (0x5)`，沙盒擋 named pipe）。
+  ⇒ **所有要真 Electron 嘅驗證（實載閘／`npm start`／HUD 穿透／拖位／窗嘅外觀）只可以由用戶跑**；
+  agent 唔准報「已驗」，詳情 `AGENTS.md` §2 同 §8 4c。
 
 
 

@@ -293,11 +293,14 @@ node_modules\.bin\electron.cmd tools\verify-renderer-load.js
                                     #    載入 4 個 HTML（`show:false`，**唔需要開遊戲**），斷言
                                     #    ① page 冇 throw ② main→renderer 通（送真 payload 讀 DOM）
                                     #    ③ renderer→main 通（等「開窗即問」嗰條 channel 到）
-                                    #    ⚠️ 一定要用 **Electron** 跑（`node` 跑冇意義）；
-                                    #    ⚠️ 如果環境漏咗 `ELECTRON_RUN_AS_NODE=1`（DSH agent shell
-                                    #       會漏）→ 先 `Remove-Item Env:\ELECTRON_RUN_AS_NODE`，
-                                    #       唔然 electron.exe 會用 Node 模式跑（`import … from
-                                    #       'electron'` 即刻爆／攞到 npm shim）
+                                    #    ⚠️ 一定要用 **Electron** 跑（`node` 跑冇意義）
+                                    # ⛔ **只可以由用戶喺自己終端跑**（設計審查 2026-09-28 M11 實測）：
+                                    #    harness shim（`…\harness\.desktop-bin\node.cmd`，第一句
+                                    #    `@set ELECTRON_RUN_AS_NODE=1`）令 `electron` 行 Node 模式
+                                    #    （症狀：`Cannot read properties of undefined (reading
+                                    #    'setPath')`）；`Remove-Item Env:\…` 冇用；直接叫
+                                    #    `electron.exe` 又即刻 FATAL（mojo `存取被拒 0x5`）。
+                                    #    詳情：`docs/design.md` §6.6；**agent 唔准報「已驗」**（見 §8 4c）。
 npm.cmd run pack:win                # ⭐ A9 打包：**經 `tools/pack-win.js`** → electron-builder
                                     #    （wrapper 嘅作用：`electronDist` 有先用、冇就交返
                                     #     electron-builder 自己下載 —— 見 `docs/packaging.md` §3.3）
@@ -744,7 +747,11 @@ oval > 0 → 再加 oval 部分；最後 floor
    ⚠️ 為何：`require('./ipc-channels.cjs')` 喺 renderer 一解唔到，page 就**開頭 throw**
    → 之後所有 `ipcRenderer.on()` 靜默唔註冊（窗開得到但永遠唔郁）——
    `npm.cmd test` 同語法閘**只睇文字，捉唔到**。呢個閘真係開 Electron、真係來回送 IPC。
-   ✅ **唔需要開遊戲**（`show:false`）；⚠️ 要真 Electron（見 §2 嗰行嘅 `ELECTRON_RUN_AS_NODE` 註記）。
+   ✅ **唔需要開遊戲**（`show:false`）；⚠️ 要真 Electron（見 §2 嗰行嘅完整實測說明）。
+   ⛔ **agent shell 跑唔到呢個閘**（設計審查 2026-09-28 M11）：DSH harness 嘅 `node` shim 會
+   令 electron 行 Node 模式（`Cannot read properties of undefined (reading 'setPath')`），
+   直接叫 `electron.exe` 又會 FATAL（mojo `存取被拒 0x5`）→ **一定要請用戶喺自己終端跑**，
+   而且 agent **唔准**喺回覆講「實載閘已過」。
 4d. **加／刪／改名 `src/**` 或 `tools/**` 之下嘅檔（或者改佢哋嘅檔頭註釋第一句）之後**：
    `node tools/diag-file-map.js` → 要綠。紅咗就跑 `node tools/diag-file-map.js --write`
    （只換 `docs/file-map.md` 標記之後嘅附錄，正文一個位元組都唔動）。
@@ -764,7 +771,7 @@ oval > 0 → 再加 oval 部分；最後 floor
 5b. **CI 會自動跑同一套閘**（2026-09-28，設計審查 S5）：`.github/workflows/gates.yml`
    （推 `main`／PR／手動）＝ `npm test`＋語法閘＋文件地圖閘＋fit-score＋`diag-statbar --read`＋
    `read-result --all`＋`build-glyph-templates --verify`；`release.yml` 發版前**再跑一次**
-   （唔過唔會出 exe）。⚠️ 呢啲閘唔准「冇證據就靜默通過」（§8.1）—— 呢一輪順手修好
+   （唔過唔會出 exe）。⚠️ 呢啲閘唔准「冇證據就靜默通過」（§8 第 1 條嗰個原則）—— 呢一輪順手修好
    `tools/fit-score.js` 同 `tools/diag-statbar.js` 嗰兩條（以前冇真值 → `exit 0`，而家 `exit 1`）。
 6. **`git commit`**（見 §0：每次改動都要 commit，驗收唔過唔准 commit）
 

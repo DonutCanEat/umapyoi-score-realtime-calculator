@@ -5,7 +5,7 @@
 > 嘅流水帳係全份文件最長嘅一段（每次加測試都要跟手改，令預算爆錶 → 文件**尾段會被截走**）。
 > 2026-09-28（設計審查 M5 同一輪）搬嚟呢度：查得返，但唔會再頂爆預算。
 >
-> ⚠️ 呢度係**歷史紀錄**，唔係驗收標準。**現時**要幾多條測試睇 `AGENTS.md` §8.1
+> ⚠️ 呢度係**歷史紀錄**，唔係驗收標準。**現時**要幾多條測試睇 `AGENTS.md` §8 第 1 條
 > 同 `README.md`（兩個都要同 `npm.cmd test` 實際數字一致）。
 
 ## 由 2026-09-19 到 2026-09-28（原文照搬）
@@ -35,5 +35,9 @@
 - **M6** 啟動資源錯誤政策統一（`src/hud/startup-resource.js`）+13（含 2 條接線閘）→ **586**
 - **L11** `AGENTS.md` §1.2 影像里程碑搬去 `docs/vision-design.md`（無新測試；65,195 → 61,596 bytes）→ 586
 - **M7** 成長曲線 x 軸改真時間（`historyAxis()`）＋ 場次邊界（`session`）+8 ＋ HUD 標籤接線閘 +1 → **595**
+- **M8** ROI→像素規則收斂成一份（`electron/capture-region.cjs`；`test/capture-region.test.js` 改為直接 import 生產模組）+1 → **596**
+- **M9** 驗證廣度自報（`fit-score`）＋ `diag-statbar --perf` ＋ `test/verification-coverage.test.js` +5 → **601**
+- **M10** what-if 窗唔准用 `innerHTML` 插動態值（`makeEl()`）＋ `test/whatif-html-safety.test.js` +4 → **605**
+- **M11** renderer 實載閘「agent shell 跑唔到」嘅文檔更正（`AGENTS.md` §2／§8 4c、`docs/design.md` §6.6；無新測試）→ 605
 
 ⚠️ 每一項嘅 commit hash／驗收數據睇 `git log --oneline`（commit message 有寫實測數字）。

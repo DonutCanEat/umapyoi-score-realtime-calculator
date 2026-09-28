@@ -105,7 +105,7 @@ git push origin main --tags          # ⭐ 就係呢一步觸發自動打包發�
 - ⚠️ **刻意唔跑 `npm ci`**：呢批閘全部係零依賴 Node script（冇 import 第三方套件），
   裝依賴只會每次多 ~100MB Electron 下載。完整依賴安裝由 `release.yml` 把關。
   ⚠️ 如果將來有測試／工具開始 import `node_modules` 嘅嘢，就要加返 `npm ci`。
-- ⚠️ **閘唔准「冇證據就靜默通過」**（同 `AGENTS.md` §8.1 一致）：呢一輪順手修好兩處 ——
+- ⚠️ **閘唔准「冇證據就靜默通過」**（同 `AGENTS.md` §8 第 1 條一致）：呢一輪順手修好兩處 ——
   `tools/fit-score.js`（以前冇 ground-truth 樣本 → `exit 0`）同
   `tools/diag-statbar.js`（以前冇 `data/live-truth.json`／冇樣本可對 → `exit 0`）
   → 而家**兩者都 exit 1**（負樣本自測：暫時搬走兩個檔案 → 兩邊都 exit 1）。
