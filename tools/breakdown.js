@@ -13,7 +13,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { evaluate, uniqueSkillPoints, normalSkillPoints, APTITUDE_COEFFICIENT } from '../src/umascore/index.js';
+import { evaluate, uniqueSkillPoints, normalSkillPoints, multiplierForGrades } from '../src/umascore/index.js';
 import { hasFlag, positionalArgs, toolArgs } from './lib/args.js';
 import { pad } from './lib/width.js';
 
@@ -47,7 +47,12 @@ for (const file of readdirSync(GT_DIR).filter((f) => f.endsWith('.json') && (!fi
   for (const k of s.skills) {
     const isCombo = String(k.condition ?? '').includes(',');
     if (combosOnly && !isCombo) continue;
-    const mult = (k.aptitudes ?? []).reduce((m, g) => m * (1 + (APTITUDE_COEFFICIENT[String(g).toUpperCase()] ?? 0)), 1);
+    // ⚠️ 倍率**唔准**喺呢度自己砌（設計審查 L4）：以前呢行係
+    //    `1 + (APTITUDE_COEFFICIENT[g] ?? 0)` 逐個乘 —— 同一個檔嗰條路（下面
+    //    `normalSkillPoints()`）用嘅係另一份規則，兩邊一旦分叉，**同一行嘅
+    //    「倍率」同「分」就會自相矛盾**（而且嗰個 `?? 0` 會靜默當 ×1.0）。
+    //    唯一來源 = `aptitude.js` 嘅 `multiplierForGrades()`（有測試）。
+    const mult = multiplierForGrades(k.aptitudes ?? []);
     console.log(
       `  ${isCombo ? '＊' : ' '}${pad(k.name, 19)}${pad(k.condition ?? '', 16)}${pad((k.aptitudes ?? []).join('/'), 10)}${num(mult.toFixed(3), 7)}${num(k.base, 7)}${num(normalSkillPoints(k.base, k.aptitudes ?? []), 7)}`,
     );
