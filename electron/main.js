@@ -1390,6 +1390,23 @@ function writeDiagnosticSnapshot() {
         ]
         : [['（未收過幀）', '']],
     },
+    {
+      title: '最近一次讀取（培育結束確認：第二條計分路）',
+      // ⭐ 設計審查 M4：呢個 section 以前**唔存在**（`lastResultSummary` 寫咗冇人讀）→
+      //    用戶報「培育結束確認讀唔到」嗰陣，快照完全答唔到「有冇收到條帶／讀到咩」。
+      rows: lastResultSummary
+        ? [
+          ['樣本大細', lastResultSummary.size ?? '—'],
+          ['時間', `${Math.round((Date.now() - lastResultSummary.at) / 1000)} 秒前`],
+          ['結果', lastResultSummary.notResult
+            ? 'notResult（唔似嗰個畫面 —— 屬正常）'
+            : lastResultSummary.stats ? '讀到（經「連續兩張一樣」閘）' : '讀唔清'],
+          ['五維', lastResultSummary.stats ? lastResultSummary.stats.join('/') : '—'],
+          ['信心', lastResultSummary.confidence ?? '—'],
+          ['原因', lastResultSummary.reason || '—'],
+        ]
+        : [['（從來冇收過呢條條帶）', '條帶由 renderer 每秒送一張（見 capture.html）']],
+    },
     { title: '最近 log（最後 40 行）', rows: [['', logTail.join('\n')]] },
   ];
 
@@ -1909,6 +1926,10 @@ let lastResultLogAt = 0;
 function handleResultFrame({ width, height, buffer }) {
   if (!templatesReady()) return;
   const image = imageFromFrame({ width, height, buffer });
+  // ⭐ 呢條路嘅幀都要留住（設計審查 M4）：以前只寫 `lastResultSummary`（**冇任何讀者**）、
+  //    又唔入 `lastFrame` → 用戶按「寫入診斷 log」嗰陣，快照同 PNG 完全睇唔到呢條路
+  //    （連「係唔係嗰個畫面」都答唔到）。呢條條帶好細（~160×175），留住唔會有成本。
+  lastFrame = { image, meta: { kind: 'result', width, height } };
   const read = readResultPanel(image, templates);
   lastResultSummary = {
     at: Date.now(),
