@@ -206,18 +206,46 @@
       });
 
       // ── 顯示：現時評價分 ────────────────────────────────────
+      /**
+       * ⭐ 砌一個元素（**文字一律經 `textContent`**）。
+       *
+       * 為何要有呢個 helper（設計審查 2026-09-28 M10）：呢個窗
+       * （`web-preferences.js`：`nodeIntegration:true` ＋ `contextIsolation:false`，而且
+       * 4 個 HTML **冇** CSP）以前用 `innerHTML` 插入面值 —— 其中 `${e.query}`
+       * 係**用戶自己貼落去嘅文字** → 貼一段 `<img src=x onerror=…>` 就會**本機執行任意程式碼**
+       * （self-XSS：攻擊者＝用戶自己，唔係遠端注入；但一樣要修）。
+       * 而家：`innerHTML` **只准放完全靜態嘅 markup**（呢個檔連一個動態插值都冇），
+       * 其餘一律用呢個 helper 砌 —— 有接線閘 `test/whatif-html-safety.test.js` 守住。
+       */
+      function makeEl(tag, className = '', text = undefined) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = String(text);
+        return node;
+      }
+
       function renderCurrent(info) {
         if (!info || !Number.isFinite(info.total)) {
+          // ⚠️ 呢句係**完全靜態** markup（冇 `${…}`）→ 符合上面嘅規矩。
           currentEl.innerHTML = '<span class="muted">（五維未讀到 —— 可以自己入數，一樣試算得到）</span>';
           return;
         }
-        const gap = info.nextRank
-          ? `　仲差 <b>${info.nextRank.gap}</b> 分到 ${info.nextRank.rank}`
-          : '　<span class="muted">（已到最高ランク UA）</span>';
-        const age = info.ageMs === null ? '' : `　<span class="muted">（${Math.round(info.ageMs / 1000)} 秒前讀到）</span>`;
-        currentEl.innerHTML =
-          `五維分 <b>${info.statScore}</b>　評價點 <b>${info.total}</b>（<b>${info.rank}</b>）${gap}${age}`
-          + '<div class="muted">技能分：未讀到（Phase 2 暫停）→ 呢個係下限</div>';
+        // ⚠️ 原本係一句 template literal ＋ innerHTML；而家逐件砌（視覺輸出逐字一樣）。
+        currentEl.textContent = '';
+        currentEl.append(
+          '五維分 ', makeEl('b', '', info.statScore),
+          '　評價點 ', makeEl('b', '', info.total),
+          '（', makeEl('b', '', info.rank), '）',
+        );
+        if (info.nextRank) {
+          currentEl.append('　仲差 ', makeEl('b', '', info.nextRank.gap), ` 分到 ${info.nextRank.rank}`);
+        } else {
+          currentEl.append(makeEl('span', 'muted', '　（已到最高ランク UA）'));
+        }
+        if (info.ageMs !== null) {
+          currentEl.append(makeEl('span', 'muted', `　（${Math.round(info.ageMs / 1000)} 秒前讀到）`));
+        }
+        currentEl.append(makeEl('div', 'muted', '技能分：未讀到（Phase 2 暫停）→ 呢個係下限'));
       }
 
       // ── 顯示：搜尋結果 ──────────────────────────────────────
@@ -305,21 +333,30 @@
         }
         pickedEl.append(table);
 
-        const delta = document.createElement('div');
-        delta.className = 'big';
+        const delta = makeEl('div', 'big');
         const sign = result.points >= 0 ? '+' : '';
-        delta.innerHTML = `加 <span class="delta${result.points < 0 ? ' neg' : ''}">${sign}${result.points}</span> 分`;
+        // ⚠️ M10：原本係 `delta.innerHTML = …`（動態插值）→ 而家砌 DOM（輸出逐字一樣）。
+        delta.append(
+          '加 ',
+          makeEl('span', `delta${result.points < 0 ? ' neg' : ''}`, `${sign}${result.points}`),
+          ' 分',
+        );
         pickedEl.append(delta);
 
-        const after = document.createElement('div');
-        after.className = 'mono';
-        const gapTxt = result.gapAfter === null
-          ? '已到最高ランク（UA）'
-          : `仲差 <b>${result.gapAfter}</b> 分到 ${result.after.nextRank.rank}`;
-        after.innerHTML =
-          `評價點 ${result.before.total}（${result.before.rank}） → <b>${result.after.total}</b>（<b>${result.after.rank}</b>）`
-          + `${result.rankUp ? ' <span class="up">⭐ 升級！</span>' : ''}`
-          + `<div>${gapTxt}</div>`;
+        const after = makeEl('div', 'mono');
+        after.append(
+          `評價點 ${result.before.total}（${result.before.rank}） → `,
+          makeEl('b', '', result.after.total),
+          '（', makeEl('b', '', result.after.rank), '）',
+        );
+        if (result.rankUp) after.append(' ', makeEl('span', 'up', '⭐ 升級！'));
+        const gapLine = makeEl('div');
+        if (result.gapAfter === null) {
+          gapLine.textContent = '已到最高ランク（UA）';
+        } else {
+          gapLine.append('仲差 ', makeEl('b', '', result.gapAfter), ` 分到 ${result.after.nextRank.rank}`);
+        }
+        after.append(gapLine);
         pickedEl.append(after);
       }
 
@@ -340,13 +377,16 @@
         batchHintEl.textContent =
           `${r.resolved}/${r.total} 招認得到` + (r.unresolved.length ? `　⚠️ ${r.unresolved.length} 行認唔到` : '');
 
-        const head = document.createElement('div');
-        head.className = 'big';
+        const head = makeEl('div', 'big');
         const sign = r.delta >= 0 ? '+' : '';
-        head.innerHTML =
-          `總分 ${r.before.total}（${r.before.rank}） → <b>${r.after.total}</b>（<b>${r.after.rank}</b>）`
-          + `　<span class="delta${r.delta < 0 ? ' neg' : ''}">${sign}${r.delta}</span>`
-          + `${r.rankUp ? ' <span class="up">⭐ 升級！</span>' : ''}`;
+        // ⚠️ M10：原本係 `head.innerHTML = …`（動態插值）→ 而家砌 DOM（輸出逐字一樣）。
+        head.append(
+          `總分 ${r.before.total}（${r.before.rank}） → `,
+          makeEl('b', '', r.after.total),
+          '（', makeEl('b', '', r.after.rank), '）',
+          '　', makeEl('span', `delta${r.delta < 0 ? ' neg' : ''}`, `${sign}${r.delta}`),
+        );
+        if (r.rankUp) head.append(' ', makeEl('span', 'up', '⭐ 升級！'));
         batchOutEl.append(head);
         // ⚠️ Σ 逐招邊際分 同 全量 Δ 理論上可以差 ≤1 分（逐招四捨五入 vs 全量先加後捨）
         //    → 非 0 要**講出嚟**，唔准靜默當一致。
@@ -363,7 +403,10 @@
           const td1 = document.createElement('td');
           td1.style.width = '46%';
           if (!e.resolved) {
-            td1.innerHTML = `<span class="delta neg">${e.query}</span>`;
+            // ⚠️ M10（self-XSS 修正）：`e.query` 係**用戶自己貼落去嘅原文** ——
+            //    以前呢句用 `innerHTML` 插佢（貼 `<img src=x onerror=…>` 就會執行）→
+            //    而家一律 `textContent`（`makeEl()` 內部就係 `textContent`）。
+            td1.append(makeEl('span', 'delta neg', e.query));
           } else {
             td1.textContent = e.name ?? e.query;
           }
@@ -383,8 +426,12 @@
             const s2 = e.points >= 0 ? '+' : '';
             const apt = e.aptitudes.length ? `×${e.multiplier.toFixed(2)}（${e.aptitudes.join('、')}）` : '×1.00';
             const pt = Number.isFinite(e.pt) ? `${e.pt} Pt` : 'Pt：冇資料';
-            td2.innerHTML = `<span class="delta${e.points < 0 ? ' neg' : ''}">${s2}${e.points}</span>`
-              + ` 分　<span class="muted">基礎 ${e.base}　${apt}　${pt}</span>`;
+            // ⚠️ M10：`base`／適性名／`pt` 雖然嚟自技能庫（唔係用戶輸入），但技能庫係**抓返嚟嘅
+            //    外部文字** → 一樣唔准入 `innerHTML`（同一個原則，唔准有例外）。
+            td2.append(
+              makeEl('span', `delta${e.points < 0 ? ' neg' : ''}`, `${s2}${e.points}`),
+              makeEl('span', 'muted', ` 分　基礎 ${e.base}　${apt}　${pt}`),
+            );
           }
           tr.append(td1, td2);
           table.append(tr);

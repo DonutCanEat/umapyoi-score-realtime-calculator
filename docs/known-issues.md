@@ -155,4 +155,17 @@
 **一定要**同時加真機樣本。
 
 
+### what-if 窗嘅輸入衞生（設計審查 2026-09-28 M10）
+
+| 項目 | 狀態 |
+|---|---|
+| `whatif.html` 用 `innerHTML` 插 `${e.query}`（用戶自己貼嘅原文） | ✅ **已修**：`whatif.html` 嘅 `innerHTML` 而家**只准放完全靜態 markup**，所有動態文字一律經 `textContent`（`makeEl()` helper）；接線閘 `test/whatif-html-safety.test.js`（4 條）釘住「一個動態插值都唔准有」＋「`e.query` 要經 `makeEl()`」 |
+| 4 個 HTML **冇** `Content-Security-Policy` | ⛔ **未修**（要改架構）：renderer 係 classic script ＋ inline `<script>` ＋ `nodeIntegration:true` ＋ `contextIsolation:false` → 加 CSP 就一定要 `script-src 'unsafe-inline'`（＝幾乎冇保護），真正嘅修法係**開 preload ＋ 關 nodeIntegration**（要重寫 4 個窗嘅 IPC 用法）。⚠️ 唔准為咗「有個 CSP」而加一條冇用嘅 CSP |
+| 全 repo 冇 preload script | ⛔ **未做**（同上）：呢個係 `nodeIntegration:true` 嘅代價 —— 換嚟嘅好處係 renderer 直接 `require('./ipc-channels.cjs')`／`require('./capture-region.cjs')`。⚠️ 要改就要連 `verify-renderer-load.js`（實載閘）一齊改 |
+
+⚠️ **風險界定**：上面第 1 條係「用戶自己貼落去嘅文字」（**self-XSS**，唔係遠端注入 ——
+技能庫內容冇行呢條路）；但 `nodeIntegration:true` 之下，一次誤插就係本機任意程式碼執行
+→ 所以「結構上唔准用動態 `innerHTML`」係刻意嘅硬規矩，唔係「記得 escape 就得」。
+
+
 ---
