@@ -67,6 +67,14 @@ import { createOffContentWarner, boundsMismatchWarning } from './hud-place.js';
 // ⭐ 擷取凍結 watchdog（設計審查 S4 第四刀）：5 個可變全域 ＋ 節流／上限政策搬去純模組
 //    （2026-09-19 實機「擷取靜默凍結」事故嘅防線，以前零測試覆蓋）。
 import { createCaptureWatchdog, MAX_CAPTURE_RECOVERS } from './capture-watchdog.js';
+// ⭐ dump 政策（設計審查 S4 第五刀）：總量／成功幀／每幀上限 ＋ crop 解析 ＋ 同頁指紋
+//    （以前散喺 main.js 零覆蓋，而佢哋係「出問題之後仲有冇現場可查」嘅唯一保證）。
+import {
+  DEFAULT_SKILL_CROP,
+  createDumpBudget,
+  parseCrop,
+  samePage,
+} from './dump-policy.js';
 import { MAX_HISTORY, pushSample } from '../src/hud/history.js';
 // ⭐ 「dump／連拍要寫邊」嘅決策（A9 打包）：打包之後 `ROOT` 係唯讀 asar，
 //    寫入會 throw ENOTDIR/EROFS → 同「設定檔位置」一樣要集中一個決策（`src/hud/write-root.js`）。
@@ -1123,9 +1131,7 @@ function resetHudView(why) {
  * 只 dump 頭 N 幀，唔會無限量寫落磁碟；寫成 `.raw`（RGBA）＋ `.json`（meta），
  * 用 `node tools/raw-to-png.js shots/live-debug` 轉 PNG 之後就可以用現成工具睇。
  */
-const MAX_DUMPS = 40;
-let dumpCount = 0;
-let okDumps = 0;
+const dumpBudget = createDumpBudget();
 
 /**
  * `UMAPYOI_DUMP_FRAMES=N`：頭 N 幀**每一幀都存**（唔理成功定失敗）。
@@ -1146,7 +1152,6 @@ const DUMP_EVERY = envNumber('UMAPYOI_DUMP_FRAMES', { fallback: 0, positive: tru
  *        ② 佢亦係我哋自己驗證成條快照路徑嘅方法（唔使做 UI 自動化去撳掣）。
  */
 const SNAPSHOT_AFTER = envNumber('UMAPYOI_SNAPSHOT_AFTER', { fallback: 0, positive: true });
-let everyCount = 0;
 
 /**
  * 技能畫面「連拍」模式：`UMAPYOI_SKILL_DUMP=1`
@@ -1178,35 +1183,19 @@ const SKILL_MAX = envNumber('UMAPYOI_SKILL_MAX', { fallback: 400, positive: true
  * ⚠️ 呢啲比例係**對擷取框**（唔一定係遊戲視窗）—— 換窗口大細／位置就要重新量。
  * 用 `UMAPYOI_DUMP_CROP=0,0,1,1` 可以還原成整個內容區。
  */
-function parseCrop(value) {
-  if (!value) return null;
-  const parts = String(value).split(',').map(Number);
-  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) {
-    throw new Error(`UMAPYOI_DUMP_CROP 格式應該係 x,y,w,h（內容區比例），實得「${value}」`);
-  }
-  const [x, y, w, h] = parts;
-  if (w <= 0 || h <= 0) throw new Error(`UMAPYOI_DUMP_CROP 嘅 w／h 要 > 0，實得「${value}」`);
-  return { x, y, w, h };
-}
+// ⚠️ `parseCrop()` 而家喺 `electron/dump-policy.js`（唯一一份，有測試）。
 // ⚠️ 空白 = 冇 set（同 `envIsSet()` 嘅唯一語意一致；設計審查 M2）：以前 `?? ` 只擋
 //    `undefined`／`null`，所以 `UMAPYOI_DUMP_CROP=''`／`' '` 會行落 `parseCrop()` →
 //    module 頂層 throw → **程式開唔到**。而家空白一律當冇 set → 用預設值。
 const SKILL_CROP = SKILL_DUMP
-  ? parseCrop(envIsSet('UMAPYOI_DUMP_CROP') ? process.env.UMAPYOI_DUMP_CROP : '0.06,0.16,0.32,0.79')
+  ? parseCrop(envIsSet('UMAPYOI_DUMP_CROP') ? process.env.UMAPYOI_DUMP_CROP : DEFAULT_SKILL_CROP)
   : null;
 
 let skillPages = 0;
 let skillSkipped = 0;
 const skillSignatures = []; // 已存頁面嘅指紋（正規化逐列墨量）
 
-/** 兩頁指紋係唔係同一頁（逐列墨量差異 ≤ 0.01 就當一樣）。 */
-function samePage(a, b) {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i += 1) {
-    if (Math.abs(a[i] - b[i]) > 0.01) return false;
-  }
-  return true;
-}
+// ⚠️ `samePage()` 而家喺 `electron/dump-policy.js`（唯一一份，有測試）。
 
 // ─────────────────── dump 兩個函數共用嘅兩件小事（獨立審計 L3）───────────────────
 // `dumpSkillPage()`（連拍收圖，寫 PNG）同 `dumpFrame()`（失敗幀 dump，寫 .raw ＋ .json）
@@ -1261,7 +1250,7 @@ function dumpSkillPage(image, meta) {
 }
 
 function dumpFrame(image, meta) {
-  if (dumpCount >= MAX_DUMPS) return null;
+  if (!dumpBudget.canDump()) return null;
   try {
     ensureDir(debugDir()); // ⚠️ 共用（審計 L3）
     const stamp = stampForFilename();
@@ -1269,7 +1258,7 @@ function dumpFrame(image, meta) {
     const bytes = Buffer.from(image.data.buffer, image.data.byteOffset, image.width * image.height * 4);
     writeFileSync(`${base}.raw`, bytes);
     writeFileSync(`${base}.json`, `${JSON.stringify({ ...meta, width: image.width, height: image.height }, null, 2)}\n`);
-    dumpCount += 1;
+    dumpBudget.noteDumped(meta.kind);
     lastDumpPath = `${base}.raw`;
     return `${base}.raw`;
   } catch (error) {
@@ -1837,10 +1826,10 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
   // 每幀都更新 HUD 嘅「新鮮度」（唔可以只喺出數嗰陣推，否則 stale 轉唔到）。
   pushHud();
   // UMAPYOI_DUMP_FRAMES=N：頭 N 幀每幀存落嚟（驗 HUD 有冇被自己影到，見上面註解）。
-  if (everyCount < DUMP_EVERY) {
-    everyCount += 1;
+  if (dumpBudget.canEvery(DUMP_EVERY)) {
+    const nth = dumpBudget.noteEveryFrame();
     const dumped = dumpFrame(image, { kind: 'every', cropped, fullWidth, fullHeight });
-    if (dumped) console.log(`[dump] 第 ${everyCount} 幀已存（驗 HUD 用）：${dumped.replace(`${ROOT}\\`, '')}`);
+    if (dumped) console.log(`[dump] 第 ${nth} 幀已存（驗 HUD 用）：${dumped.replace(`${ROOT}\\`, '')}`);
   }
   // cropped = renderer 已經 1:1 剪咗面板條（見 capture.html）→ 走 statbar 嗰條路；
   // 冇 cropped（舊格式／冇 ROI）→ 退回全畫面結構偵測。
@@ -1885,7 +1874,7 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
   }
 
   // 成功嘅頭幾幀都存落嚟做對照（睇下成功／失敗嘅分別）
-  if (okDumps < 3) {
+  if (dumpBudget.canOk()) {
     const dumped = dumpFrame(image, {
       kind: 'ok',
       stats: read.stats,
@@ -1894,7 +1883,6 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
       cropped,
     });
     if (dumped) {
-      okDumps += 1;
       console.log(`[dump] 成功幀已存：${dumped.replace(`${ROOT}\\`, '')}`);
     }
   }

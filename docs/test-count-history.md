@@ -42,5 +42,6 @@
 - **S4（第二刀）** HUD 拖位狀態機抽出（`electron/hud-drag.js` ＋ `test/hud-drag-machine.test.js`）+14 → **619**
 - **S4（第三刀）** HUD 位置警告去重抽出（`electron/hud-place.js` ＋ `test/hud-place.test.js`）+13 → **632**
 - **S4（第四刀）** 擷取凍結 watchdog 抽出（`electron/capture-watchdog.js` ＋ `test/capture-watchdog.test.js`）+17 → **649**
+- **S4（第五刀）** dump 政策抽出（`electron/dump-policy.js` ＋ `test/dump-policy.test.js`）+11 → **660**
 
 ⚠️ 每一項嘅 commit hash／驗收數據睇 `git log --oneline`（commit message 有寫實測數字）。

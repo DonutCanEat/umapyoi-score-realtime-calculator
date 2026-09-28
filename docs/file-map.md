@@ -155,6 +155,12 @@ electron/
                   #    checkFreeze()／heartbeat()／state()}。政策：10 秒節流、最多 5 次、
                   #    重試成功要「畀新一輪時間」、心跳一幀都收唔到要大聲講。
                   #    2026-09-19 實機事故（擷取靜默凍結）嘅防線 → 17 條測試。
+  dump-policy.js  # ⭐ dump 政策（設計審查 S4 第五刀）：MAX_DUMPS=40／MAX_OK_DUMPS=3／
+                  #    DEFAULT_SKILL_CROP='0.06,0.16,0.32,0.79' ＋ parseCrop(value)（唔合法 throw，
+                  #    訊息回帶用戶打咗咩）＋ samePage(a,b)（逐列墨量差 ≤ 0.01 當同一頁）＋
+                  #    createDumpBudget({maxTotal,maxOk}) → {canDump()／canEvery(N)／canOk()／
+                  #    noteEveryFrame()（＝試過，寫檔失敗都用咗一格）／noteDumped(kind)／state()}。
+                  #    呢啲係「用戶報問題之後仲有冇現場可查」嘅唯一保證 → 11 條測試。
   panel-window.js # ⭐ 普通面板窗建立器（審計 M3）：createPanelWindow({file, title, width, height,
                   #    minWidth, minHeight, onClosed}) → BrowserWindow ＋ webPreferences
                   #    ＋ setContentProtection ＋ loadFile ＋ ready-to-show → show。
@@ -239,6 +245,13 @@ test/
                        #    `end()` 之後清空／`why` 同警告措辭逐字 ＋ 接線閘（`main.js` 唔准
                        #    再留住可變 `hudDrag`、唔准自己砌訊息）。負樣本自測：改成 `>=`
                        #    或者加返 `let hudDrag = null` → 即刻紅
+  dump-policy.test.js # ⭐ dump 政策（設計審查 S4 第五刀，11 條）：crop 合法／空值 → null／格式錯同
+                       #    w/h ≤ 0 要 throw（連回帶訊息）／x,y 負數合法／指紋 ≤ 0.01 邊界（用
+                       #    1/128 vs 1/64 避開浮點）／總量上限 40（第 41 次唔准）／成功幀上限 3／
+                       #    canEvery(N)（N=0 唔開、每格 noteEveryFrame）／「試過」語意（寫檔失敗都
+                       #    用咗一格但 total 唔加）／state() 係副本 ＋ 接線閘（main.js 唔准再有
+                       #    MAX_DUMPS／dumpCount／okDumps／everyCount，亦唔准再寫死預設 crop）。
+                       #    負樣本自測：把 `total < maxTotal` 改成 `<=` → 即紅
   capture-watchdog.test.js # ⭐ 擷取凍結 watchdog（設計審查 S4 第四刀，17 條）：凍結係**嚴格大於**
                        #    15 秒（邊界值釘死）／未開始／冇窗唔准當「試過」／節流 10 秒（啱啱好
                        #    就准）／試夠 5 次要停手 ＋ 叫用戶重開程式／重試要「畀新一輪時間」／

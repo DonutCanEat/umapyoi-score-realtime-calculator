@@ -100,6 +100,13 @@
    `beginCapture()`、「強制更新」四條路，**零覆蓋**。
    ⚠️ `main.js` 仍然零覆蓋嘅部分：IPC handler 本體、`placeHud()`／`pushHud()`、診斷快照組裝、
    `finishDrag()` 落 `applyHudConfig()`／存檔嗰幾句、`beginCapture()` 本體。
+   ✅ **2026-09-28 第七輪收窄（設計審查 S4 第五刀）**：⑪ **dump 政策**搬去 `electron/dump-policy.js`
+   （`MAX_DUMPS=40`／`MAX_OK_DUMPS=3`／`DEFAULT_SKILL_CROP` ＋ `parseCrop()`／`samePage()`／
+   `createDumpBudget()`）＋ `test/dump-policy.test.js`（**11 條**）—— 呢啲係「用戶報問題之後
+   仲有冇現場可查」嘅唯一保證（dump 總量、成功幀對照組、每幀模式、crop 解析、連拍去重），
+   以前散喺 `main.js` 三個計數器 ＋ 兩個純函數，**零覆蓋**。
+   ⚠️ `main.js` 仍然零覆蓋嘅部分收窄到：IPC handler 本體、`placeHud()`／`pushHud()`、
+   診斷快照組裝、`finishDrag()` 落設定／存檔嗰幾句、`beginCapture()` 本體、`dumpFrame()` 嘅 IO。
 6. ✅ **已修（2026-09-23，技術債 §9.1-6）—— 唔可以再當「技術債」**：原子寫原本冇 `fsync`
    （`saveConfig()` = `writeFileSync(.tmp)` ＋ `renameSync`）→ `writeFileSync` 只係寫入
    OS page cache，**停電／硬斷電**之下 `rename()` 完成咗但內容仲喺 cache，開機之後見到嘅
