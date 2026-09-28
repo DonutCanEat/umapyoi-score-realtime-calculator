@@ -46,5 +46,6 @@
 - **L1** `fromSource.w/h` 死碼刪走 ＋ 矛盾註釋更正（`src/hud/config.js` ＋ `test/hud-config.test.js` 2 條閘）+2 → **662**
 - **L8** `data/bwiki-skill-pages.json` 入 `.gitignore` ＋ `.gitignore` 真閘（`test/gitignore-caches.test.js`）+3 → **665**
 - **L2** log 輪替改成「每一行都查上限」（`src/hud/log-file.js` ＋ `test/log-file.test.js` 2 條）+2 → **667**
+- **L3** `settings.html` 嘅 `MIN_SIZE`／`DECIMALS` 綁住 `layout.js` 常數（`test/hud-settings-html.test.js` 新閘）+1 → **668**
 
 ⚠️ 每一項嘅 commit hash／驗收數據睇 `git log --oneline`（commit message 有寫實測數字）。

@@ -24,6 +24,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { HUD_DISPLAY_KEYS } from '../src/hud/config.js';
+import { LAYOUT_DECIMALS, MIN_HUD_SIZE } from '../src/hud/layout.js';
 
 const SETTINGS_HTML = process.env.UMAPYOI_SETTINGS_HTML
   ?? join(dirname(fileURLToPath(import.meta.url)), '..', 'electron', 'settings.html');
@@ -67,6 +68,27 @@ function numKeysFromHtml(text) {
   const block = /const NUM_FIELDS\s*=\s*\[([\s\S]*?)\]/.exec(readSettings(text));
   assert.ok(block, '⚙️ 由 settings.html 搵唔到 `const NUM_FIELDS = [...]` —— 測試要更新 regex（唔准改 HTML）');
   return [...block[1].matchAll(/\bkey:\s*'([^']+)'/g)].map((m) => m[1]);
+}
+
+/**
+ * 由 HTML **真係抽**出兩個「同 `layout.js` 應該一致」嘅常數（設計審查 L3）。
+ *
+ * 設定窗係 classic script（`require` 唔到 ESM 嘅 `layout.js`）→ 以前 `MIN_SIZE = 0.01`
+ * 同 `DECIMALS = 6` 係**手抄**，冇任何閘綁住；而 `layout.js` 嗰邊改咗（例如
+ * `MIN_HUD_SIZE` 變 0.005）就只會「slider 拖唔到咁細」而**完全靜默**。
+ *
+ * ```js
+ * const MIN_SIZE = 0.01;
+ * const DECIMALS = 6;
+ * ```
+ */
+function limitsFromHtml(text) {
+  const src = readSettings(text);
+  const min = /const MIN_SIZE\s*=\s*([\d.]+)\s*;/.exec(src);
+  const dec = /const DECIMALS\s*=\s*(\d+)\s*;/.exec(src);
+  assert.ok(min, '⚙️ 由 settings.html 搵唔到 `const MIN_SIZE = …;` —— 測試要更新 regex（唔准改 HTML）');
+  assert.ok(dec, '⚙️ 由 settings.html 搵唔到 `const DECIMALS = …;` —— 測試要更新 regex（唔准改 HTML）');
+  return { minSize: Number(min[1]), decimals: Number(dec[1]) };
 }
 
 /**
@@ -180,11 +202,27 @@ test('⭐ slider 冇死區：任何情況下「拉到最大」都仍然合法（
   }
 });
 
+test('⭐ 設計審查 L3：`settings.html` 嘅 `MIN_SIZE`／`DECIMALS` 一定要綁住 `layout.js` 嘅常數', () => {
+  // 為何要：`settings.html` 係 classic script，`require` 唔到 ESM 嘅 `layout.js` → 兩個數
+  // 係手抄。抄歪咗嘅後果係**完全靜默**：
+  //   ① `MIN_SIZE` 大過 `MIN_HUD_SIZE` → slider 夾得到一個主程序唔接受嘅大細（或者反過來
+  //      用戶永遠拖唔到合法嘅最細值，而設定窗顯示嘅值同實際唔一致）；
+  //   ② `DECIMALS` 少過 `LAYOUT_DECIMALS` → 設定窗顯示／存返嘅值被截斷，
+  //      同 `round6()` 嘅收斂唔一致（「還原預設 → 拖 → 存」會寫入唔同嘅數）。
+  const { minSize, decimals } = limitsFromHtml();
+  assert.equal(minSize, MIN_HUD_SIZE, `settings.html 嘅 MIN_SIZE（${minSize}）要等於 layout.js 嘅 MIN_HUD_SIZE（${MIN_HUD_SIZE}）`);
+  assert.equal(decimals, LAYOUT_DECIMALS, `settings.html 嘅 DECIMALS（${decimals}）要等於 layout.js 嘅 LAYOUT_DECIMALS（${LAYOUT_DECIMALS}）`);
+  // 而且兩個數一定要真係用喺 `fieldBounds()`／`round()` 入面（唔准「宣告咗但冇用」）
+  const src = readSettings();
+  assert.match(src, /Math\.max\(MIN_SIZE,/, '`MIN_SIZE` 要真係用喺夾大細嗰度');
+  assert.match(src, /10 \*\* DECIMALS/, '`DECIMALS` 要真係用喺收斂小數位嗰度');
+});
+
 test('slider 上下限：大細下限、x1／y1 嘅起碼值、dx／dy 嘅 ±1 都要一致', () => {
   const fieldBounds = fieldBoundsFromHtml();
   const b = fieldBounds({ x0: 0.4, y0: 0.2, w: 0.3, h: 0.5 });
-  assert.deepEqual(b.w, [0.01, 0.6], 'x0 = 0.4 → w 最多 0.6（下限 0.01 一定要喺度）');
-  assert.equal(b.w[0], 0.01, '大細下限（同 MIN_HUD_SIZE 一致）');
+  assert.deepEqual(b.w, [MIN_HUD_SIZE, 0.6], `x0 = 0.4 → w 最多 0.6（下限 ${MIN_HUD_SIZE} 一定要喺度）`);
+  assert.equal(b.w[0], MIN_HUD_SIZE, '大細下限要用 `MIN_HUD_SIZE`（唯一來源，唔准寫死數字）');
   assert.ok(b.x1[0] > 0.4, `x1 一定要大過 x0（實得 ${b.x1[0]}）`);
   assert.equal(b.x1[1], 1);
   assert.deepEqual(b.dx, [-1, 1]);
