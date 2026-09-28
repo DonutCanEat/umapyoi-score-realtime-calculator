@@ -53,8 +53,13 @@ git -C "D:\File\Program Project\Umapyoi Score Realtime Calculator" log --oneline
 ⭐ **遠端（2026-09-19 設定）**：`origin` = `https://github.com/DonutCanEat/umapyoi-score-realtime-calculator.git`
 （⭐ **public —— 用戶 2026-09-23 明確決定保持公開**；用戶名 `DonutCanEat`）。主分支 `main`。
 - ⭐ **exe 一律擺 Release，唔入 repo**（`dist/` 已喺 `.gitignore`）：推 `v*` tag
-  → `.github/workflows/release.yml` 自動跑（測試閘 → 語法閘 → fit-score → `pack:win` → 掛上 Release）。
-  完整流程同公開前注意事項：`docs/github.md`。
+  → `.github/workflows/release.yml` 自動跑（測試閘 → 語法閘 → fit-score → **三個影像閘** →
+  `pack:win` → 掛上 Release）。完整流程同公開前注意事項：`docs/github.md`。
+- ⭐ **驗收閘 workflow（2026-09-28，設計審查 S5）**：`.github/workflows/gates.yml` ——
+  推 `main`／開 PR／手動都會跑齊「唔使 Electron」嘅閘（`npm test`／語法閘／fit-score／
+  `diag-statbar --read`／`read-result --all`／`build-glyph-templates --verify`）。
+  以前只有推 tag 先跑 → **普通 commit 零自動驗證**。⚠️ 呢個 workflow **刻意唔跑 `npm ci`**
+  （全部閘都係零依賴 Node script；裝依賴只會每次多 ~100MB Electron 下載）。
 - ✅ **已驗證成功（2026-09-19，run #3）**：Release 上面有
   `UmapyoiScoreRealtimeCalculator-0.1.1-portable.exe` **95.7 MB**
   （<https://github.com/DonutCanEat/umapyoi-score-realtime-calculator/releases>）。
@@ -747,6 +752,11 @@ oval > 0 → 再加 oval 部分；最後 floor
    `npm.cmd test` 同語法閘**只睇文字，捉唔到**。呢個閘真係開 Electron、真係來回送 IPC。
    ✅ **唔需要開遊戲**（`show:false`）；⚠️ 要真 Electron（見 §2 嗰行嘅 `ELECTRON_RUN_AS_NODE` 註記）。
 5. 更新 `docs/formula.md`（公式）或者 `docs/vision-design.md`（影像）
+5b. **CI 會自動跑同一套閘**（2026-09-28，設計審查 S5）：`.github/workflows/gates.yml`
+   （推 `main`／PR／手動）＝ `npm test`＋語法閘＋fit-score＋`diag-statbar --read`＋
+   `read-result --all`＋`build-glyph-templates --verify`；`release.yml` 發版前**再跑一次**
+   （唔過唔會出 exe）。⚠️ 呢啲閘唔准「冇證據就靜默通過」（§8.1）—— 呢一輪順手修好
+   `tools/fit-score.js` 同 `tools/diag-statbar.js` 嗰兩條（以前冇真值 → `exit 0`，而家 `exit 1`）。
 6. **`git commit`**（見 §0：每次改動都要 commit，驗收唔過唔准 commit）
 
 > **唔准為咗「跑得快」而犧牲精度**。呢個專案嘅核心價值就係「顯示嘅數同遊戲一模一樣」，

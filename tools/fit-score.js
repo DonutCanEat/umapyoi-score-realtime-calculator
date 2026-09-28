@@ -55,14 +55,17 @@ const profile = getProfile(profileId);
 const { samples, names } = loadSamples(files);
 
 if (samples.length === 0) {
-  console.log('未有 ground truth sample。');
-  console.log('');
-  console.log('請喺 data/ground-truth/ 放入「培育完成」嘅紀錄（每個一個 .json），格式見：');
-  console.log('  data/ground-truth/README.md');
-  console.log('  data/ground-truth/_template.json.example');
-  console.log('');
-  console.log('最低限度需要：stats（五維）＋ total（遊戲顯示嘅総合評價點）。');
-  process.exit(0);
+  console.error('⛔ 未有 ground truth sample —— **唔可以當「答案啱」**（設計審查 2026-09-28 S5）。');
+  console.error('');
+  console.error('請喺 data/ground-truth/ 放入「培育完成」嘅紀錄（每個一個 .json），格式見：');
+  console.error('  data/ground-truth/README.md');
+  console.error('  data/ground-truth/_template.json.example');
+  console.error('');
+  console.error('最低限度需要：stats（五維）＋ total（遊戲顯示嘅総合評價點）。');
+  console.error('');
+  console.error('⚠️ 以前呢度係 exit 0：冇樣本都會「過關」，即係「驗唔到」被當成「驗過」——');
+  console.error('   同 AGENTS §8.1「唔准用 if (!existsSync(...)) return; 迴避」係同一種病。');
+  process.exit(1);
 }
 
 const report = analyzeSamples(samples, { profile });

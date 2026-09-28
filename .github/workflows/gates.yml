@@ -1,0 +1,72 @@
+# ⭐ 驗收閘（設計審查 2026-09-28 S5）：每次推 `main`／開 PR 都跑齊「唔使 Electron」嘅閘
+#
+# ## 為何要另開一個 workflow（唔係加落 release.yml）
+#
+# `release.yml` 只喺推 `v*` tag 嗰陣跑（順便打包＋上 Release）→ **普通 commit 零自動驗證**。
+# 但 `AGENTS.md` §8 要求嘅影像閘（30/30、15/15、負樣本 5/5、`read-result --all`）
+# 其實**純 Node、唔需要 Electron、每個 < 1 秒**（實測：`diag-statbar --read` 0.5s、
+# `read-result --all` 0.3s）→ 冇理由唔跑。
+# ⚠️ 唔可以就咁把 release.yml 加個 `push` trigger：嗰個 workflow 會 `pack:win` ＋
+#    上 Release —— 推 main 就出 Release 係錯嘅。所以驗收閘同發佈分開兩個 workflow。
+#
+# ⚠️ **唔跑 `npm ci`**：呢批閘全部係零依賴 Node script（`node --test`／`node tools/…`），
+#    冇任何 import 第三方套件；裝依賴只會每次多 ~100MB Electron 下載。
+#    完整依賴安裝由 `release.yml` 把關（嗰邊先係真正打包出 exe 嗰條路）。
+#    ⚠️ 如果將來有測試／工具開始 import node_modules 嘅嘢，就要喺呢度加返 `npm ci`。
+#
+# 本機同一套指令都可以跑（見 AGENTS.md §2／§8）：
+#   npm.cmd test
+#   node tools/check-renderer-syntax.js
+#   node tools/fit-score.js
+#   node tools/diag-statbar.js --read
+#   node tools/read-result.js --all
+#   node tools/build-glyph-templates.js --exclude=uma2 --verify
+
+name: gates
+
+on:
+  push:
+    branches: ['main']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gates:
+    # ⚠️ 同 release.yml 一致用 windows-latest（本機係 Windows、`npm test` 喺嗰邊實測過）；
+    #    亦順便驗證 Windows 專屬嘅路徑／換行假設。
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ⚠️ **一定要 Node 24**：`npm test` 用咗 `--test-isolation=none`（Node 24 先有）——
+      #    用 Node 22 會 `node: bad option` 直接爆（2026-09-19 實測，見 docs/github.md §3）。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # ⭐ 單元測試（純函數 ＋ 接線閘；乾淨 checkout 一樣要全過）
+      - name: 單元測試
+        run: npm test
+
+      # ⭐ 語法閘（4 個 renderer HTML ＋ electron/** ＋ src/** ＋ tools/**）
+      - name: 語法閘
+        run: node tools/check-renderer-syntax.js
+
+      # ⭐ 計分核心：5 條實機樣本必須完全命中、總絕對誤差 0
+      - name: 對答案（計分核心）
+        run: node tools/fit-score.js
+
+      # ⭐ 影像閘 1：實機面板條 15/15 ＋ 負樣本 5/5 唔出數（有真值對唔上 → exit 1）
+      - name: 實機面板條閘
+        run: node tools/diag-statbar.js --read
+
+      # ⭐ 影像閘 2：培育結束確認（基礎能力）真值全中 ＋ 負樣本一個數都唔准出
+      - name: 培育結束確認閘
+        run: node tools/read-result.js --all
+
+      # ⭐ 影像閘 3：字形模板雙閘（面板截圖 30/30 ＋ 實機面板條 15/15 ＋ 負樣本 5/5）
+      #    ⚠️ `--verify` **唔會寫檔**（驗證唔過就報錯、pass 都唔覆寫）→ CI 唔會汙染 worktree
+      - name: 字形模板驗證閘
+        run: node tools/build-glyph-templates.js --exclude=uma2 --verify

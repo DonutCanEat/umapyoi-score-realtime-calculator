@@ -76,8 +76,39 @@ git push origin main --tags          # ⭐ 就係呢一步觸發自動打包發�
 ```
 
 ⚠️ **Workflow 會跑測試做閘**（`npm test`）—— 測試唔過就**唔會發佈**（唔會出一個壞嘅 exe 畀人下載）。
+⭐ **2026-09-28（設計審查 S5）加咗三個影像閘**落 `release.yml`（`pack:win` 之前）：
+`diag-statbar --read`（15/15 ＋ 負樣本 5/5）、`read-result --all`、`build-glyph-templates --verify`
+（30/30 ＋ 15/15 ＋ 負樣本 5/5；`--verify` **唔寫檔**）。理由：呢三個係「顯示嘅數同遊戲
+一模一樣」嘅最後防線，但以前**只喺人手跑**（agent shell 又開唔到 Electron，所以連 agent 都跑唔到），
+而佢哋純 Node、每個 < 1 秒 —— 冇理由唔喺發佈之前跑。
 ⚠️ 第一次跑 GitHub Actions 可能要用幾分鐘裝 Electron（有 cache 之後快好多）。
 ⚠️ 出咗 release 之後仲想改？**唔好改資產**（會令已下載嘅人對唔上）→ 出一個新版本號。
+
+---
+
+## 3.0 ⭐ 驗收閘 workflow（`.github/workflows/gates.yml`，2026-09-28 加）
+
+**為何要**：`release.yml` 只喺推 `v*` tag 嗰陣跑 → **普通 commit 零自動驗證**（設計審查 S5）。
+但 `AGENTS.md` §8 要求嘅影像閘其實**純 Node、唔需要 Electron、每個 < 1 秒**
+（實測 `diag-statbar --read` 0.5s、`read-result --all` 0.3s）→ 另開一個 workflow 跑齊：
+
+| 步驟 | 指令 | 期望 |
+|---|---|---|
+| 單元測試 | `npm test` | 全過（Node 24，`--test-isolation=none`）|
+| 語法閘 | `node tools/check-renderer-syntax.js` | 全 ✓ |
+| 計分核心 | `node tools/fit-score.js` | `完全命中 5/5　總絕對誤差 0` |
+| 實機面板條 | `node tools/diag-statbar.js --read` | 15/15 ＋ 負樣本 5/5 |
+| 培育結束確認 | `node tools/read-result.js --all` | 真值全中 ＋ 負樣本唔出數 |
+| 字形模板 | `node tools/build-glyph-templates.js --exclude=uma2 --verify` | 30/30 ＋ 15/15 ＋ 5/5 |
+
+- 觸發：推 `main`／開 PR／手動 `workflow_dispatch`（**唔會**出 Release —— 發佈仍然係 tag 專屬）。
+- ⚠️ **刻意唔跑 `npm ci`**：呢批閘全部係零依賴 Node script（冇 import 第三方套件），
+  裝依賴只會每次多 ~100MB Electron 下載。完整依賴安裝由 `release.yml` 把關。
+  ⚠️ 如果將來有測試／工具開始 import `node_modules` 嘅嘢，就要加返 `npm ci`。
+- ⚠️ **閘唔准「冇證據就靜默通過」**（同 `AGENTS.md` §8.1 一致）：呢一輪順手修好兩處 ——
+  `tools/fit-score.js`（以前冇 ground-truth 樣本 → `exit 0`）同
+  `tools/diag-statbar.js`（以前冇 `data/live-truth.json`／冇樣本可對 → `exit 0`）
+  → 而家**兩者都 exit 1**（負樣本自測：暫時搬走兩個檔案 → 兩邊都 exit 1）。
 
 ---
 

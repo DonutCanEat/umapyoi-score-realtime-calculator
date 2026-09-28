@@ -54,6 +54,20 @@ jobs:
       - name: 對答案（計分核心必須誤差 0）
         run: node tools/fit-score.js
 
+      # ⭐ 影像閘（設計審查 2026-09-28 S5）：呢三個以前**只喺人手跑**，而佢哋係
+      #    「顯示嘅數同遊戲一模一樣」嘅最後防線 —— 純 Node、唔需要 Electron、
+      #    每個 < 1 秒 → 冇理由唔喺發佈之前跑（唔過就唔會出 exe）。
+      #    ⚠️ 同一套閘亦喺 `gates.yml`（推 main／PR）跑；呢度再跑一次係刻意嘅：
+      #       release 係最後關卡，唔可以因為「main 嗰陣跑過」就跳。
+      - name: 實機面板條閘（15/15 ＋ 負樣本 5/5）
+        run: node tools/diag-statbar.js --read
+
+      - name: 培育結束確認閘（真值全中 ＋ 負樣本唔出數）
+        run: node tools/read-result.js --all
+
+      - name: 字形模板驗證閘（30/30 ＋ 15/15 ＋ 負樣本 5/5；--verify 唔寫檔）
+        run: node tools/build-glyph-templates.js --exclude=uma2 --verify
+
       - name: 打包 portable exe
         run: npm run pack:win
 

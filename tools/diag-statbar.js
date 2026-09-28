@@ -235,4 +235,15 @@ if (doRead && files.length === 0 && existsSync(NEG_DIR)) {
 }
 
 // 有真值（或負樣本）而對唔上 → exit 1，令呢個工具可以當**閘**用（AGENTS §8）。
-if (negBad > 0 || (doRead && liveTruth && total > 0 && pass < total)) process.exit(1);
+// ⚠️ 但「唔對唔上」唔等於「驗過」（設計審查 2026-09-28 S5）：以前冇真值來源、
+//    或者一條樣本都冇（`total === 0`）都會 exit 0 → 即係「驗唔到」被當成「過關」。
+//    同 AGENTS §8.1「唔准用 if (!existsSync(...)) return; 迴避」係同一種病 → 一律 exit 1。
+if (doRead && !expect && !liveTruth) {
+  console.error('\n⛔ 冇真值可以用（--expect 冇交、data/live-truth.json 又讀唔到）→ 唔可以當閘通過。');
+  process.exit(1);
+}
+if (doRead && total === 0) {
+  console.error('\n⛔ 一條樣本都對唔到（唔係「過關」，係「驗唔到」）→ 唔可以當閘通過。');
+  process.exit(1);
+}
+if (negBad > 0 || (doRead && total > 0 && pass < total)) process.exit(1);
