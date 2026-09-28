@@ -303,6 +303,39 @@ test('hud-config ⭐ resolveHudConfig：驗 fileConfig 嘅警告一樣要經 cal
 
 // ───────── 向後兼容：`loadConfig()` 嘅呼叫寫法（唔准因為加 onWarn 而破）─────────
 
+test('⭐ 設計審查 L1：`fromSource.w/h` 係死碼，唔准再傳（亦唔准靠佢判斷大細有冇寫死）', () => {
+  // 為何要呢條閘：以前 `resolveHudConfig()` 傳 `{x,y,w,h}` 落 `validateConfig()`，而
+  // `validateLayout()` **只讀 `x`／`y`／`midSpan`** —— 但同一份檔嘅註釋反過來寫
+  // 「`fromSource.w/h` 淨係話畀 `assertAxis()` 聽大細係寫死嘅」（假嘅：`assertAxis()`
+  // 冇收 `fromSource`）。死碼 ＋ 矛盾註釋會令下一個人**跟住假嘅規則改嘢**。
+  //
+  // ① 行為：多傳 `w`／`h` 同唔傳，結果一定要逐位一樣（＝佢哋真係冇讀取點）。
+  const layout = { x: [0.1, 0.3], y: [0.4, 0.5], size: { w: 0.2, h: 0.1 } };
+  const without = validateConfig({ layout }, { fromSource: { x: true, y: true } });
+  const withDead = validateConfig({ layout }, { fromSource: { x: true, y: true, w: true, h: true } });
+  assert.deepEqual(withDead, without, '`w`／`h` 唔准再影響任何結果');
+  // ② 原始碼：`fromSource` 物件入面唔准再出現 `w:`／`h:`，`envHW`／`envHH` 亦唔准返轉頭。
+  const src = readFileSync(new URL('../src/hud/config.js', import.meta.url), 'utf8');
+  assert.ok(!/\benvHW\b|\benvHH\b/.test(src), '`envHW`／`envHH` 係為咗砌死碼旗標而存在 → 唔准返轉頭');
+  const fromSourceBlocks = src.match(/fromSource:\s*\{[\s\S]*?\}/g) ?? [];
+  assert.ok(fromSourceBlocks.length > 0, '一定要搵到 `fromSource:` 物件（否則呢條閘已經失效）');
+  for (const block of fromSourceBlocks) {
+    assert.ok(!/(^|\s)[wh]:/.test(block), `\`fromSource\` 唔准再傳 \`w\`／\`h\`：${block}`);
+  }
+});
+
+test('⭐ 設計審查 L1：大細「寫死」係由 `size` 鍵自身判斷（`size: {w}` 有交就係寫死）', () => {
+  // 「只交 w 唔交 h」係 `resolveHudConfig()` 嘅真實用法（env 只寫一邊）：
+  // x 軸用寫死嘅 w、y 軸要由檔案／預設嗰邊嚟 → 兩者結果唔可以一樣。
+  const onlyW = validateConfig(
+    { layout: { x: [0.1, 0.2], y: [0.4, 0.5], size: { w: 0.3 } } },
+    { fromSource: { x: true, y: true } },
+  );
+  assert.equal(onlyW.layout.size.w, 0.3, 'w 寫死 → 用佢');
+  assert.equal(onlyW.layout.x[1], 0.4, 'x[1] 由 x[0] + size.w 推（0.1 + 0.3）');
+  assert.equal(onlyW.layout.size.h, 0.1, 'h 冇交 → 由 y 範圍推（0.5 − 0.4）');
+});
+
 test('hud-config 向後兼容：loadConfig 嘅所有舊呼叫寫法都要照 work（加 onWarn 之後）', () => {
   // ① 冇參數／`{}` → 用預設路徑（`defaultConfigPath()` ＝ 而家嘅工作目錄）。
   //    ⚠️ 呢兩個要同 `defaultConfigPath()` 嗰條路**完全一樣**（唔可以各自讀一次）：

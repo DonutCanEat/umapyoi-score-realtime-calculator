@@ -149,7 +149,9 @@ export function defaultConfigPath(baseDir = process.cwd()) {
  * ## 第二個參數：`{ onWarn }` ＋ 舊寫法 `fromSource`（兩者都要支援）
  *
  * - `{ fromSource }`（`resolveHudConfig()` 合併之後用）：講明 `layout` 邊幾欄係
- *   「寫死」而唔係補預設（見 `validateLayout()`）。
+ *   「寫死」而唔係補預設（見 `validateLayout()`）。⚠️ **實際只讀 `x`／`y`／`midSpan`**
+ *   三個 key；`w`／`h` 以前都傳但**冇任何讀取點**（設計審查 L1）→ 已刪，
+ *   「大細有冇寫死」一律由 `size` 鍵自身判斷（`assertAxis()` 嘅 `writtenSize`）。
  * - `{ onWarn }`：**大聲警告**嘅去處。而家要 warn 嘅情形係「同一個軸上面範圍同大細
  *   兩樣都寫死但唔一致」→ 以 `size` 為準（`x[1]` 由 `x[0] + size.w` 推）而且 warn
  *   （`x[1]` 唔影響渲染，所以唔可以為咗一個冗餘欄位令人開唔到程式）。
@@ -160,9 +162,9 @@ export function defaultConfigPath(baseDir = process.cwd()) {
  *   大聲，唔會變成「加咗檢查但冇人知」。
  *
  * @param {unknown} obj 由 JSON 讀返嚟或者呼叫者砌出嚟嘅設定
- * @param {{x?:boolean,y?:boolean,w?:boolean,h?:boolean}
- *         | {fromSource?:{x?:boolean,y?:boolean,w?:boolean,h?:boolean}, onWarn?:(message:string)=>void}
- *         | string} [options] 見上面
+ * @param {{x?:boolean,y?:boolean,midSpan?:boolean}
+ *         | {fromSource?:{x?:boolean,y?:boolean,midSpan?:boolean}, onWarn?:(message:string)=>void}
+ *         | string} [options] 見上面（⚠️ `w`／`h` 已經唔存在，見上面嗰段）
  * @returns {{layout:{x:number[],y:number[],offset:{dx:number,dy:number},size:{w:number,h:number}},
  *            display:Record<string,boolean>}}
  */
@@ -185,7 +187,10 @@ export function validateConfig(obj, options) {
  * 而新呼叫係物件 —— 唔可以用 `options?.fromSource` 就算（字串會被靜默當冇 source）。
  */
 function normalizeValidateOptions(options) {
-  if (typeof options === 'string') return { fromSource: { x: true, y: true, w: true, h: true } };
+  // ⚠️ 舊式字串（`validateConfig(obj, 'loadConfig')`）＝「呢個 config 由寫死來源嚟」。
+  //    只交 `x`／`y`（同 `validateLayout()` 實際會讀嘅 key 一致；以前多交嘅 `w`／`h`
+  //    係死碼，見設計審查 L1）。
+  if (typeof options === 'string') return { fromSource: { x: true, y: true } };
   if (!isPlainObject(options)) return { fromSource: {}, onWarn: console.warn };
   return {
     fromSource: isPlainObject(options.fromSource) ? options.fromSource : options,
@@ -242,11 +247,14 @@ export const LAYOUT_EPSILON = 1e-9;
  * （env > 檔案 > 預設）。合併之後 `raw` 一定有齊所有欄位 → 單憑 `raw` 分唔出
  * 「用戶寫咗 `size`」同「`size` 係啱啱補返嚟嘅預設」，於是就會攞一個**來源唔同**
  * 嘅預設去否定用戶寫嘅範圍。所以呼叫者要講明「呢個軸上面
- * 範圍／大細**係唔係來自一個寫死嘅來源**」。
+ * **範圍**係唔係來自一個寫死嘅來源」。
+ * ⚠️ **大細唔經呢個參數**：大細有冇寫死，睇 `raw.size` 個鍵有冇交就已經知
+ *    （見下面 `written` 嘅註釋同 `assertAxis()` 嘅 `writtenSize`）。
  *
  * @param {unknown} raw 由 JSON 讀返嚟或者呼叫者砌出嚟嘅 layout
- * @param {{x?:boolean,y?:boolean,w?:boolean,h?:boolean}} [fromSource]
- *        `true` ＝ 呢一欄係由寫死嘅來源（檔案／env）嚟，唔係補出嚟嘅預設
+ * @param {{x?:boolean,y?:boolean,midSpan?:boolean}} [fromSource]
+ *        `true` ＝ 呢一欄係由寫死嘅來源（檔案／env）嚟，唔係補出嚟嘅預設。
+ *        ⚠️ **大細唔喺呢度**：`assertAxis()` 直接睇 `size` 鍵有冇交（見 `writtenSize`）。
  * @param {(message:string)=>void} [onWarn] 大聲警告嘅去處（預設 `console.warn`）
  * @returns {{x:number[],y:number[],offset:{dx:number,dy:number},size:{w:number,h:number}}}
  */
@@ -706,9 +714,6 @@ export function resolveHudConfig(env = {}, fileConfig = null, { onWarn } = {}) {
    * `fileConfig` 一定已經過 `validateConfig()`，所以佢嘅 `size.w/h` 一定係具體數字）。
    */
   const fileHas = (key) => file !== null && Object.hasOwn(file.layout, key);
-  const fileSizeHas = (key) => file !== null && Object.hasOwn(file.layout.size, key);
-  const envHW = envW || fileSizeHas('w');
-  const envHH = envH || fileSizeHas('h');
 
   /**
    * 逐個軸合成，**唔准混來源**。
@@ -769,10 +774,12 @@ export function resolveHudConfig(env = {}, fileConfig = null, { onWarn } = {}) {
     defSpan: defaults.y,
   });
 
-  // ⚠️ 大細嘅**值**只有呢度最清楚（env 嗰個，或者檔案本身嗰對）：
-  //    `fromSource.w/h` 淨係話畀 `assertAxis()` 聽「大細係寫死嘅」——
-  //    「寫死」但個值係 `undefined` 就會靜默用返預設（實測：`UMAPYOI_HUD_W=0.30`
-  //    完全冇效，`size.w` 仍然係 0.212）。
+  // ⚠️ 大細嘅**值**只有呢度最清楚（env 嗰個，或者檔案本身嗰對），所以下面 `size` 只交
+  //    「env 寫死嘅大細」。「大細有冇被寫死」**唔需要**另一個旗標：
+  //    `assertAxis()` 直接睇 `size !== undefined`（見 `writtenSize`）。
+  //    ⛔ 以前呢度仲傳 `fromSource.w/h`（設計審查 L1）—— 嗰兩個 key **冇任何讀取點**，
+  //       註釋又反過來寫「話畀 `assertAxis()` 聽大細係寫死嘅」（假嘅：`assertAxis()`
+  //       根本冇收 `fromSource`）→ 已刪，並由 `test/hud-config.test.js` 守住唔准返轉頭。
   const layout = {
     x: ax.span,
     y: ay.span,
@@ -808,8 +815,8 @@ export function resolveHudConfig(env = {}, fileConfig = null, { onWarn } = {}) {
       // 長度 2 ＝「範圍係寫死嘅」（`assertAxis()` 會攞末端同推導值對帳 → 唔一致就 warn）。
       x: ax.span.length === 2 || (!envW && fileHas('x')),
       y: ay.span.length === 2 || (!envH && fileHas('y')),
-      w: envHW,
-      h: envHH,
+      // ⛔ 唔准再傳 `w`／`h`：`validateLayout()` 只讀 `x`／`y`／`midSpan`（設計審查 L1）
+      //    ——「大細有冇寫死」同「大細係咩值」都已經由上面個 `size` 鍵自己講清楚。
       // ⚠️ 呢個 flag 淨係內部用（`resolveHudConfig()` 交中間形狀）：用戶／檔案交嘅
       //    半截範圍一定要 throw，唔可以靜默收。
       midSpan: ax.span.length === 1 || ay.span.length === 1,

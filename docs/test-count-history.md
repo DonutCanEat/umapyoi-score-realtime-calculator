@@ -43,5 +43,6 @@
 - **S4（第三刀）** HUD 位置警告去重抽出（`electron/hud-place.js` ＋ `test/hud-place.test.js`）+13 → **632**
 - **S4（第四刀）** 擷取凍結 watchdog 抽出（`electron/capture-watchdog.js` ＋ `test/capture-watchdog.test.js`）+17 → **649**
 - **S4（第五刀）** dump 政策抽出（`electron/dump-policy.js` ＋ `test/dump-policy.test.js`）+11 → **660**
+- **L1** `fromSource.w/h` 死碼刪走 ＋ 矛盾註釋更正（`src/hud/config.js` ＋ `test/hud-config.test.js` 2 條閘）+2 → **662**
 
 ⚠️ 每一項嘅 commit hash／驗收數據睇 `git log --oneline`（commit message 有寫實測數字）。
