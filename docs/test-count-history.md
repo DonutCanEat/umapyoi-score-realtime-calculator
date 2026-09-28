@@ -50,5 +50,6 @@
 - **L4** `tools/breakdown.js` 第三份倍率規則收斂成 `multiplierForGrades()`（`test/breakdown-wiring.test.js`）+3 → **671**
 - **L5** 8 條真庫測試唔准再 `{skip: !hasDb}`（缺失要紅）＋ 全 repo `skip` 閘（`test/verification-coverage.test.js`）+1 → **672**
 - **L7** 加 `LICENSE`（MIT，2026 DonutCanEat）＋ `package.json` `license` ＋ README 指向 ＋ 授權三處一致閘（`test/license.test.js`）+3 → **675**
+- **L6** 技能庫寫入守門（`tools/lib/skill-db-guard.js`：絕對下限 ＋ 歷史高位 `maxCount` ＋ `--force` ＋覆寫前備份）＋ `data/backups/` ignore 真閘 +12（`test/skill-db-guard.test.js`）＋ gitignore 備份閘 +1 → **688**
 
 ⚠️ 每一項嘅 commit hash／驗收數據睇 `git log --oneline`（commit message 有寫實測數字）。

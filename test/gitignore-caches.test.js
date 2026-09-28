@@ -112,3 +112,16 @@ test('gitignore：`data/` 之下兩個 bwiki cache 都要 ignore（一個都唔�
     assert.equal(ignoredByGit('data/skill-db-tw.json'), false, '技能庫本體一定要入 git');
   }
 });
+
+test('gitignore：技能庫覆寫備份（`data/backups/`，L6）要 ignore，但真備份檔名都擋得住', () => {
+  // L6 加咗「覆寫前先備份去 data/backups/」→ 唔 ignore 嘅話每次抓都出一個 60 萬 bytes 嘅 `??`。
+  assert.match(GITIGNORE, /^data\/backups\/$/m, '`data/backups/` 要 ignore');
+  if (HAS_GIT) {
+    assert.equal(ignoredByGit('data/backups/'), true);
+    // ⭐ 用**真嘅**備份檔名（`backupPathFor()` 嘅輸出形狀）再問一次 git：
+    //    淨係 check 目錄唔夠 —— 目錄 ignore 咗但檔名規則寫錯一樣會漏。
+    assert.equal(ignoredByGit('data/backups/skill-db-tw-2026-09-28T12-34-56-789.json'), true);
+    // 反面：備份唔准蓋過主庫本體（主庫要繼續入 git）
+    assert.equal(ignoredByGit('data/skill-db-tw.json'), false);
+  }
+});

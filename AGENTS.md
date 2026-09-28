@@ -274,12 +274,12 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（675 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（688 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ **electron/**（10 檔，含
                                      #    main.js／panel-window.js／web-preferences.js／hud-passthrough.js／
                                      #    hud-drag.js／hud-place.js／capture-watchdog.js／dump-policy.js／
                                      #    ipc-channels.cjs／capture-region.cjs）
-                                     #    ＋ src/**（50 檔）＋ tools/**（56 檔）—— 見 §8 4b
+                                     #    ＋ src/**（50 檔）＋ tools/**（57 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
                                      #    喺 HEAD 已經爆 SyntaxError 都冇人知（見 §8 4b）
                                      # ⚠️ 2026-09-27 擴充到 `electron/**`：之前只列死 main.js／
@@ -416,6 +416,11 @@ node tools/whatif.js --stats=... --skill=弧線的教授 --json           # 餵�
 
 # ── Phase 0（計分核心）──
 node tools/fetch-skill-db.js               # 由 bwiki 拎技能庫（有 cache）
+                                           # ⭐ 寫入守門（L6，`tools/lib/skill-db-guard.js`）：
+                                           #    絕對下限 1000 招 ＋ 歷史高位 `maxCount` → 跌穿就
+                                           #    exit 1 唔寫檔；過關先備份去 `data/backups/`
+node tools/fetch-skill-db.js --dry-run     # 只報告會寫咩（守門照跑，唔寫檔）
+node tools/fetch-skill-db.js --force       # 上游真係刪招嗰陣明示放行
 node tools/fetch-skill-db.js --refresh     # 強制重抓
 node tools/fill-ground-truth.js            # 用技能庫自動填 ground truth
 node tools/fit-score.js                    # 對答案（應該 5/5、總誤差 0）
@@ -437,9 +442,8 @@ node tools/diag-statbar.js --read          # ⭐ 對 `data/live-truth.json` 真�
                                            #    ⚠️ 有真值對唔上／負樣本讀到數 → exit 1（真閘）
 node tools/diag-statbar.js --read --cropped --trace            # 模擬 renderer 剪 ROI（執行時路徑）
 node tools/diag-statbar.js --read --perf        # ⭐ 量**演算法**效能（設計審查 M9）：15 張實機圖
-                                                #    中位 2.9 ms/幀、最慢 26.0 ms/幀 ＝ 5fps（200ms/幀）
-                                                #    預算嘅 1.4%。⚠️ 唔包桌面擷取／IPC／剪 ROI
-                                                #    → **唔等於**端到端延遲（見 known-issues「驗證廣度」）
+                                                #    中位 2.9／最慢 26.0 ms/幀 ＝ 5fps 預算嘅 1.4%
+                                                #    ⚠️ 唔包擷取／IPC／剪 ROI → 唔等於端到端延遲
 node tools/read-result.js --all            # ⭐ **「培育結束確認 → 基礎能力」閘**（用戶 2026-09-23 要求）：
                                            #    `data/result-truth.json` 全部樣本要完全命中
                                            #    ＋ `shots/negatives/` 全部負樣本**一個數都唔准出**
@@ -503,7 +507,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **675 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **688 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 15/15**、**負樣本 5/5 唔出數**），全部都要中
@@ -540,8 +544,8 @@ electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 
                 #   dump-policy.js（dump 預算 ＋ crop／指紋，S4）／
                 #   panel-window.js／web-preferences.js／capture-region.cjs／
                 #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 675 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
-tools/          # 53 個 CLI（＋ tools/lib/ 3 個共用模組）：診斷／建模板／對答案／what-if／advice／
+test/           # 688 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+tools/          # 54 個 CLI（＋ tools/lib/ 4 個共用模組）：診斷／建模板／對答案／what-if／advice／
                 #   診斷包／renderer 實載閘／讀技能名（`read-skills` 等 5 個）／
                 #   外部名單比對（`diff-skill-names`）／GameTora 抓取＋查詢＋缺口（`fetch-gametora`／
                 #   `gametora-skill`／`skill-gaps`／`analyze-gametora-skills`）／
@@ -705,14 +709,14 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **675 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **688 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
    （歷史同逐步累積過程搬咗去 `docs/test-count-history.md`（AGENTS.md 有 65,536 bytes 讀取預算，
    見 L11）；重點：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js`
    要求 repo 根有 `hud-position.json`），修好之後兩邊一樣；而家工作樹同乾淨 HEAD 都係
-   **675／0**。查法一樣：`git archive` 出乾淨樹跑一次。）
+   **688／0**。查法一樣：`git archive` 出乾淨樹跑一次。）
    ⚠️ **唔准**用 `skip`／`if (!existsSync(...)) return;` 迴避 —— 咁樣只係把「驗唔到」
    變成「靜默通過」。要用嘅話就**自己控制環境**（例如 `os.tmpdir()` ＋ `process.chdir()`）。
    ⚠️ 涉及 cwd 嘅測試一定要**同步** ＋ `finally` 還原（`--test-isolation=none` 之下

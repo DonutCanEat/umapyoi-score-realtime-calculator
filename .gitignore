@@ -39,3 +39,9 @@ snapshots/
 #    要留嘅係**合併入技能庫之後**嘅結果（`data/skill-db-tw.json`，有入 git）。
 data/bwiki-pages/
 data/bwiki-skill-pages.json
+
+# ── 技能庫覆寫前嘅備份（`tools/fetch-skill-db.js`；設計審查 L6）──
+# 每次覆寫主庫之前會 copy 一份去 `data/backups/skill-db-<lang>-<時間>.json`。
+# ⚠️ 唔入 git：主庫本身有入 git（出事追得返），呢啲係「本地即時回溯」用，
+#    而且會隨住每次抓而累積（60 萬 bytes × N）→ 入咗只會令 repo 無故膨脹。
+data/backups/

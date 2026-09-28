@@ -456,7 +456,7 @@ docs/
 - `src/vision/similarity.js` — 特徵向量嘅標準化同相似度（**唯一一份實作**）。
 - `src/vision/skillread.js` — 技能名「候選庫比對」（Phase 2 讀技能：離線部分）。
 
-### tools/（正文冇提及嘅 24 個）
+### tools/（正文冇提及嘅 25 個）
 
 - `tools/analyze-gametora-skills.js` — **GameTora skills.json → 同本專案技能庫比對 ＋ 分類**（補技能庫嘅工作單）。
 - `tools/bwiki-coverage.js` — **bwiki 每招一頁 ↔ 本專案技能庫 ↔ GameTora 三方對帳**（**完全離線**，唔上網）。
@@ -472,6 +472,7 @@ docs/
 - `tools/gametora-skill.js` — **查一招技能**（GameTora 對照 ＋ 本專案技能庫狀態）。
 - `tools/lib/args.js` — `tools/` CLI 嘅參數解析（**唯一一份**，獨立審計 M6）。
 - `tools/lib/file-map.js` — `docs/file-map.md` 附錄嘅**生成邏輯**（純函數；設計審查 2026-09-28 M5）。
+- `tools/lib/skill-db-guard.js` — 主技能資料庫（`data/skill-db-<lang>.json`）嘅**寫入守門**（純函數；設計審查 2026-09-28 L6）。
 - `tools/lib/width.js` — 終端機表格用嘅「顯示闊度」同補空格工具（**唯一一份**）。
 - `tools/merge-skill-db.js` — **合併技能庫**：bwiki 計算器頁（繁中服當前狀態）＋ GameTora（日服繁體名）→ `data/skill-db-tw.json`。
 - `tools/nameboxes-sheet.js` — 技能名「逐頁逐欄」對照圖：一頁一欄 7 格 → 疊成一張清晰大圖（畀人／agent 肉眼核名）。
