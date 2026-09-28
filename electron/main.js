@@ -15,7 +15,7 @@
  *    詳見 AGENTS.md 地雷清單 #10/#11/#12。
  */
 
-import { app, BrowserWindow, desktopCapturer, ipcMain, screen } from 'electron';
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, screen } from 'electron';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -23,6 +23,14 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { pickGameSource, tooSmallSourceWarning } from '../src/capture/source.js';
 import { loadTemplates, readStats, StatTracker, scoreStats } from '../src/vision/reader.js';
 import { readStatBar, DEFAULT_STATBAR_OPTIONS } from '../src/vision/statbar.js';
+// ⭐ 啟動資源嘅讀取同錯誤政策（**唯一一份**，設計審查 M6）：以前「模板唔見」係靜默僵屍、
+//    「模板壞」係 import 期 throw、「設定唔合法」就乾淨 exit(1) —— 三套政策，而家一套。
+import {
+  STARTUP_EXIT_CODE,
+  checkGlyphTemplates,
+  loadRequiredJson,
+  startupFailureReport,
+} from '../src/hud/startup-resource.js';
 // ⭐ 「一次讀取結果 → 診斷用分類」嘅唯一一份（設計審查 M1）：`highlighted` 喺失敗路徑
 //    唔代表「金色格跳過」，唔准再用佢做判準（見 `read-summary.js` 檔頭）。
 import { classifyRead } from '../src/vision/read-summary.js';
@@ -144,17 +152,55 @@ initLogFile();
  * 排除自己嘅窗係**必要條件**，規則＋回歸測試見 AGENTS 地雷 #27。
  */
 
-/** 字形模板（由 tools/build-glyph-templates.js 產生）。 */
-const TEMPLATE_PATH = join(ROOT, 'data', 'glyph-templates.json');
-let templates = {};
-if (existsSync(TEMPLATE_PATH)) {
-  templates = loadTemplates(JSON.parse(readFileSync(TEMPLATE_PATH, 'utf8')));
-  console.log(
-    `[模板] 載入 ${Object.keys(templates).length} 個數字字形（${Object.keys(templates).sort().join('')}）`,
-  );
-} else {
-  console.error(`[模板] ⚠️ 搵唔到 ${TEMPLATE_PATH}，請先跑 node tools/build-glyph-templates.js`);
+/**
+ * ⭐ 啟動期致命錯誤嘅**唯一出口**（設計審查 2026-09-28 M6）。
+ *
+ * 為何要統一：同一類「啟動資源唔妥」以前有**三種**下場 ——
+ *   ① 字形模板**唔見** → 淨係一句 `console.error` 就照開，之後每幀喺 `templatesReady()` 靜默早退
+ *      → **HUD 永遠「等待面板條」**（程式開到但永遠唔出數，最難查）；
+ *   ② 模板 JSON **壞** → module scope `JSON.parse` throw（import 期爆；打包版係 GUI，連 stack 都冇）；
+ *   ③ HUD 設定唔合法 → catch ＋ 清楚訊息 ＋ `app.exit(1)`（✅ 唯一正確嗰個）。
+ * 而家三個都行呢度：大聲 log（會入 log 檔）＋ **出系統錯誤對話**（打包版用戶真係睇得到）
+ * ＋ `app.exit(1)`（唔會留低冇窗嘅僵屍程序）。
+ *
+ * ⚠️ 呢個函數會喺 `app.whenReady()` **之前**被叫（資源係 module scope 讀嘅）——
+ *    `dialog.showErrorBox()` 係 Electron 少數 ready 之前合法嘅 API；`app.exit()` 亦冇問題。
+ *    兩者都包 try/catch：唔想「報告錯誤」本身再爆一次（咁就完全冇訊息）。
+ */
+function fatalStartup(error) {
+  const report = startupFailureReport({ error, logPath: logFile?.path ?? null });
+  console.error(`[啟動] ⛔ ${error.message}`);
+  console.error(`[啟動] → ${error.hint}`);
+  try {
+    dialog.showErrorBox(report.title, report.detail);
+  } catch (dialogError) {
+    console.error(`[啟動] ⚠️ 連錯誤對話都開唔到：${dialogError?.message ?? dialogError}`);
+  }
+  app.exit(STARTUP_EXIT_CODE);
 }
+
+/**
+ * 字形模板（由 `tools/build-glyph-templates.js` 產生）。
+ *
+ * ⚠️ 呢個係**必要資源**，唔係「有就用」：實測 `templatesReady()` 係三個 reader
+ *    （`statbar.js`／`reader.js`／`resultpanel.js`）嘅共同前置條件 → 冇模板 = 一個數都讀唔到，
+ *    而畫面只會顯示「等待面板條」。所以唔見／壞 → 行 `fatalStartup()`（M6）。
+ */
+const TEMPLATE_PATH = join(ROOT, 'data', 'glyph-templates.json');
+const templateFile = loadRequiredJson({
+  path: TEMPLATE_PATH,
+  hint: '跑 `node tools/build-glyph-templates.js` 重新產生字形模板',
+  exists: existsSync,
+  readText: (path) => readFileSync(path, 'utf8'),
+});
+if (!templateFile.ok) fatalStartup(templateFile.error);
+const templateCheck = checkGlyphTemplates(templateFile.value, { path: TEMPLATE_PATH });
+if (!templateCheck.ok) fatalStartup(templateCheck.error);
+if (templateCheck.warning) console.warn(`[模板] ${templateCheck.warning}`);
+const templates = loadTemplates(templateFile.value);
+console.log(
+  `[模板] 載入 ${Object.keys(templates).length} 個數字字形（${Object.keys(templates).sort().join('')}）`,
+);
 
 const tracker = new StatTracker();
 let lastLog = 0;
@@ -291,6 +337,11 @@ function imageFromFrame({ width, height, buffer }) {
  *
  * ⚠️ 兩條讀數路（面板條／培育結束確認欄）**都一定要擋** —— 模板未載入就讀，
  * `readStatBar()`／`readResultPanel()` 會回一堆冇意義嘅結果（甚至 throw）。
+ *
+ * ⭐ 2026-09-28（設計審查 M6）：而家呢個函數係**不變式**，唔再係失敗路徑 ——
+ *    模板唔見／壞／空都會喺 module scope 行 `fatalStartup()` 直接收工
+ *    （以前係「警告一句就照開」→ 呢個 guard 每幀靜默早退 → HUD 永遠等面板條）。
+ *    即係話呢度**永遠應該回 true**；留住個 guard 係防將來有人喺其他地方改 `templates`。
  */
 function templatesReady() {
   return Object.keys(templates).length > 0;
@@ -1587,12 +1638,17 @@ app.whenReady().then(async () => {
   // ⚠️ 最先讀設定（環境變數 > 檔案 > 預設）—— 位置／顯示選項都要喺開窗之前定好。
   //    環境變數唔合法會 throw：大聲講 + 即刻收工（唔可以留低冇窗嘅僵屍程序，
   //    亦**唔可以**靜默用預設位置 —— 嗰樣比起跑唔到更難查）。
+  //    ⭐ 2026-09-28（M6）：行**同一個** `fatalStartup()`（以前呢度自己砌訊息 ＋ exit(1)，
+  //    同模板嗰條路唔一致 —— 連「用戶睇唔睇得到原因」都唔同）。
   try {
     loadHudConfig();
   } catch (error) {
-    console.error(`[設定] ⛔ 環境變數／設定合併之後唔合法：${error?.message ?? error}`);
-    console.error('[設定] 唔會靜默用預設位置 → 即刻收工，請修好環境變數或者設定檔再開。');
-    app.exit(1);
+    fatalStartup({
+      code: 'bad-config',
+      path: 'hud-position.json／UMAPYOI_* 環境變數',
+      message: `環境變數／設定合併之後唔合法：${error?.message ?? error}`,
+      hint: '唔會靜默用預設位置 —— 請修好環境變數或者設定檔再開（設定檔路徑上面有 log）。',
+    });
     return;
   }
 

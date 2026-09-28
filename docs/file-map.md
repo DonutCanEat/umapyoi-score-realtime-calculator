@@ -381,8 +381,9 @@ docs/
 
 <!-- appendix:start -->
 
-### src/（正文冇提及嘅 13 個）
+### src/（正文冇提及嘅 14 個）
 
+- `src/hud/startup-resource.js` — 啟動期資源嘅**讀取 ＋ 錯誤政策**（純函數；設計審查 2026-09-28 M6）。
 - `src/umascore/bwiki-calc-page.js` — bwiki「评分计算器」頁面嘅解析（純函數，唔上網、唔讀檔）。
 - `src/umascore/bwiki-coverage.js` — **bwiki 每招一頁 ↔ 本庫 ↔ GameTora 三方對帳**（純函數，唔上網、唔讀檔）。
 - `src/umascore/bwiki-skill-page.js` — bwiki「每招一頁」嘅解析（純函數）。

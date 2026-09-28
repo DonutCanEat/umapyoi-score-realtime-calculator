@@ -1,5 +1,4 @@
-# 測試數量累積歷史（
-pm.cmd test）
+# 測試數量累積歷史（`npm.cmd test`）
 
 > **為何有呢份文件**：原本寫喺 `AGENTS.md` §8.1 —— 但 `AGENTS.md` 要畀 agent 喺
 > **65,536 bytes** 讀取預算之內讀得完（§L11），而呢段「逐個 commit 加咗幾多條測試」
@@ -18,3 +17,21 @@ pm.cmd test）
    → 診斷掣 +4 → 346 → 培育結束確認 reader +5 → 351 → 確認閘 +3 → 354 →
    `hudViewKey` +4 → 358 → 設定檔 fsync +1 → 359 → `placeHud` DIP 換算 +4 → **363**。
    查法一樣：`git archive` 出乾淨樹跑一次。）
+
+## 2026-09-28 之後：設計審查逐項修復（每一項一個 commit）
+
+> 呢一段係**現行**做法：每一項修好就喺尾加一行，格式 `項目：+N（做咗咩）→ 新總數`。
+
+- **S1** 適性別名 `APTITUDE_ALIASES` ＋ 技能庫覆蓋閘 `aptitude-coverage` +5 → 534
+- **S2** 信心閘改 opt-in（`DEFAULT_STATBAR_OPTIONS`）＋ 2 條閘 +2 → 536
+- **S3** 三個 reader 共用數值範圍閘（`src/vision/statrange.js`）+7 → 543
+- **S4（第一刀）** HUD 穿透狀態機抽出（`electron/hud-passthrough.js`）+8 → 551
+- **S5** CI 驗收閘 workflow ＋ 兩支工具「冇真值唔准 exit 0」（無新測試） → 551
+- **M1** 讀取分類 `src/vision/read-summary.js` +7 → 558
+- **M2** 純空白 env = 冇 set +2 → 560
+- **M3** 來源太細警告換算 DIP（`tooSmallSourceWarning`）+3 → 563
+- **M4** 診斷快照覆蓋「培育結束確認」條路（無新測試；靠快照節數驗） → 563
+- **M5** 文件地圖附錄 ＋ 同步閘（`tools/diag-file-map.js`／`tools/lib/file-map.js`）+10 → **573**
+- **M6** 啟動資源錯誤政策統一（`src/hud/startup-resource.js`）+13（含 2 條接線閘）→ **586**
+
+⚠️ 每一項嘅 commit hash／驗收數據睇 `git log --oneline`（commit message 有寫實測數字）。

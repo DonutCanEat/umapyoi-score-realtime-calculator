@@ -303,11 +303,11 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（573 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（586 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ **electron/**（5 檔，含
                                      #    main.js／panel-window.js／web-preferences.js／hud-passthrough.js／
                                      #    ipc-channels.cjs）
-                                     #    ＋ src/**（49 檔）＋ tools/**（56 檔）—— 見 §8 4b
+                                     #    ＋ src/**（50 檔）＋ tools/**（56 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
                                      #    喺 HEAD 已經爆 SyntaxError 都冇人知（見 §8 4b）
                                      # ⚠️ 2026-09-27 擴充到 `electron/**`：之前只列死 main.js／
@@ -451,6 +451,11 @@ node tools/read-stats.js shots/gt/uma1-p1.png --gt=data/ground-truth/01-小栗�
                                            # ⭐ 由截圖讀五維＋對答案（--trace 睇每個字元分數）
 node tools/build-glyph-templates.js        # 建字形模板（面板截圖 ＋ 實機面板條；**雙閘**）
 node tools/build-glyph-templates.js --verify
+                                           # ⚠️ 字形模板係**必要資源**（設計審查 2026-09-28 M6）：
+                                           #    `data/glyph-templates.json` 唔見／壞／空 →
+                                           #    程式**開唔到**（大聲 log ＋ 系統錯誤對話 ＋ exit 1），
+                                           #    唔會再係「照開但永遠唔出數」嘅靜默僵屍。
+                                           #    政策唯一一份：`src/hud/startup-resource.js`
 node tools/diag-statbar.js                 # ⭐ 實機面板條定位（ROI／切行／相對比例）
 node tools/diag-statbar.js --read          # ⭐ 對 `data/live-truth.json` 真值（應該 15/15）
                                            #    ＋ 自動跑 `shots/negatives/`（其他畫面唔准出數，5/5）
@@ -519,7 +524,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **573 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **586 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 15/15**、**負樣本 5/5 唔出數**），全部都要中
@@ -553,7 +558,7 @@ src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔�
                 #   env-flag.js（環境變數唯一讀法）／history.js（C3 成長曲線核心）
 electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／ipc-channels.cjs（channel 名唯一來源）／
                 #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 573 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+test/           # 586 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
 tools/          # 53 個 CLI（＋ tools/lib/ 3 個共用模組）：診斷／建模板／對答案／what-if／advice／
                 #   診斷包／renderer 實載閘／讀技能名（`read-skills` 等 5 個）／
                 #   外部名單比對（`diff-skill-names`）／GameTora 抓取＋查詢＋缺口（`fetch-gametora`／
@@ -716,14 +721,14 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **573 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **586 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
    （歷史同逐步累積過程搬咗去 `docs/test-count-history.md`（AGENTS.md 有 65,536 bytes 讀取預算，
    見 L11）；重點：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js`
    要求 repo 根有 `hud-position.json`），修好之後兩邊一樣；而家工作樹同乾淨 HEAD 都係
-   **573／0**。查法一樣：`git archive` 出乾淨樹跑一次。）
+   **586／0**。查法一樣：`git archive` 出乾淨樹跑一次。）
    ⚠️ **唔准**用 `skip`／`if (!existsSync(...)) return;` 迴避 —— 咁樣只係把「驗唔到」
    變成「靜默通過」。要用嘅話就**自己控制環境**（例如 `os.tmpdir()` ＋ `process.chdir()`）。
    ⚠️ 涉及 cwd 嘅測試一定要**同步** ＋ `finally` 還原（`--test-isolation=none` 之下
