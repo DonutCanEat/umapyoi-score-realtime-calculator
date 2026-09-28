@@ -79,6 +79,13 @@
    `placeHud()`／`pushHud()`、診斷快照）**仍然零覆蓋**，而且 S4 嘅重構要**用戶自己跑
    `node_modules\.bin\electron.cmd tools\verify-renderer-load.js` ＋ `npm.cmd start`**
    先算驗完（agent shell 開唔到 Electron，見 `docs/dedup-next-steps.md`）。
+   ✅ **2026-09-28 第四輪收窄（設計審查 S4 第二刀）**：⑧ **HUD 拖位狀態機**搬去
+   `electron/hud-drag.js`（`createHudDrag()`／`targetBounds()`／`dragCommitWhy()`／
+   `clampedWarning()`，`DRAG_IDLE_MS` 亦一併搬走）＋ `test/hud-drag-machine.test.js`（**14 條**：
+   原點＋總位移唔准累加／大細唔變／逾時嚴格大於／唔合法 delta 連時間都唔准改／`state` 係副本／
+   `end()` 清空／訊息措辭逐字／接線閘）—— 呢段係地雷 #28／#29 嘅現場，以前零覆蓋。
+   ⚠️ `main.js` 仍然零覆蓋嘅部分收窄到：IPC handler 本體、`placeHud()`／`pushHud()`、
+   診斷快照、同 `finishDrag()` 落 `applyHudConfig()`／存檔嗰幾句。
 6. ✅ **已修（2026-09-23，技術債 §9.1-6）—— 唔可以再當「技術債」**：原子寫原本冇 `fsync`
    （`saveConfig()` = `writeFileSync(.tmp)` ＋ `renameSync`）→ `writeFileSync` 只係寫入
    OS page cache，**停電／硬斷電**之下 `rename()` 完成咗但內容仲喺 cache，開機之後見到嘅

@@ -207,6 +207,10 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
   跟窗冇必要；見 §9 ①）。
 - ⚠️ 對位模式期間切換仍然要重開程式（✅ **2026-09-19 用戶實機驗過**：新嗰行「升級 … 差 …」
   正常顯示；原話「呢兩樣都ok」）。
+- ⭐ **2026-09-28（設計審查 S4）主程序逐刀抽離**：第一刀 `hud-passthrough.js`（穿透狀態機，8 條）、
+  第二刀 `hud-drag.js`（拖位狀態機 ＋ 反推訊息，14 條）—— 兩者以前都住喺 `main.js` 零測試覆蓋，
+  而佢哋正係「用戶點唔到遊戲／拖唔郁」嘅守門人。⛔ 兩刀嘅**實機行為**仍然要用戶跑
+  `npm.cmd start` 拖一次先算驗完（agent shell 開唔到 Electron，見 §8 4c）。
 
 **Phase 2 — 技能 icon 識別／讀技能名**
 
@@ -271,10 +275,10 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（605 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
-node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ **electron/**（6 檔，含
+npm.cmd test              # 單元測試（619 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ **electron/**（7 檔，含
                                      #    main.js／panel-window.js／web-preferences.js／hud-passthrough.js／
-                                     #    ipc-channels.cjs／capture-region.cjs）
+                                     #    hud-drag.js／ipc-channels.cjs／capture-region.cjs）
                                      #    ＋ src/**（50 檔）＋ tools/**（56 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
                                      #    喺 HEAD 已經爆 SyntaxError 都冇人知（見 §8 4b）
@@ -499,7 +503,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **605 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **619 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 15/15**、**負樣本 5/5 唔出數**），全部都要中
@@ -532,8 +536,10 @@ src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔�
                 #   snapshot.js（⭐ 診斷快照嘅純格式化：擷取窗「寫入診斷 log」掣用）／
                 #   env-flag.js（環境變數唯一讀法）／history.js（C3 成長曲線核心）
 electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／ipc-channels.cjs（channel 名唯一來源）／
+                #   hud-passthrough.js（穿透狀態機）／hud-drag.js（拖位狀態機，S4）／
+                #   panel-window.js／web-preferences.js／capture-region.cjs／
                 #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 605 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+test/           # 619 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
 tools/          # 53 個 CLI（＋ tools/lib/ 3 個共用模組）：診斷／建模板／對答案／what-if／advice／
                 #   診斷包／renderer 實載閘／讀技能名（`read-skills` 等 5 個）／
                 #   外部名單比對（`diff-skill-names`）／GameTora 抓取＋查詢＋缺口（`fetch-gametora`／
@@ -698,14 +704,14 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **605 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **619 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
    （歷史同逐步累積過程搬咗去 `docs/test-count-history.md`（AGENTS.md 有 65,536 bytes 讀取預算，
    見 L11）；重點：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js`
    要求 repo 根有 `hud-position.json`），修好之後兩邊一樣；而家工作樹同乾淨 HEAD 都係
-   **605／0**。查法一樣：`git archive` 出乾淨樹跑一次。）
+   **619／0**。查法一樣：`git archive` 出乾淨樹跑一次。）
    ⚠️ **唔准**用 `skip`／`if (!existsSync(...)) return;` 迴避 —— 咁樣只係把「驗唔到」
    變成「靜默通過」。要用嘅話就**自己控制環境**（例如 `os.tmpdir()` ＋ `process.chdir()`）。
    ⚠️ 涉及 cwd 嘅測試一定要**同步** ＋ `finally` 還原（`--test-isolation=none` 之下

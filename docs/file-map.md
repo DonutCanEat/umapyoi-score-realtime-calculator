@@ -135,6 +135,13 @@ electron/
                   #    正常模式一定穿透、次序一定係先還原穿透再 setFocusable、API 出事唔准爆）。
                   #    ⚠️ 建立 HUD 窗嗰一下嘅 `setIgnoreMouseEvents(true)` 仍然喺 main.js
                   #       （全檔唯一例外，見嗰處註釋），之後一律行呢個 funnel。
+  hud-drag.js     # ⭐ HUD 拖位狀態機（設計審查 S4 第二刀）：DRAG_IDLE_MS=1200 ＋
+                  #    createHudDrag({now}) → {start(point,bounds)／move(delta)／end()／isIdle()／
+                  #    active／state}，另加 targetBounds()（原點＋總位移，四捨五入、大細照抄）、
+                  #    dragCommitWhy(layout)（放手後 applyHudConfig 嗰句，講明 offset 已歸零）、
+                  #    clampedWarning(rel,layout)（拖出內容區要被夾返 → 講明夾咗邊個軸）。
+                  #    以前係 main.js 一個 `let hudDrag` ＋ 三處散落判斷（地雷 #28／#29 現場）
+                  #    → 而家有 14 條測試（test/hud-drag-machine.test.js，含接線閘）＋ 負樣本自測。
   panel-window.js # ⭐ 普通面板窗建立器（審計 M3）：createPanelWindow({file, title, width, height,
                   #    minWidth, minHeight, onClosed}) → BrowserWindow ＋ webPreferences
                   #    ＋ setContentProtection ＋ loadFile ＋ ready-to-show → show。
@@ -213,8 +220,14 @@ test/
                       #    真檔副本 → 驗參數（webPreferences 係共用常數嘅**副本**／show:false／
                       #    focusable:true…）＋ 副作用次序（setContentProtection → loadFile →
                       #    ready-to-show → closed）＋ `onClosed` 選填。⚠️ 唔需要 Electron
+  hud-drag-machine.test.js # ⭐ HUD 拖位狀態機（設計審查 S4 第二刀，14 條）：原點＋總位移
+                       #    （唔准累加，有反向斷言）／大細唔變／逾時係嚴格大於 `DRAG_IDLE_MS`
+                       #    （邊界值釘死 1200）／唔合法 delta 連 `at` 都唔准改／`state` 係副本／
+                       #    `end()` 之後清空／`why` 同警告措辭逐字 ＋ 接線閘（`main.js` 唔准
+                       #    再留住可變 `hudDrag`、唔准自己砌訊息）。負樣本自測：改成 `>=`
+                       #    或者加返 `let hudDrag = null` → 即刻紅
   renderer-syntax-gate.test.js # ⭐ **語法閘自己嘅閘**（地雷 #33，3 條）：`JS_DIRS` 一定要有
-                      #    `electron`／`electron/` 之下每個 `.js`／`.cjs` 都被覆蓋／4 個 HTML
+                       #    `electron`／`electron/` 之下每個 `.js`／`.cjs` 都被覆蓋／4 個 HTML
                       #    都要驗（防止「新增檔走漏」再一次發生）
   write-root.test.js  # ⭐ A9 寫入根目錄決策（5 條）：開發 = 專案根／打包 = userData／
                       #    `ROOT` 落喺 .asar 就算 isPackaged=false 都用 userData／

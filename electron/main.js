@@ -58,6 +58,9 @@ import { createPanelWindow } from './panel-window.js';
 // ⭐ HUD 滑鼠穿透狀態機（設計審查 S4）：由 main.js 抽出，因為「用戶點唔到遊戲」
 //    係本專案最嚴重嘅後果，而呢段以前零測試覆蓋。wrapper 函數名保持唔變。
 import { createHudPassthrough } from './hud-passthrough.js';
+// ⭐ HUD 拖位狀態機（設計審查 S4 第二刀）：以前係一個 module-level `let hudDrag` ＋ 散落
+//    三處嘅判斷（地雷 #28／#29 嘅現場），而家純模組 ＋ 假視窗測試（`test/hud-drag-machine.test.js`）。
+import { createHudDrag, DRAG_IDLE_MS, clampedWarning, dragCommitWhy } from './hud-drag.js';
 import { MAX_HISTORY, pushSample } from '../src/hud/history.js';
 // ⭐ 「dump／連拍要寫邊」嘅決策（A9 打包）：打包之後 `ROOT` 係唯讀 asar，
 //    寫入會 throw ENOTDIR/EROFS → 同「設定檔位置」一樣要集中一個決策（`src/hud/write-root.js`）。
@@ -293,10 +296,13 @@ const hudPassthrough = createHudPassthrough({
   onModeChange: (message) => console.log(message),
   onError: (message) => console.error(message),
 });
-/** 拖位中嘅狀態（`null` = 冇拖緊）。`at` 係最後一次收到消息嘅時間（watchdog 用）。 */
-let hudDrag = null;
-/** 拖位 watchdog：幾久冇新消息就當「pointerup 唔見咗」，主動收手（毫秒）。 */
-const DRAG_IDLE_MS = 1200;
+/**
+ * 拖位狀態機（`electron/hud-drag.js`）—— 拖位中嘅狀態同 watchdog 時間全部喺佢入面。
+ *
+ * ⚠️ `DRAG_IDLE_MS`（幾久冇新消息就當「pointerup 唔見咗」）**唔再**喺呢度定義：
+ *    唯一一份喺 `hud-drag.js`，唔准喺 `main.js` 再寫死一個數（兩份數就會漂移）。
+ */
+const hudDrag = createHudDrag();
 /** 最近一次顯示嘅五維數值（HUD 要逐格顯示）。 */
 let lastStats = null;
 /**
@@ -836,8 +842,7 @@ function logHudBounds(tag, bounds) {
  * @param {boolean} commit `true` = 放手 → 反推位置、寫入設定檔；`false` = 放棄（唔存檔）
  */
 function finishDrag(commit) {
-  const drag = hudDrag;
-  hudDrag = null;
+  const drag = hudDrag.end();
   try {
     if (!commit || !drag || !hudWindow || hudWindow.isDestroyed()) return;
     const bounds = hudWindow.getBounds();
@@ -862,23 +867,12 @@ function finishDrag(commit) {
     //    見 layout.js 嗰段註解）。呢度要**講出嚟**（唔准靜默改用戶拖到嘅位）。
     try {
       const rel = relativeFromBounds(hudContent, bounds);
-      const clampedX = Math.abs(rel.x0 - config.layout.x[0]) > 1e-6;
-      const clampedY = Math.abs(rel.y0 - config.layout.y[0]) > 1e-6;
-      if (clampedX || clampedY) {
-        console.warn(
-          `[HUD] ⚠️ 拖到內容區外面（${clampedX ? `x ${rel.x0.toFixed(3)}` : ''}` +
-          `${clampedX && clampedY ? '、' : ''}${clampedY ? `y ${rel.y0.toFixed(3)}` : ''}）` +
-          `→ 已夾返入去（x ${config.layout.x[0]}、y ${config.layout.y[0]}）。` +
-          ' 理由：HUD 擺出內容區就會超出螢幕／搵唔返，所以拖位一律夾入去。',
-        );
-      }
+      const clamped = clampedWarning(rel, config.layout);
+      if (clamped) console.warn(clamped.message);
     } catch {
       /* 反推唔到就唔嘈（上面 `layoutFromBounds()` 一樣會 throw 落 catch） */
     }
-    applyHudConfig(config, {
-      why: `拖位：x0=${config.layout.x[0]} y0=${config.layout.y[0]}　` +
-        `大細 ${config.layout.size.w}×${config.layout.size.h}　（offset 已歸零）`,
-    });
+    applyHudConfig(config, { why: dragCommitWhy(config.layout) });
     try {
       saveHudConfigFile(config);
     } catch (error) {
@@ -1817,7 +1811,7 @@ function startHudTickers() {
   // 拖位 watchdog：`pointerup` 有時會唔見（例如拖出窗外面先放手／renderer 出錯）
   // → 唔可以永遠卡住「拖緊」。逾時就當用戶收手（唔存檔，只還原狀態）。
   setInterval(() => {
-    if (hudDrag && Date.now() - hudDrag.at > DRAG_IDLE_MS) {
+    if (hudDrag.isIdle()) {
       console.warn(`[HUD] ⚠️ 拖位 ${DRAG_IDLE_MS}ms 冇新消息（可能 lost pointerup）→ 當佢收手（唔存檔）`);
       finishDrag(false);
     }
@@ -2292,30 +2286,19 @@ ipcMain.on(IPC_CHANNELS.whatifBatch, (event, payload) => {
 ipcMain.on(IPC_CHANNELS.hudDragStart, (_event, point) => {
   if (!HUD_EDIT) return;
   if (!hudWindow || hudWindow.isDestroyed()) return;
-  const x = Number(point?.x);
-  const y = Number(point?.y);
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
   // 記住「按下嗰刻嘅視窗範圍」：之後每次 move 都係由呢個原點 + 總位移計，
-  // 唔會因為上一格嘅 setBounds 而累積誤差。
-  hudDrag = { sx: x, sy: y, bounds: hudWindow.getBounds(), dx: 0, dy: 0, at: Date.now() };
-  logHudBounds('開始拖', hudDrag.bounds);
+  // 唔會因為上一格嘅 setBounds 而累積誤差（呢個保證喺 `hud-drag.js` 入面，有測試）。
+  const start = hudDrag.start(point, hudWindow.getBounds());
+  if (!start) return; // 座標唔合法（`NaN`／唔係數字）→ 唔入拖曳狀態
+  logHudBounds('開始拖', start.bounds);
 });
 
 ipcMain.on(IPC_CHANNELS.hudDragMove, (_event, delta) => {
-  if (!hudDrag || !hudWindow || hudWindow.isDestroyed()) return;
-  const dx = Number(delta?.dx);
-  const dy = Number(delta?.dy);
-  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
-  hudDrag.dx = dx;
-  hudDrag.dy = dy;
-  hudDrag.at = Date.now();
+  if (!hudDrag.active || !hudWindow || hudWindow.isDestroyed()) return;
+  const target = hudDrag.move(delta);
+  if (!target) return; // 唔喺拖曳狀態或者 delta 唔合法 → 乜都唔做
   try {
-    hudWindow.setBounds({
-      x: Math.round(hudDrag.bounds.x + dx),
-      y: Math.round(hudDrag.bounds.y + dy),
-      width: hudDrag.bounds.width,
-      height: hudDrag.bounds.height,
-    });
+    hudWindow.setBounds(target);
   } catch (error) {
     console.error(`[HUD] ⚠️ 拖曳 setBounds 失敗：${error?.message ?? error}`);
     finishDrag(false); // 出錯就收手（唔好卡住拖曳狀態）
