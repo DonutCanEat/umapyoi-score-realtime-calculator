@@ -25,7 +25,14 @@ import {
   dropNonDigits,
   expectedGlyphHeight,
   DEFAULT_STATBAR_OPTIONS,
+  // ⭐ 面板條自己嘅剔碎片門檻（設計審查 2026-09-28 L9）—— 下面每條測試都**明示**傳佢，
+  //    ⛔ 唔准再靠任何隱形預設（`dropNonDigits()` 而家唔傳 ratio 都用 statbar 政策，
+  //    但測試要表達「我驗緊邊個政策」，所以寫出嚟）。
+  STATBAR_DIGIT_MIN_HEIGHT_RATIO,
 } from '../src/vision/statbar.js';
+
+/** 面板條政策嘅剔碎片（＝生產路徑用嘅同一組參數）。 */
+const drop = (glyphs) => dropNonDigits(glyphs, { minGlyphHeightRatio: STATBAR_DIGIT_MIN_HEIGHT_RATIO });
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DB = JSON.parse(readFileSync(`${ROOT}/data/glyph-templates.json`, 'utf8'));
@@ -173,7 +180,7 @@ test('statbar dropNonDigits：剔走唔可能係數字嘅細碎片（2026-09-18 
     { width: 14, height: 18 },
     { width: 3, height: 4 }, // ← 碎片
   ];
-  const kept = dropNonDigits(glyphs);
+  const kept = drop(glyphs);
   assert.equal(kept.length, 3, '應該淨係剩返三個真數字');
   assert.ok(!kept.includes(glyphs[3]), '碎片要剔走');
 });
@@ -188,11 +195,13 @@ test('statbar dropNonDigits：⭐ 1px 闊嘅格線碎片（2026-09-19 實機：�
     { width: 13, height: 18 }, // 6
     { width: 1, height: 18 },  // ← 格線（同字元一樣高）
   ];
-  const kept = dropNonDigits(glyphs);
+  const kept = drop(glyphs);
   assert.equal(kept.length, 3, '格線要剔走，剩返 216 三個字元');
   assert.ok(!kept.some((g) => g.width === 1), '1px 闊一定唔係數字');
-  // 闊度門檻唔准調到傷及真字元：最細實機窗（1356px）之下「1」約 4px 闊
-  assert.equal(dropNonDigits([{ width: 13, height: 18 }, { width: 4, height: 13 }, { width: 6, height: 18 }]).length, 3);
+  // ⚠️ 呢條嘅**闊度**門檻係額外一道：4–5px 闊嘅碎片（唔夠 55% 高）係由**高度**判準剔走，
+  //    而最窄真字元「1」唔准受影響 —— 實測面板條 6px、最細實機窗（1356px）之下約 4px。
+  const narrow = [{ width: 6, height: 18 }, { width: 4, height: 18 }, { width: 5, height: 18 }];
+  assert.equal(drop(narrow).length, 3, '「1」好窄但一樣高 → 唔准剔');
 });
 
 test('statbar dropNonDigits：同樣高度就唔會誤剔', () => {
@@ -201,18 +210,18 @@ test('statbar dropNonDigits：同樣高度就唔會誤剔', () => {
     { width: 14, height: 18 },
     { width: 5, height: 18 }, // 「1」好窄但一樣高 → 要保留
   ];
-  assert.equal(dropNonDigits(glyphs).length, 3);
+  assert.equal(drop(glyphs).length, 3);
 });
 
 test('statbar dropNonDigits：唔會剔到一個都冇，亦唔會郁單一字元', () => {
   const single = [{ width: 3, height: 4 }];
-  assert.equal(dropNonDigits(single).length, 1, '單一字元唔郁（可能真係細字）');
+  assert.equal(drop(single).length, 1, '單一字元唔郁（可能真係細字）');
   // 全部都好矮（例如細字行）→ 唔敢剔
   const tiny = [
     { width: 6, height: 5 },
     { width: 6, height: 3 },
   ];
-  assert.equal(dropNonDigits(tiny).length, 2);
+  assert.equal(drop(tiny).length, 2);
 });
 
 /* ──────────────────────────── 端到端 ──────────────────────────── */

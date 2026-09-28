@@ -440,7 +440,7 @@ docs/
 
 <!-- appendix:start -->
 
-### src/（正文冇提及嘅 13 個）
+### src/（正文冇提及嘅 14 個）
 
 - `src/hud/startup-resource.js` — 啟動期資源嘅**讀取 ＋ 錯誤政策**（純函數；設計審查 2026-09-28 M6）。
 - `src/umascore/bwiki-calc-page.js` — bwiki「评分计算器」頁面嘅解析（純函數，唔上網、唔讀檔）。
@@ -451,6 +451,7 @@ docs/
 - `src/umascore/skill-owners.js` — 技能「擁有者／進化鏈」解析（純函數）。
 - `src/umascore/skilllist-diff.js` — 外部技能名單 → 分類（純函數）。
 - `src/vision/combinations.js` — 「由 n 個候選揀 5 個」嘅組合搜尋骨架（**唯一一份**）。
+- `src/vision/digitfilter.js` — 「剔走唔可能係數字嘅碎片」嘅**共用規則**（唯一一份；設計審查 2026-09-28 L9）。
 - `src/vision/nameseg.js` — 技能名 → **逐字元**像素切分（Phase 2 字元模板路線）。
 - `src/vision/projection.js` — 逐列／逐欄墨量投影 ＋ 連續段掃描（**唯一一份**，獨立審計 M3）。
 - `src/vision/similarity.js` — 特徵向量嘅標準化同相似度（**唯一一份實作**）。

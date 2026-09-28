@@ -12,7 +12,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodePng } from '../src/vision/png.js';
-import { collectStatBarGlyphs, dropNonDigits } from '../src/vision/statbar.js';
+import { collectStatBarGlyphs, STATBAR_DIGIT_MIN_HEIGHT_RATIO } from '../src/vision/statbar.js';
+import { filterDigitGlyphs } from '../src/vision/digitfilter.js';
 import { readNumberTrimmed } from '../src/vision/glyphs.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -52,7 +53,15 @@ for (const rel of files) {
   const cells = [];
   for (const [vi, [, over]] of variants.entries()) {
     const res = collectStatBarGlyphs(image, { whole, ...NO_GATE, ...over });
-    const texts = (res.entries ?? []).map((e) => readNumberTrimmed(dropNonDigits(e.glyphs), templates, {}).text);
+    // ⚠️ 呢個探針掃嘅係**面板條** → 一定要用 statbar 自己嘅政策門檻（0.8），
+    //    ⛔ 唔准再靠 `dropNonDigits()` 嗰個隱形 `?? 0.55`（設計審查 2026-09-28 L9）。
+    const texts = (res.entries ?? []).map((e) =>
+      readNumberTrimmed(
+        filterDigitGlyphs(e.glyphs, { ratio: over.minGlyphHeightRatio ?? STATBAR_DIGIT_MIN_HEIGHT_RATIO }),
+        templates,
+        {},
+      ).text,
+    );
     const ok = texts.join(',') === exp.join(',');
     if (ok) stats[vi] += 1;
     if (gold) goldOf.push(`${variants[vi][0]} → ${texts.join('/') || '—'}`);

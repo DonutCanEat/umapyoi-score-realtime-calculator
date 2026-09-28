@@ -35,6 +35,18 @@ import { columnCounts, countInk } from './projection.js';
 // ⚠️ 內容區推算住喺 `content-box.js`（審計 H3）；`as gameContentBox` 係避免同下面
 //    export 出去嘅 `contentBox()`（舊形狀）撞名。
 import { contentBox as gameContentBox, CONTENT_ASPECT } from './content-box.js';
+// ⭐ 剔碎片規則嘅**唯一一份實作**（設計審查 2026-09-28 L9）；呢個檔只提供自己嘅政策數值。
+import { filterDigitGlyphs } from './digitfilter.js';
+
+/**
+ * 面板條讀數嘅「最短字元高度 ÷ 最高字元」門檻（**statbar 專屬政策**）。
+ *
+ * ⚠️ **同 `resultpanel.js` 嘅 `RESULT_DIGIT_MIN_HEIGHT_RATIO = 0.55` 刻意唔同**：
+ *    呢個 0.8 同「唔似面板條」結構閘綁埋一齊 —— 實測支援卡列表「Lv27…」徽章行
+ *    字高比 **0.64** 會靜默讀出 27/27/25/25/25（用戶真實值 700+，地雷 #30），
+ *    而真值圖係 0.85–0.96 → 0.8 兩邊都有餘量。**唔准**為咗「一致」而調低。
+ */
+export const STATBAR_DIGIT_MIN_HEIGHT_RATIO = 0.8;
 
 /**
  * 墨點像素嘅**色相分位數**（用嚟分「正常橙棕」同「金色高亮」）。
@@ -94,7 +106,7 @@ export const DEFAULT_STATBAR_OPTIONS = Object.freeze({
    * （比最低真值低 0.05、比假陽性高 0.16）。
    * ⚠️ 唔准調返落 0.6：0.6–0.8 之間係「假陽性會過、真值唔會跌到」嘅危險帶。
    */
-  minGlyphHeightRatio: 0.8,
+  minGlyphHeightRatio: STATBAR_DIGIT_MIN_HEIGHT_RATIO,
   /**
    * 「唔似面板條」檢查（結構）：**上限行一定要真係有字**。
    *
@@ -364,7 +376,7 @@ export function pickFiveBySpacing(numbers, options = {}) {
 }
 
 /**
- * 剔走「唔可能係數字」嘅碎片。
+ * 剔走「唔可能係數字」嘅碎片（**statbar 嘅政策**；規則本身住喺 `digitfilter.js`）。
  *
  * 為何需要（2026-09-18 實機 dump 實測）：第 5 格數字右邊有時會多一舊 **3×4 像素**
  * 嘅碎片（格線／高亮邊緣之類）。`readNumberTrimmed()` 係由右邊貪心收，
@@ -380,16 +392,18 @@ export function pickFiveBySpacing(numbers, options = {}) {
  * 但佢會被當成一個「字元」→ 整格報「?」→ **一個畫面都讀唔到**（用戶 2026-09-19 實機報）。
  * 真字元最窄嘅係「1」（實機面板條實測 6px；最細嘅實機窗 1356px 之下約 4px）
  * → **闊 ≤2px 一定唔係數字**。
+ *
+ * ⚠️ **`minGlyphHeightRatio` 係 statbar 專屬政策（0.8），同 `resultpanel.js` 嘅 0.55
+ *    刻意唔同**（設計審查 2026-09-28 L9）：呢個 0.8 同時係「唔似面板條」結構閘嘅一部分
+ *    —— 實測支援卡列表「Lv27…」徽章行字高比 **0.64** 會變**假陽性**（靜默讀出 27/27/25/25/25，
+ *    用戶真實數值 700+，見地雷 #30），而真值圖係 0.85–0.96。所以呢個數**唔准**為咗
+ *    「同 resultpanel 一致」而調低。政策數值唯一一份：`STATBAR_DIGIT_MIN_HEIGHT_RATIO`。
  */
 export function dropNonDigits(glyphs, options = {}) {
-  if (!glyphs || glyphs.length <= 1) return glyphs ?? [];
-  const ratio = options.minGlyphHeightRatio ?? 0.55;
-  const minWidth = options.minGlyphWidth ?? 3;
-  const maxHeight = Math.max(...glyphs.map((g) => g.height));
-  if (maxHeight < 6) return glyphs; // 太細就唔敢剔（可能係細字）
-  const minHeight = Math.max(4, Math.round(maxHeight * ratio));
-  const kept = glyphs.filter((g) => g.height >= minHeight && g.width >= minWidth);
-  return kept.length ? kept : glyphs;
+  return filterDigitGlyphs(glyphs, {
+    ratio: options.minGlyphHeightRatio ?? STATBAR_DIGIT_MIN_HEIGHT_RATIO,
+    minWidth: options.minGlyphWidth,
+  });
 }
 
 /**

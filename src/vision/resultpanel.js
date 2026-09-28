@@ -32,7 +32,32 @@ import { buildInkMask, findTextLines } from './inkmask.js';
 import { columnCounts, countInk, runSpans } from './projection.js';
 // ⭐ 數值合理性檢查（唯一一份；設計審查 2026-09-28 S3 —— 生產路徑以前冇呢個閘）
 import { checkStatRange } from './statrange.js';
-import { dropNonDigits } from './statbar.js';
+// ⭐ 剔碎片規則改成直接用**共用實作**（設計審查 2026-09-28 L9）：以前係
+//    `import { dropNonDigits } from './statbar.js'` ＋ 唔傳 ratio → 靜默行 statbar 嘅
+//    隱形預設，而 `DEFAULT_RESULT_OPTIONS` 又冇宣告呢個欄位 → 邊個傳一包 statbar 味
+//    嘅 options 入 `readResultPanel()` 就會靜默由 0.55 變 0.8。而家政策數值喺下面
+//    `RESULT_DIGIT_MIN_HEIGHT_RATIO`（有實測依據），規則住喺 `digitfilter.js`。
+import { filterDigitGlyphs } from './digitfilter.js';
+
+/**
+ * 數字欄讀數嘅「最短字元高度 ÷ 最高字元」門檻（**「培育結束確認」專屬政策**）。
+ *
+ * 實測（2026-09-28，`data/result-truth.json` 兩張實機樣本，逐行量字元框）：
+ *
+ * | 樣本 | 每行字元（w×h） | 最高 h | 最矮 h |
+ * |---|---|---|---|
+ * | `result-ability-1930x1116.png` | `w8h21 w14h22 w15h21 w15h22` …（5 行 3–4 字元）| 22–23 | 21 |
+ * | `result-ability-1931x1117.png` | 同上（5 行全部 4 字元）| 22–23 | 21 |
+ *
+ * → 呢個畫面嘅字元高度非常齊（21–23px，最矮 ÷ 最高 = 0.91–0.96），
+ *   所以 **0.55 同 0.8 兩邊剔走嘅嘢完全一樣（實測 0/10 行有分別）**，
+ *   而真正捉到碎片嗰條判準係**闊度**（1px 格線、3px 碎片）。
+ *   保留 0.55（＝呢個 reader 一路嘅實際行為）而唔係跟 statbar 嘅 0.8，係因為
+ *   0.8 係「唔似面板條」結構閘嘅一部分（見 `statbar.js`
+ *   `STATBAR_DIGIT_MIN_HEIGHT_RATIO` 註釋），兩者服務嘅畫面唔同。
+ * ⚠️ **之後加樣本（更低解析度／主題色）如果有更矮嘅真字元，就要重新量過先准改**。
+ */
+export const RESULT_DIGIT_MIN_HEIGHT_RATIO = 0.55;
 
 /**
  * 預設參數。
@@ -94,6 +119,16 @@ export const DEFAULT_RESULT_OPTIONS = Object.freeze({
   numberColumnFrom: 0.2,
   /** 讀唔清嘅門檻（同 `statbar` 一致：0.40 係實機量出嚟嘅安全值）。 */
   minAccept: 0.40,
+  /**
+   * 剔碎片用嘅「最短字元高度 ÷ 最高字元」（設計審查 2026-09-28 L9）。
+   *
+   * ⚠️ 以前呢個欄位**唔存在** → 呼叫 `statbar.js` 嘅 `dropNonDigits()` 嗰陣會靜默行
+   *    佢嘅 `?? 0.55`，但 `statbar` 出貨嘅政策係 **0.8**（見 `statbar.js`
+   *    `STATBAR_DIGIT_MIN_HEIGHT_RATIO`）→ 一傳錯 options 就會靜默變門檻。
+   *    而家由呢個 reader **自己宣告**，而且規則實作只有一份（`digitfilter.js`）。
+   *    為何揀 0.55：實測依據同完整數字喺 `RESULT_DIGIT_MIN_HEIGHT_RATIO` 嘅 JSDoc。
+   */
+  minGlyphHeightRatio: RESULT_DIGIT_MIN_HEIGHT_RATIO,
   /** 5 個數字讀完之後嘅整體信心下限。 */
   minConfidence: 0.5,
 });
@@ -249,7 +284,10 @@ export function readResultPanel(strip, templates, options = {}) {
   // ④ 逐個數值框讀字（同面板條共用 `readNumberBoxes()`：信心取 min、一失敗即停）
   const items = boxes.map((box) => {
     const raw = extractGlyphs(strip, mask, box, box.y0, box.y1);
-    return { box, glyphs: dropNonDigits(raw, o), rawGlyphs: raw.length };
+    // ⚠️ 剔碎片規則同 statbar 共用實作，但**門檻係呢個 reader 自己嘅政策**
+    //    （`o.minGlyphHeightRatio` 由 `DEFAULT_RESULT_OPTIONS` 宣告；設計審查 L9）。
+    const glyphs = filterDigitGlyphs(raw, { ratio: o.minGlyphHeightRatio, minWidth: o.minGlyphWidth });
+    return { box, glyphs, rawGlyphs: raw.length };
   });
   const { texts, confidence, failed } = readNumberBoxes(items, templates, o, (item, read, i) => {
     const detail = read.detail
