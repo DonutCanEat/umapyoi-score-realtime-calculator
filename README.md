@@ -15,7 +15,7 @@
 
 ```bash
 npm.cmd install                # 依賴（npm cache 已指入 workspace，見 .npmrc）
-npm.cmd test                   # 單元測試：672 個，必須全過
+npm.cmd test                   # 單元測試：675 個，必須全過
 npm.cmd start                  # 開程式（要先開住遊戲）
 ```
 
@@ -143,7 +143,7 @@ DPI 改變都自動食得住。
 
 ```bash
 # ── 測試同閘 ──
-npm.cmd test                                    # 672 個單元測試，必須全過
+npm.cmd test                                    # 675 個單元測試，必須全過
 node tools/check-renderer-syntax.js             # 語法閘（4 HTML ＋ electron/** ＋ src/** ＋ tools/**）
 node tools/diag-file-map.js                     # 文件地圖閘：docs/file-map.md 附錄同實際檔案／檔頭註釋同步
                                                 # （⚠️ 紅咗要跑 `--write` 重新生成，唔准手改附錄）
@@ -205,7 +205,7 @@ src/hud/        layout／config／config-path／write-root／log-file／snapshot
 src/cli.js      手動試算 CLI
 electron/       main.js（主程序）／ipc-channels.cjs／hud-passthrough.js／hud-drag.js／hud-place.js／capture-watchdog.js／dump-policy.js／4 個 HTML renderer
 tools/          53 個 CLI（診斷／建模板／對答案／what-if／advice／診斷包／實載閘／文件地圖閘…）＋ tools/lib/（3 個共用模組）
-test/           672 條（純函數 ＋ 幾個接線閘）
+test/           675 條（純函數 ＋ 幾個接線閘）
 data/           skill-db-tw.json（1589 招）／glyph-templates.json／live-truth.json／ground-truth/…
 shots/          ⭐ 證據庫（每個目錄係咩睇 shots/README.md）
 docs/           設計／公式／地雷／待辦／打包／檔案地圖
@@ -265,4 +265,7 @@ docs/           設計／公式／地雷／待辦／打包／檔案地圖
 本專案係非官方社群工具，同遊戲開發商／發行商冇任何關係；遊戲內容、技能名同數值嘅版權
 屬原公司所有。程式**只讀畫面**（`desktopCapturer`），唔讀記憶體、唔注入、唔改遊戲檔案。
 
-> 倉庫目前**冇 LICENSE 檔** —— 即係預設保留所有權利。
+> 倉庫而家有 [`LICENSE`](LICENSE)：**MIT**（© 2026 DonutCanEat）——
+> 你可以自由使用／修改／再發佈，只需保留版權聲明同授權全文。
+> ⚠️ 呢個授權**只覆蓋本專案自己嘅程式碼**；遊戲內容、技能名同數值嘅版權屬原公司所有
+> （見上面），`data/` 內由 bwiki／GameTora 反推嘅資料亦只作個人對照用途。

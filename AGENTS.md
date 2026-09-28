@@ -138,8 +138,8 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
   ⚠️ 嗰 250 個固有技**唔需要 base**（分數 = ★ × Lv）→ 真正要靠外部來源補嘅係 **70 招**，
   而 bwiki 逐頁嗰 70 招全部標「独特」（base 240／340，唔係 base）→ **設計上補唔到**，唔准硬填。
   種類（實測）：**唔准淨靠 `rarity`** —— GameTora 更新之後 `rarity` 分佈係
-  `{1:598, 2:346, 3:22, 4:22, 5:250, 6:672}`，`6` 已經係**普通稀有度**；
-  ✅ 真正嘅進化標記係 **`pre_evo`**（672 項）、固有係 `rarity === 5`（250 項，同 `gene_version` 對得上）。
+  `{1:598, 2:346, 3:22, 4:22, 5:250, 6:675}`，`6` 已經係**普通稀有度**；
+  ✅ 真正嘅進化標記係 **`pre_evo`**（675 項）、固有係 `rarity === 5`（250 項，同 `gene_version` 對得上）。
   ⭐ **交叉驗證（2026-09-27，bwiki 逐頁已抓齊 2404/2404）**：用逐頁 cache 獨立核 `base`／`skillPt`
   → 可比 1319 項：**一致 1318（99.9%）**、已知有理由 1、**真正有問題 0**（`node tools/verify-skill-bases.js`）。
   · 逐頁 cache：`繁/` 2135（技能 1838 ＋**比賽等非技能 199**）＋ `继承技/` 269；0 失敗。
@@ -274,7 +274,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（672 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（675 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ **electron/**（10 檔，含
                                      #    main.js／panel-window.js／web-preferences.js／hud-passthrough.js／
                                      #    hud-drag.js／hud-place.js／capture-watchdog.js／dump-policy.js／
@@ -503,7 +503,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **672 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **675 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 15/15**、**負樣本 5/5 唔出數**），全部都要中
@@ -540,7 +540,7 @@ electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 
                 #   dump-policy.js（dump 預算 ＋ crop／指紋，S4）／
                 #   panel-window.js／web-preferences.js／capture-region.cjs／
                 #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 672 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+test/           # 675 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
 tools/          # 53 個 CLI（＋ tools/lib/ 3 個共用模組）：診斷／建模板／對答案／what-if／advice／
                 #   診斷包／renderer 實載閘／讀技能名（`read-skills` 等 5 個）／
                 #   外部名單比對（`diff-skill-names`）／GameTora 抓取＋查詢＋缺口（`fetch-gametora`／
@@ -705,14 +705,14 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **672 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **675 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
    （歷史同逐步累積過程搬咗去 `docs/test-count-history.md`（AGENTS.md 有 65,536 bytes 讀取預算，
    見 L11）；重點：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js`
    要求 repo 根有 `hud-position.json`），修好之後兩邊一樣；而家工作樹同乾淨 HEAD 都係
-   **672／0**。查法一樣：`git archive` 出乾淨樹跑一次。）
+   **675／0**。查法一樣：`git archive` 出乾淨樹跑一次。）
    ⚠️ **唔准**用 `skip`／`if (!existsSync(...)) return;` 迴避 —— 咁樣只係把「驗唔到」
    變成「靜默通過」。要用嘅話就**自己控制環境**（例如 `os.tmpdir()` ＋ `process.chdir()`）。
    ⚠️ 涉及 cwd 嘅測試一定要**同步** ＋ `finally` 還原（`--test-isolation=none` 之下
