@@ -54,4 +54,6 @@
 - **L9** 剔非數字碎片規則收斂成 `src/vision/digitfilter.js`（`ratio` 冇預設，唔傳就 throw）＋兩個 reader 各自宣告政策（`STATBAR_DIGIT_MIN_HEIGHT_RATIO` 0.8／`RESULT_DIGIT_MIN_HEIGHT_RATIO` 0.55；實測兩者喺真樣本剔走嘅嘢一樣、0/10 行有分別）＋ `test/digitfilter.test.js` +8 → **696**
 - **L10** PNG 解碼器四道防護（chunk 長度／CRC（`src/vision/crc32.js` 同編碼器共用）／尺寸上限／解壓長度必須啱啱好；索引色 PLTE 檢查）＋ `test/png-decode-guard.test.js` +11 → **707**
 
+- **發版 v0.1.5 驗收（2026-09-29）** 修 L8 嗰條 gitignore 閘嘅**可重現性**：`HAS_GIT` 由「有冇 git 執行檔」改成「係唔係真工作樹」（`git rev-parse --is-inside-work-tree`）—— `git archive HEAD` 解壓出嚟嘅乾淨樹**冇 `.git/`**，以前照行「真問 git」→ `git check-ignore` exit 128 → 假紅（工作樹 707／0 vs 乾淨樹 **705／2**，違反 AGENTS §8 第 1 條）。冇工作樹就同「冇裝 git」一樣行**逐字比對 `.gitignore`**（一樣係硬斷言；負樣本實測：拆走 `node_modules/`＋`data/backups/` → 3 條紅）。測試數不變 **707**。
+
 ⚠️ 每一項嘅 commit hash／驗收數據睇 `git log --oneline`（commit message 有寫實測數字）。
