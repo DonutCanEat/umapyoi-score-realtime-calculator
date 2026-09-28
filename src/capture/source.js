@@ -160,3 +160,46 @@ export function pickGameSource(sources, { ownIds = [], ownTitles = [], hints = G
   candidates.sort((a, b) => b.score - a.score);
   return { hit: candidates[0] ?? null, candidates, rejected };
 }
+
+/**
+ * 擷取到嘅畫面**係唔係細得可疑**（＝可能揀錯咗窗）—— 純函數（設計審查 2026-09-28 M3）。
+ *
+ * ## 為何要抽（個 bug 係「單位混用」）
+ *
+ * `electron/main.js` 嘅 `warnIfSourceTooSmall()` 以前直接攞
+ * `width >= workArea.width * 0.6` 比較 —— 但 `width` 係**擷取幀嘅物理像素**
+ * （`capture.html` 用 `video.videoWidth`），而 `workArea` 係 **DIP**。
+ * 100% 縮放之下兩者啱好一樣（所以一直冇人發現），但 125%／150%／200% 之下
+ * 幀數字會等比放大 → 門檻相對變鬆 → 「揀錯來源」呢道**唯一可見防線**系統性唔出聲。
+ * （同一個 bug 類別喺 `placeHud()` 已經修好：`gameWindowRect()` 會 ÷`scaleFactor`。）
+ *
+ * ⚠️ **唔准改用 `gameWindowRect()` 嘅結果**：佢會 `Math.min` 夾入工作區
+ *    → 夾完一定 ≤ 工作區 → 條件永遠唔成立 → 警告**永遠唔出**（見 `docs/known-issues.md`）。
+ *
+ * @param {object} input
+ * @param {number} input.frameWidth 擷取幀闊（**物理像素**）
+ * @param {number} input.frameHeight 擷取幀高（**物理像素**）
+ * @param {{width:number,height:number}} input.workArea 工作區（**DIP**，`display.workArea`）
+ * @param {number} [input.scaleFactor] `display.scaleFactor`（唔合法／冇 → 當 1）
+ * @param {number} [input.ratio] 門檻比例（預設 **0.6**，同舊行為一樣）
+ * @returns {{tooSmall:boolean, frameDip:{w:number,h:number}, threshold:{w:number,h:number}, reason:string}}
+ */
+export function tooSmallSourceWarning({ frameWidth, frameHeight, workArea, scaleFactor = 1, ratio = 0.6 } = {}) {
+  const k = Number(scaleFactor);
+  const factor = Number.isFinite(k) && k > 0 ? k : 1;
+  const fw = Number(frameWidth);
+  const fh = Number(frameHeight);
+  const aw = Number(workArea?.width);
+  const ah = Number(workArea?.height);
+  if (!Number.isFinite(fw) || !Number.isFinite(fh) || !Number.isFinite(aw) || !Number.isFinite(ah)) {
+    return { tooSmall: false, frameDip: { w: 0, h: 0 }, threshold: { w: 0, h: 0 }, reason: '量唔到（唔嘈）' };
+  }
+  const frameDip = { w: fw / factor, h: fh / factor };
+  const threshold = { w: aw * ratio, h: ah * ratio };
+  const tooSmall = frameDip.w < threshold.w || frameDip.h < threshold.h;
+  const reason = tooSmall
+    ? `擷取到嘅畫面 ${fw}×${fh}（＝ ${Math.round(frameDip.w)}×${Math.round(frameDip.h)} DIP，`
+      + `scaleFactor ${factor}）比工作區 ${aw}×${ah}（DIP）細好多（門檻 ${Math.round(threshold.w)}×${Math.round(threshold.h)}）`
+    : '';
+  return { tooSmall, frameDip, threshold, reason };
+}

@@ -36,6 +36,12 @@
    ⚠️ **仍未做**：窗口化遊戲嘅**螢幕位置**照舊假設喺工作區左上角（冇 Win32 API 讀遊戲窗座標）；
    而且上面係**純推理 ＋ 單元測試**，**未經實機 150% 縮放驗證** —— 要驗就要用
    `UMAPYOI_HUD_EDIT=1` 睇 `[HUD/位]` log（或在 150% 縮放之下拖一次對位）。
+   ✅ **2026-09-28 同一 bug 類別嘅另一處都修好（設計審查 M3）**：`warnIfSourceTooSmall()`
+   以前攞**物理像素**（`fullWidth`）同 **DIP** 嘅 `workArea × 0.6` 直接比 → 高 DPI 之下
+   門檻相對變鬆，「揀錯來源」呢道唯一可見防線**靜默失效**。判斷收埋喺
+   `src/capture/source.js` 嘅 `tooSmallSourceWarning()`（純函數：÷`scaleFactor` → DIP 才比；
+   ⚠️ **唔准**改用 `gameWindowRect()`，佢夾完一定 ≤ 工作區 → 警告永遠唔出）。
+   回歸：`test/capture-source.test.js`「高 DPI 之下唔准靜默」。
 3. **金色格 `highlighted` 只係 row-level**（整條數值行嘅墨點色相 p90 ≥ 33°），**唔係逐格** →
    app 只講得出「有金格」，講唔出「係邊一格」。⚠️ 而 `src/vision/statbar.js` 自己嘅註釋
    反而寫「一定要逐格判斷…唔可以用整條面板條嘅平均」→ **兩者矛盾，係既有取捨（未修）**。

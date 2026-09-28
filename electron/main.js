@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 
-import { pickGameSource } from '../src/capture/source.js';
+import { pickGameSource, tooSmallSourceWarning } from '../src/capture/source.js';
 import { loadTemplates, readStats, StatTracker, scoreStats } from '../src/vision/reader.js';
 import { readStatBar, DEFAULT_STATBAR_OPTIONS } from '../src/vision/statbar.js';
 // ⭐ 「一次讀取結果 → 診斷用分類」嘅唯一一份（設計審查 M1）：`highlighted` 喺失敗路徑
@@ -1540,14 +1540,23 @@ async function findGameSource() {
  * 但 `fullWidth/fullHeight` 會變成**嗰個窗**嘅大細 → `placeHud()` 攞住錯嘅「遊戲內容區」
  * → HUD 大細、可拖範圍、存檔嘅相對值全部計錯（實測：設定窗 560×780 →
  * `hudContent` 560×315 → HUD 淨係拖得郁左半邊）。呢句警告令呢類 bug 即刻睇得見。
+ *
+ * ⚠️ **單位一定要換**（設計審查 2026-09-28 M3）：`width`／`height` 係**物理像素**，
+ *    `workArea` 係 **DIP** → 判斷收喺 `tooSmallSourceWarning()`（`src/capture/source.js`，
+ *    純函數、有測試）。以前直接比 → 125%／150%／200% 縮放之下門檻相對變鬆，
+ *    呢道唯一可見防線會**靜默失效**。
  */
 function warnIfSourceTooSmall(width, height) {
   try {
-    const area = screen.getPrimaryDisplay().workArea;
-    if (width >= area.width * 0.6 && height >= area.height * 0.6) return;
-    console.warn(
-      `[來源] ⚠️ 擷取到嘅畫面得 ${width}×${height}，比工作區 ${area.width}×${area.height} 細好多。`,
-    );
+    const display = screen.getPrimaryDisplay();
+    const verdict = tooSmallSourceWarning({
+      frameWidth: width,
+      frameHeight: height,
+      workArea: display.workArea,
+      scaleFactor: display.scaleFactor,
+    });
+    if (!verdict.tooSmall) return;
+    console.warn(`[來源] ⚠️ ${verdict.reason}。`);
     console.warn(
       '[來源] 　→ 可能揀錯視窗（亦可能係遊戲冇最大化）。揀錯嘅後果：HUD 大細同可拖範圍全部計錯。',
     );

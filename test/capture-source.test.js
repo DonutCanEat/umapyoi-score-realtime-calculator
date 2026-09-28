@@ -18,6 +18,7 @@ import {
   GAME_TITLE_HINTS,
   matchScore,
   pickGameSource,
+  tooSmallSourceWarning,
   windowHandleOf,
 } from '../src/capture/source.js';
 
@@ -153,4 +154,38 @@ test('排除清單唔可以反過來排除遊戲本體（清單本身要保持�
   // 「遊戲標題就係關鍵字」→ 唔准有「標題含關鍵字就排除」呢種寫法
   const { hit } = pickGameSource([src('ウマ娘 プリティーダービー', 111)], { ownIds: [222] });
   assert.equal(hit.id, 'window:111:0');
+});
+
+/* ───────────── 「擷取到嘅畫面細得可疑」（設計審查 M3）───────────── */
+
+test('tooSmallSourceWarning：100% 縮放（物理 = DIP）行為同舊版一樣', () => {
+  const area = { width: 1920, height: 1080 };
+  // 細窗（揀錯來源嘅典型）→ 一定要 warn
+  assert.equal(tooSmallSourceWarning({ frameWidth: 560, frameHeight: 780, workArea: area, scaleFactor: 1 }).tooSmall, true);
+  // 遊戲最大化 → 唔准 warn
+  assert.equal(tooSmallSourceWarning({ frameWidth: 1920, frameHeight: 1080, workArea: area, scaleFactor: 1 }).tooSmall, false);
+});
+
+test('⭐ tooSmallSourceWarning 回歸：高 DPI 之下唔准靜默（舊版單位混用會放行）', () => {
+  const area = { width: 1920, height: 1080 };   // DIP
+  // 200% 縮放：一個 1000×700 DIP 嘅窗（＝ 2000×1400 物理）明顯細過工作區
+  const r = tooSmallSourceWarning({ frameWidth: 2000, frameHeight: 1400, workArea: area, scaleFactor: 2 });
+  assert.equal(r.tooSmall, true, '⭐ 以前攞物理像素同 DIP 門檻比 → 2000 >= 1152 → 靜默唔 warn');
+  assert.deepEqual(r.frameDip, { w: 1000, h: 700 }, '要先用 scaleFactor 換返 DIP');
+  assert.match(r.reason, /scaleFactor 2/, '訊息要講清楚係邊個縮放之下量到');
+  assert.match(r.reason, /1000×700/, '訊息要出換算之後嘅 DIP');
+  // 真遊戲窗（1920×1080 DIP → 3840×2160 物理）→ 唔准 warn
+  assert.equal(tooSmallSourceWarning({ frameWidth: 3840, frameHeight: 2160, workArea: area, scaleFactor: 2 }).tooSmall, false);
+});
+
+test('tooSmallSourceWarning：scaleFactor 唔合法／workArea 量唔到 → 安全（唔 throw、唔亂 warn）', () => {
+  const area = { width: 1920, height: 1080 };
+  for (const scaleFactor of [0, -1, Number.NaN, undefined, '2x']) {
+    const r = tooSmallSourceWarning({ frameWidth: 1920, frameHeight: 1080, workArea: area, scaleFactor });
+    assert.equal(r.tooSmall, false, `scaleFactor=${scaleFactor} 應該當 1 → 唔 warn`);
+  }
+  const bad = tooSmallSourceWarning({ frameWidth: 800, frameHeight: 600, workArea: null });
+  assert.equal(bad.tooSmall, false);
+  assert.match(bad.reason, /量唔到/);
+  assert.doesNotThrow(() => tooSmallSourceWarning());
 });

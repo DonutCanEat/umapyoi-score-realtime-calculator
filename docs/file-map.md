@@ -67,6 +67,10 @@ src/capture/
                   #    pickGameSource()（**排除本程式自己嘅窗**：HWND 硬排除 ＋ 標題第二重）、
                   #    matchScore()（完全相符 3／開頭 2／包含 1）、windowHandleOf()。
                   #    ⚠️ 呢個係「唔可以再揀錯窗」嘅單一來源（見地雷 #27）
+                  #    ⭐ tooSmallSourceWarning()（設計審查 M3）：「擷取到嘅畫面細得可疑」
+                  #    嘅判斷 —— 幀係**物理像素**、`workArea` 係 **DIP**，所以要先 ÷`scaleFactor`
+                  #    才比（高 DPI 之下唔換算 = 呢道防線靜默失效）。⚠️ **唔准**改用
+                  #    `gameWindowRect()`（佢夾完一定 ≤ 工作區 → 警告永遠唔出）
 
 src/cli.js        # 手動試算
 
