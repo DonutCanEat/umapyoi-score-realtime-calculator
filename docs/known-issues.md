@@ -65,6 +65,14 @@
    ⑤ 設定窗 slider 上下限抽成純函數 `fieldBounds()`（`test/hud-settings-html.test.js` 3 條，
    **真係由 HTML 抽出嚟執行**）—— 但「互動中唔搶控制」嗰段（`interacting`／watchdog／
    `describeClamp()`／`renderEffective()`，全部要 DOM）**仍然零覆蓋**，只可以手動驗。⑥ 拖位 ↔ 設定窗嘅同步線抽成**接線閘** `test/hud-config-sync.test.js`（由 `main.js`／`settings.html` **原始碼抽關鍵接線**斷言）—— ⚠️ 佢只擋「條線被拆走」，**唔算**功能已驗證：行為仍然要實機拖一次再撳「儲存」（見地雷 #29）。
+   ✅ **2026-09-28 第三輪收窄（設計審查 S4）**：⑦ **HUD 滑鼠穿透狀態機**搬去
+   `electron/hud-passthrough.js` ＋ `test/hud-passthrough.test.js`（8 條，假視窗：
+   正常模式一定穿透／次序一定係先還原穿透再 `setFocusable`／API 出事唔准爆／
+   `reassert()` 只喺唔互動嗰陣補穿透）—— 呢段係「用戶點唔到遊戲」嘅守門人，
+   以前係零覆蓋。⚠️ `main.js` 其餘部分（IPC handler 本體、拖曳狀態機嘅 `finishDrag()`、
+   `placeHud()`／`pushHud()`、診斷快照）**仍然零覆蓋**，而且 S4 嘅重構要**用戶自己跑
+   `node_modules\.bin\electron.cmd tools\verify-renderer-load.js` ＋ `npm.cmd start`**
+   先算驗完（agent shell 開唔到 Electron，見 `docs/dedup-next-steps.md`）。
 6. ✅ **已修（2026-09-23，技術債 §9.1-6）—— 唔可以再當「技術債」**：原子寫原本冇 `fsync`
    （`saveConfig()` = `writeFileSync(.tmp)` ＋ `renameSync`）→ `writeFileSync` 只係寫入
    OS page cache，**停電／硬斷電**之下 `rename()` 完成咗但內容仲喺 cache，開機之後見到嘅

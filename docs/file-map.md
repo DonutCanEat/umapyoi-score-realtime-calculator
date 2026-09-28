@@ -119,6 +119,13 @@ electron/
                   #    ⚠️ 兩條計分路徑（面板條／培育結束確認欄）共用 imageFromFrame()／
                   #       templatesReady()／applyScore()（審計 M8）；lastGold 同 score.source
                   #       **刻意唔入 helper**（兩條路語意唔同）
+  hud-passthrough.js # ⭐ HUD 滑鼠穿透狀態機（設計審查 S4 抽出）：createHudPassthrough({isEditMode,
+                  #    onModeChange, onError}) → {set(on,win)／reassert(win)／isInteractive()}。
+                  #    「用戶點唔到遊戲」係本專案最嚴重後果，而呢段以前住喺 main.js 內**零覆蓋**
+                  #    （known-issues §9.1-5）→ 抽出嚟用假視窗驗（test/hud-passthrough.test.js 8 條：
+                  #    正常模式一定穿透、次序一定係先還原穿透再 setFocusable、API 出事唔准爆）。
+                  #    ⚠️ 建立 HUD 窗嗰一下嘅 `setIgnoreMouseEvents(true)` 仍然喺 main.js
+                  #       （全檔唯一例外，見嗰處註釋），之後一律行呢個 funnel。
   panel-window.js # ⭐ 普通面板窗建立器（審計 M3）：createPanelWindow({file, title, width, height,
                   #    minWidth, minHeight, onClosed}) → BrowserWindow ＋ webPreferences
                   #    ＋ setContentProtection ＋ loadFile ＋ ready-to-show → show。

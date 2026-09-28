@@ -44,6 +44,9 @@ import { APP_WEB_PREFERENCES } from './web-preferences.js';
 // ⭐ 普通面板窗嘅共用建立器（獨立審計 M3）：設定窗／what-if 窗以前逐行一樣。
 //    ⛔ HUD overlay 同擷取窗**刻意唔合**入去（語意唔同，見嗰個檔嘅檔頭）。
 import { createPanelWindow } from './panel-window.js';
+// ⭐ HUD 滑鼠穿透狀態機（設計審查 S4）：由 main.js 抽出，因為「用戶點唔到遊戲」
+//    係本專案最嚴重嘅後果，而呢段以前零測試覆蓋。wrapper 函數名保持唔變。
+import { createHudPassthrough } from './hud-passthrough.js';
 import { MAX_HISTORY, pushSample } from '../src/hud/history.js';
 // ⭐ 「dump／連拍要寫邊」嘅決策（A9 打包）：打包之後 `ROOT` 係唯讀 asar，
 //    寫入會 throw ENOTDIR/EROFS → 同「設定檔位置」一樣要集中一個決策（`src/hud/write-root.js`）。
@@ -229,13 +232,18 @@ const NO_SETTINGS = envFlag('UMAPYOI_NO_SETTINGS');
 /** `UMAPYOI_NO_WHATIF=1`：唔開 what-if 模擬窗（HUD／設定窗照開；C1）。 */
 const NO_WHATIF = envFlag('UMAPYOI_NO_WHATIF');
 /**
- * HUD 而家係唔係「可互動」（＝唔穿透）。
+ * HUD 滑鼠穿透狀態機（⭐ 設計審查 S4：由 `hud-passthrough.js` 管，唔再係呢個檔嘅全域 `let`）。
  *
- * ⚠️ **一定要自己記住**：`electron.d.ts` **冇** `isIgnoreMouseEvents()` getter
- * → 讀唔返而家嘅狀態，所以呢個 flag 就係唯一真相。所有改動一定要經
+ * ⚠️ 「HUD 而家係唔係可互動」**一定要自己記住**：`electron.d.ts` **冇**
+ * `isIgnoreMouseEvents()` getter → 讀唔返而家嘅狀態。所有改動一定要經
  * `setHudInteractive()` 呢個 funnel（見嗰個函數嘅註解）。
+ * `onModeChange` 就係本來嗰句 `console.log`（措辭逐字保留）。
  */
-let hudInteractive = false;
+const hudPassthrough = createHudPassthrough({
+  isEditMode: HUD_EDIT,
+  onModeChange: (message) => console.log(message),
+  onError: (message) => console.error(message),
+});
 /** 拖位中嘅狀態（`null` = 冇拖緊）。`at` 係最後一次收到消息嘅時間（watchdog 用）。 */
 let hudDrag = null;
 /** 拖位 watchdog：幾久冇新消息就當「pointerup 唔見咗」，主動收手（毫秒）。 */
@@ -697,56 +705,31 @@ function notifySettingsWindow() {
 /**
  * ⭐ HUD 滑鼠模式嘅**唯一入口**（funnel）。
  *
- * 為何一定要集中（唔可以四圍各自叫 `setIgnoreMouseEvents()`）：
- *   `electron.d.ts` **冇** `isIgnoreMouseEvents()` getter → 讀唔返而家嘅狀態，
- *   所以一定要靠 `hudInteractive` flag 記住。分散喺幾條路徑各自叫 = 早晚有一條漏咗還原
- *   → 用戶**點唔到遊戲**（本專案最嚴重嘅後果，見 AGENTS §9 ⭐高）。
+ * ⚠️ **2026-09-28（設計審查 S4）邏輯搬咗去 `electron/hud-passthrough.js`**：
+ *    呢段（＋「500ms 再確認」兜底）係本專案最嚴重後果（用戶點唔到遊戲）嘅守門人，
+ *    以前住喺呢個檔入面**零測試覆蓋**（`docs/known-issues.md` §9.1-5）。
+ *    而家狀態機係一支純模組，有 `test/hud-passthrough.test.js`（假視窗）完整覆蓋；
+ *    呢兩個 wrapper 只係保留原本嘅呼叫形狀（`setHudInteractive(on, win)`／
+ *    `assertHudPassthrough()`），令 `main.js` 其餘部分**一個字都唔使改**。
  *
- * 底線：**正常模式（冇 `UMAPYOI_HUD_EDIT`）一定係穿透**，冇任何例外 ——
- * `want` 永遠會 `&& HUD_EDIT`。對位模式先開互動（同時要 `setFocusable(true)`，
- * 因為 `focusable:false` 之下 renderer 收唔到鍵盤、拖曳亦未必穩）。
+ * 底線（唔准改）：**正常模式（冇 `UMAPYOI_HUD_EDIT`）一定係穿透**，冇任何例外。
  *
  * @param {boolean} on 想唔想互動
  * @param {Electron.BrowserWindow} [win] 預設係 `hudWindow`
  * @returns {boolean} 最後真正生效嘅模式（`true` = 可互動）
  */
 function setHudInteractive(on, win = hudWindow) {
-  if (!win || win.isDestroyed()) {
-    hudInteractive = false;
-    return false;
-  }
-  const want = Boolean(on) && HUD_EDIT;
-  // ⚠️ 次序重要：先還原穿透（就算下面 `setFocusable` 出事，都唔會擋住遊戲點擊）。
-  try {
-    win.setIgnoreMouseEvents(!want);
-  } catch (error) {
-    console.error(`[HUD] ⚠️ setIgnoreMouseEvents(${!want}) 失敗：${error?.message ?? error}`);
-  }
-  try {
-    win.setFocusable(want);
-  } catch (error) {
-    console.error(`[HUD] ⚠️ setFocusable(${want}) 失敗：${error?.message ?? error}`);
-  }
-  if (hudInteractive !== want) {
-    console.log(`[HUD] 滑鼠模式 → ${want ? '可互動（對位模式：可以拖 HUD）' : '穿透（唔會搶遊戲嘅滑鼠）'}`);
-  }
-  hudInteractive = want;
-  return want;
+  return hudPassthrough.set(on, win);
 }
 
 /**
- * 兜底：正常模式之下定期**再確認**穿透。
+ * 兜底：正常模式之下定期**再確認**穿透（邏輯喺 `hud-passthrough.js`）。
  *
  * 為何要：狀態機漂移（或者某一條路徑漏咗還原）係最嚴重嘅後果，
  * 每 500ms 重申一次就等佢**自己修正返**，就算我漏咗一條路徑都唔會永久擋住遊戲。
  */
 function assertHudPassthrough() {
-  if (hudInteractive || !hudWindow || hudWindow.isDestroyed()) return;
-  try {
-    hudWindow.setIgnoreMouseEvents(true);
-  } catch {
-    /* 下次再試（唔想因為一次失敗就洗版） */
-  }
+  hudPassthrough.reassert(hudWindow);
 }
 
 /**
