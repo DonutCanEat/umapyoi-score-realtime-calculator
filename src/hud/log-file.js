@@ -15,6 +15,12 @@
  *
  * 程式長期開住，正常模式每 30 秒就有機會出一行 → 唔輪替會無限長大。
  * 到上限就**改名做 `.1`**（只留一代），唔會刪走唯一嘅證據。
+ *
+ * ⚠️ 上限**一定要喺每一行寫入之前都查**（設計審查 L2）：以前淨係 `openLogFile()`
+ *    嗰一刻查一次 → **單一長 session**（用戶最常見嘅用法：開住唔閂）可以無限長大，
+ *    同上面「唔輪替會無限長大」自己寫嘅理由直接矛盾。
+ *    為咗唔喺熱路徑每行 `statSync()`，呢度喺記憶體記住「呢個檔而家幾多 bytes」
+ *    （開檔時 stat 一次 ＋ 每次寫入加 `Buffer.byteLength(line)`）。
  */
 
 import { existsSync, renameSync, statSync, writeFileSync } from 'node:fs';
@@ -61,28 +67,67 @@ export function shouldRotate(sizeBytes, maxBytes = LOG_MAX_BYTES) {
  * ⚠️ 所有 I/O 都包 try/catch：**log 寫唔到唔准令程式爆**
  *    （寫 log 係輔助功能，唔應該成為新嘅死因）。
  *
+ * ⚠️ 輪替**喺開檔同每一行寫入前**都會查（設計審查 L2）：
+ *    `bytes` 係「而家呢個檔已經寫咗幾多 bytes」（開檔 stat 一次 ＋ 之後自己加），
+ *    所以單一長 session 一樣守得住 `maxBytes`（唔會無限長大）。
+ *
  * @param {string} filePath
  * @param {{maxBytes?:number}} [options]
- * @returns {{path:string, write:(level:string, text:string)=>void, rotated:boolean}}
+ * @returns {{path:string, write:(level:string, text:string)=>void, rotated:boolean,
+ *            rotations:number, bytesWritten:()=>number}} `rotated` = 開檔時輪替過；
+ *            `rotations` = 累計（含寫入期間嘅輪替）；`bytesWritten()` = 而家個檔幾多 bytes
  */
 export function openLogFile(filePath, options = {}) {
   const maxBytes = options.maxBytes ?? LOG_MAX_BYTES;
   let rotated = false;
+  // 而家呢個檔已經有幾多 bytes（`statSync` 一格都唔夠準：上次寫入之後可能死過機，
+  // 所以開檔一定重新 stat 一次，唔可以靠上次 session 嘅數）。
+  let bytes = 0;
+  let rotateBroken = false; // 輪替失敗過就唔再試（同註釋「輪替失敗唔理：照寫落去」一致）
+  let rotations = 0;
+
   try {
-    if (existsSync(filePath) && shouldRotate(statSync(filePath).size, maxBytes)) {
-      const prev = `${filePath}.1`;
-      renameSync(filePath, prev); // 覆蓋上一代（Windows 上同名已存在會 throw → 包住）
-      rotated = true;
+    if (existsSync(filePath)) bytes = statSync(filePath).size;
+  } catch {
+    bytes = 0; // stat 唔到就當 0（寧願細看細，唔好因為 stat 失敗就連 log 都唔寫）
+  }
+
+  /** 輪替（舊檔搬去 `.1`）。@returns {boolean} 成唔成功 */
+  const rotateNow = () => {
+    try {
+      renameSync(filePath, `${filePath}.1`); // 覆蓋上一代（Windows 上同名已存在會 throw → 包住）
+      bytes = 0;
+      rotations += 1;
+      return true;
+    } catch {
+      rotateBroken = true; // 只有一次機會（再試只會每次寫入都 throw）
+      return false;
     }
+  };
+
+  try {
+    if (bytes > 0 && shouldRotate(bytes, maxBytes)) rotated = rotateNow();
   } catch {
     /* 輪替失敗唔理：照寫落去（大不了個檔大啲） */
   }
+
   return {
     path: filePath,
     rotated,
+    /** 累計輪替次數（唔止開檔嗰一次）。 */
+    get rotations() {
+      return rotations;
+    },
+    bytesWritten: () => bytes,
     write(level, text) {
       try {
-        writeFileSync(filePath, formatLogLine(level, text), { flag: 'a', encoding: 'utf8' });
+        const line = formatLogLine(level, text);
+        const lineBytes = Buffer.byteLength(line, 'utf8');
+        // ⭐ 每一行都查上限（L2）。`bytes > 0` 係防止「單行本身大過上限」時
+        //    每行都輪替（一個空檔冇必要輪替）。
+        if (!rotateBroken && bytes > 0 && bytes + lineBytes > maxBytes) rotateNow();
+        writeFileSync(filePath, line, { flag: 'a', encoding: 'utf8' });
+        bytes += lineBytes;
       } catch {
         /* 寫唔到就靜靜放棄（唔准影響主流程） */
       }

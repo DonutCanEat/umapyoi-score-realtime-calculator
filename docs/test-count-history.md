@@ -45,5 +45,6 @@
 - **S4（第五刀）** dump 政策抽出（`electron/dump-policy.js` ＋ `test/dump-policy.test.js`）+11 → **660**
 - **L1** `fromSource.w/h` 死碼刪走 ＋ 矛盾註釋更正（`src/hud/config.js` ＋ `test/hud-config.test.js` 2 條閘）+2 → **662**
 - **L8** `data/bwiki-skill-pages.json` 入 `.gitignore` ＋ `.gitignore` 真閘（`test/gitignore-caches.test.js`）+3 → **665**
+- **L2** log 輪替改成「每一行都查上限」（`src/hud/log-file.js` ＋ `test/log-file.test.js` 2 條）+2 → **667**
 
 ⚠️ 每一項嘅 commit hash／驗收數據睇 `git log --oneline`（commit message 有寫實測數字）。

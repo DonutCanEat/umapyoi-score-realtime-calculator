@@ -70,6 +70,38 @@ test('log-file：寫入真檔（append）＋ 到上限會輪替成 .1', () => {
   }
 });
 
+test('⭐ 設計審查 L2：長 session 都要輪替（唔止開檔嗰一次）—— 個檔唔准無限大', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'umapyoi-log-'));
+  try {
+    const file = join(dir, LOG_FILENAME);
+    const sink = openLogFile(file, { maxBytes: 300 });
+    assert.equal(sink.rotated, false, '開檔時未到上限 → 唔輪替');
+    // 一路寫，總量遠超上限（模擬「開住程式幾個鐘」）
+    for (let i = 0; i < 50; i += 1) sink.write('log', `第 ${i} 行（有少少長度嘅訊息）`);
+    const size = readFileSync(file).length;
+    assert.ok(size <= 300, `個檔一定要守住上限（實得 ${size} bytes）`);
+    assert.ok(sink.rotations >= 1, '中途一定要輪替過（以前淨係開檔查一次 → 永遠 0）');
+    assert.ok(existsSync(`${file}.1`), '舊內容要留住做證據（`.1`）');
+    assert.equal(sink.bytesWritten() <= 300, true, '`bytesWritten()` 要同實際檔大細一致');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('⭐ 設計審查 L2：輪替之後**繼續寫**（唔會停，亦唔會爆）', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'umapyoi-log-'));
+  try {
+    const file = join(dir, LOG_FILENAME);
+    const sink = openLogFile(file, { maxBytes: 200 });
+    for (let i = 0; i < 30; i += 1) sink.write('log', `訊息 ${i}`);
+    sink.write('error', '最後一行');
+    assert.match(readFileSync(file, 'utf8'), /最後一行/, '輪替之後照樣寫得入（append 新檔）');
+    assert.ok(sink.rotations >= 2, `應該輪替過幾次（實得 ${sink.rotations}）`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('log-file：寫唔到都唔准爆（路徑唔存在 → write() 靜靜放棄）', () => {
   const dir = mkdtempSync(join(tmpdir(), 'umapyoi-log-'));
   try {
