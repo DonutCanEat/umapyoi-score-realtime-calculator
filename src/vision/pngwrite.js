@@ -9,24 +9,11 @@
  */
 
 import { deflateSync } from 'node:zlib';
+// ⚠️ CRC-32 同解碼器共用一份（設計審查 2026-09-28 L10）：以前只有寫嗰邊計 CRC，
+//    讀嗰邊完全冇驗 → 兩邊各自漂移，截斷／改壞嘅檔一樣解得「成功」。
+import { crc32 } from './crc32.js';
 
 const SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-const CRC_TABLE = (() => {
-  const table = new Uint32Array(256);
-  for (let n = 0; n < 256; n += 1) {
-    let c = n;
-    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    table[n] = c >>> 0;
-  }
-  return table;
-})();
-
-function crc32(buf) {
-  let c = 0xffffffff;
-  for (let i = 0; i < buf.length; i += 1) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
 
 function chunk(type, data) {
   const length = Buffer.alloc(4);

@@ -52,5 +52,6 @@
 - **L7** 加 `LICENSE`（MIT，2026 DonutCanEat）＋ `package.json` `license` ＋ README 指向 ＋ 授權三處一致閘（`test/license.test.js`）+3 → **675**
 - **L6** 技能庫寫入守門（`tools/lib/skill-db-guard.js`：絕對下限 ＋ 歷史高位 `maxCount` ＋ `--force` ＋覆寫前備份）＋ `data/backups/` ignore 真閘 +12（`test/skill-db-guard.test.js`）＋ gitignore 備份閘 +1 → **688**
 - **L9** 剔非數字碎片規則收斂成 `src/vision/digitfilter.js`（`ratio` 冇預設，唔傳就 throw）＋兩個 reader 各自宣告政策（`STATBAR_DIGIT_MIN_HEIGHT_RATIO` 0.8／`RESULT_DIGIT_MIN_HEIGHT_RATIO` 0.55；實測兩者喺真樣本剔走嘅嘢一樣、0/10 行有分別）＋ `test/digitfilter.test.js` +8 → **696**
+- **L10** PNG 解碼器四道防護（chunk 長度／CRC（`src/vision/crc32.js` 同編碼器共用）／尺寸上限／解壓長度必須啱啱好；索引色 PLTE 檢查）＋ `test/png-decode-guard.test.js` +11 → **707**
 
 ⚠️ 每一項嘅 commit hash／驗收數據睇 `git log --oneline`（commit message 有寫實測數字）。
