@@ -41,6 +41,11 @@ import { buildInkMask } from '../src/vision/inkmask.js';
 import { columnsToGroups, groupsToNumbers } from '../src/vision/digitrow.js';
 import { extractGlyphs, readNumberTrimmed } from '../src/vision/glyphs.js';
 import { flagValue, hasFlag, positionalArgs, toolArgs } from './lib/args.js';
+// ⭐ **生產**嗰份「ROI→像素」規則（設計審查 M8）：呢個閘一定要行生產碼，唔准行手抄副本。
+//    `.cjs` 係 CommonJS（renderer 係 classic script 只 `require` 得到）→ 呢邊 default import。
+import captureRegion from '../electron/capture-region.cjs';
+
+const { regionFor } = captureRegion;
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 // ⚠️ 參數讀法住喺 `tools/lib/args.js`（審計 M6）：以前三個 `slice('--xxx='.length)`
@@ -79,16 +84,18 @@ const list = files.length
 
 /**
  * 模擬 `electron/capture.html` 嘅剪法：由遊戲視窗尺寸推內容框，再剪面板條（1:1）。
- * 呢個函式同 renderer 嗰段邏輯要一致 —— 用途就係保證「執行時路徑」都 5/5。
+ *
+ * ⭐ 2026-09-28（設計審查 M8）：以前呢度係**手抄**一份（`Math.round(image.width * o.roiX[0])`
+ * 嗰四行），而且**冇** `regionFor()` 嗰啲 clamp（`x1 >= 1 ? vw`、`Math.max(x0 + 8, …)`、
+ * `y1 >= 1 ? contentTop + contentH`）→ 但 `--read --cropped` 係 `AGENTS.md` §8 指定嘅驗收閘
+ * ⇒ **閘驗嘅係副本，唔係生產碼**。而家直接 require 生產嗰份
+ * （`electron/capture-region.cjs`，同 renderer 共用同一個檔）。
  */
 function cropLikeRenderer(image) {
-  const box = contentBox(image);
   const o = DEFAULT_STATBAR_OPTIONS;
-  const x0 = Math.round(image.width * o.roiX[0]);
-  const x1 = Math.round(image.width * o.roiX[1]);
-  const y0 = box.top + Math.round(box.height * o.roiY[0]);
-  const y1 = box.top + Math.round(box.height * o.roiY[1]);
-  return cropImage(image, x0, y0, x1, y1);
+  const rect = { x0: o.roiX[0], x1: o.roiX[1], y0: o.roiY[0], y1: o.roiY[1] };
+  const { sx, sy, sw, sh } = regionFor(image.width, image.height, rect, null, o.aspect);
+  return cropImage(image, sx, sy, sx + sw, sy + sh);
 }
 
 const templates = doRead

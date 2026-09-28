@@ -150,6 +150,15 @@ electron/
                   #    ⚠️ 串流 track ended／3 秒冇畫面都要報 `capture-error`
                   #    ⚠️ ROI→像素換算**只有一份** regionFor()（＋封包 sendFrame()；審計 H1）：
                   #       `rect = null`（冇 ROI）＝ {0,0,vw,vh}，**唔扣**標題列
+                  #    ⭐ 2026-09-28（設計審查 M8）：嗰份規則**搬咗去 `electron/capture-region.cjs`**
+                  #       （CommonJS —— renderer 係 classic script 只 `require` 得到，同
+                  #       `ipc-channels.cjs` 一樣）→ `tools/diag-statbar.js` 都 import 同一個檔，
+                  #       唔再手抄。以前 `cropLikeRenderer()` 係手抄而且冇 clamp ⇒ `--read --cropped`
+                  #       驗收閘驗緊副本（今日數值 6/6 一致，但係結構性風險）。
+  capture-region.cjs # ⭐ 「相對 ROI → 像素矩形」＋「內容框（16:9）」規則（**唯一一份**，M8）：
+                  #    `regionFor(vw,vh,rect,crop,aspect)`（含 8px／16px 下限同 x1>=1／y1>=1 特例）
+                  #    ＋ `contentFrame(vw,vh,aspect)`（同 `src/vision/content-box.js` 語意等價，
+                  #    由 `test/capture-region.test.js` 逐個解析度證明）
   hud.html        # HUD overlay renderer：透明無邊框，只畫主程序推落嚟嘅 view（＋對位模式拖位
                   #    ＋ C3 成長曲線嘅 SVG polyline —— **只畫唔計**，座標由 `src/hud/history.js` 嚟）
   settings.html   # ⭐ HUD 設定窗（**普通視窗**，classic script）：8 個數值 slider ＋ 9 個顯示選項
@@ -381,7 +390,7 @@ docs/
 
 <!-- appendix:start -->
 
-### src/（正文冇提及嘅 14 個）
+### src/（正文冇提及嘅 13 個）
 
 - `src/hud/startup-resource.js` — 啟動期資源嘅**讀取 ＋ 錯誤政策**（純函數；設計審查 2026-09-28 M6）。
 - `src/umascore/bwiki-calc-page.js` — bwiki「评分计算器」頁面嘅解析（純函數，唔上網、唔讀檔）。
@@ -392,7 +401,6 @@ docs/
 - `src/umascore/skill-owners.js` — 技能「擁有者／進化鏈」解析（純函數）。
 - `src/umascore/skilllist-diff.js` — 外部技能名單 → 分類（純函數）。
 - `src/vision/combinations.js` — 「由 n 個候選揀 5 個」嘅組合搜尋骨架（**唯一一份**）。
-- `src/vision/content-box.js` — 「遊戲內容區（16:9）」嘅推算（**唯一一份**，獨立審計 H3）。
 - `src/vision/nameseg.js` — 技能名 → **逐字元**像素切分（Phase 2 字元模板路線）。
 - `src/vision/projection.js` — 逐列／逐欄墨量投影 ＋ 連續段掃描（**唯一一份**，獨立審計 M3）。
 - `src/vision/similarity.js` — 特徵向量嘅標準化同相似度（**唯一一份實作**）。

@@ -1,16 +1,15 @@
 /**
- * **`capture.html` ROI→像素規則閘**（獨立審計 H1）。
+ * **`capture.html` ROI→像素規則閘**（獨立審計 H1；設計審查 2026-09-28 M8 加強）。
  *
  * 為何要一個閘：呢條係**擷取主路徑**，而佢嘅失敗模式係**完全靜默** ——
  *   · 剪錯 ROI → 主程序收到一個「唔係面板條」嘅圖 → HUD 只顯示「唔見面板條 N 秒」；
  *   · 或者讀到攞錯位嘅數 → **出錯數**（本專案最唔可以接受嘅事）。
- * 呢個檔係 classic script ＋ DOM（入唔到 `node --test`），所以呢度：
- *   ① 由原始碼**抽 `regionFor()` 出嚟真係執行**（唔係純文字斷言）→ 鎖住邊界特例；
- *   ② 用文字斷言鎖住「ROI→像素規則**只有一份**」（唔准再分裂出第二份內聯版本）。
  *
- * ⚠️ 為何要「真係執行」：H1 之前 `loop()` 內聯**又**寫咗一份一模一樣嘅計算，
- *    兩份走樣係睇唔出嘅（唔會 throw）—— 只有逐個數比對先捉得到。
- * ⚠️ 一定要**剝註釋**先做文字斷言（唔然註釋本身會令 `assert.match` 通過）。
+ * ⭐ M8 之後呢個閘驗嘅係**生產碼本身**：規則住喺 `electron/capture-region.cjs`
+ *   （CommonJS —— renderer 係 classic script 只 `require` 得到，同 `ipc-channels.cjs` 一樣），
+ *   `electron/capture.html` 同 `tools/diag-statbar.js` 都係 `require`／import 同一個檔。
+ *   ⛔ 以前 `tools/diag-statbar.js` 手抄咗一份（`cropLikeRenderer()`）而且冇 clamp →
+ *      `AGENTS.md` §8 指定嘅驗收閘 `--read --cropped` 原來驗緊副本（結構性風險）。
  */
 
 import test from 'node:test';
@@ -19,9 +18,15 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import captureRegion from '../electron/capture-region.cjs';
+import { contentBox } from '../src/vision/content-box.js';
+
+const { CONTENT_ASPECT, contentFrame, regionFor } = captureRegion;
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CAPTURE = join(ROOT, 'electron', 'capture.html');
 const HTML = readFileSync(CAPTURE, 'utf8');
+const DIAG = readFileSync(join(ROOT, 'tools', 'diag-statbar.js'), 'utf8');
 
 /** 剝註釋（同 `test/capture-freeze.test.js` 同一招）。 */
 function stripComments(text) {
@@ -30,29 +35,6 @@ function stripComments(text) {
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|[^:'"\\])\/\/[^\n]*/g, '$1');
 }
-
-/** 由大括號配對抽出 `function <name>(…) { … }` 嘅原文。 */
-function extractFunction(source, name) {
-  const start = source.indexOf(`function ${name}(`);
-  assert.notEqual(start, -1, `搵唔到 function ${name}()（係唔係改咗名？）`);
-  let depth = 0;
-  for (let i = source.indexOf('{', start); i < source.length; i += 1) {
-    if (source[i] === '{') depth += 1;
-    else if (source[i] === '}') {
-      depth -= 1;
-      if (depth === 0) return source.slice(start, i + 1);
-    }
-  }
-  throw new Error(`function ${name}() 嘅大括號唔配對`);
-}
-
-/** 真係執行 `capture.html` 入面嗰個 `regionFor()`（注入檔頭嘅 `contentAspect` 預設值）。 */
-function loadRegionFor(aspect = 9 / 16) {
-  const src = extractFunction(HTML, 'regionFor');
-  return new Function('contentAspect', `${src}\n  return regionFor;`)(aspect);
-}
-
-const regionFor = loadRegionFor();
 
 test('capture-region：實機樣本 1920×1120（有標題列）面板條 ROI → 四個像素數逐個一樣', () => {
   // 1920×1120：內容區 1920×1080 喺底 → contentTop = 40。
@@ -100,29 +82,44 @@ test('capture-region：crop 係相對上面嗰個範圍 ＋ 最少 16px ＋ 唔�
   assert.ok(edge.sy + edge.sh <= 900, 'sy+sh 唔可以過 vh');
 });
 
-test('capture-region：ROI→像素規則喺 capture.html **只有一份**（唔准再分裂）', () => {
+test('capture-region：ROI→像素規則只有一份（capture.html 唔准再自己定義）', () => {
   const html = stripComments(HTML);
+  assert.ok(!/function\s+regionFor\s*\(/.test(html), '⛔ `capture.html` 唔准再有自己嗰份 `regionFor()`');
+  assert.match(html, /const \{ regionFor \} = require\('\.\/capture-region\.cjs'\);/,
+    '`capture.html` 一定要 require 共用模組');
   const count = (re) => (html.match(re) ?? []).length;
-  assert.equal(count(/Math\.round\(vw \* rect\.x0\)/g), 1, '⛔ 唔准有第二份 x0 → 像素嘅計算');
-  assert.equal(count(/Math\.max\(x0 \+ 8, Math\.round\(vw \* rect\.x1\)\)/g), 1, '⛔ 唔准有第二份 8px 下限');
-  assert.equal(count(/contentTop \+ Math\.round\(contentH \* rect\.y0\)/g), 1, '⛔ 唔准有第二份 y0 → 像素嘅計算');
-  assert.match(html, /const \{ sx: cx, sy: cy, sw: cw, sh: ch \} = regionFor\(vw, vh, roi, crop\);/,
-    '`loop()` 一定要用 `regionFor()`（唔准內聯返一份）');
+  assert.equal(count(/Math\.round\(vw \* rect\.x0\)/g), 0, '⛔ 唔准內聯返 x0 → 像素嘅計算');
+  assert.equal(count(/Math\.max\(x0 \+ 8, Math\.round\(vw \* rect\.x1\)\)/g), 0, '⛔ 唔准內聯返 8px 下限');
+  assert.match(html, /const \{ sx: cx, sy: cy, sw: cw, sh: ch \} = regionFor\(vw, vh, roi, crop, contentAspect\);/,
+    '`loop()` 一定要用 `regionFor()`（而且要傳由 IPC 收到嘅 `contentAspect`）');
+  assert.match(html, /const r = regionFor\(vw, vh, resultRoi, null, contentAspect\);/,
+    '「基礎能力數字欄」嗰條路都要用同一個 `regionFor()`（同樣要傳 `contentAspect`）');
 });
 
-test('capture-region：frame 封包只有一份（`sendFrame()`），兩條路都要經過佢', () => {
-  const html = stripComments(HTML);
-  const sends = (html.match(/ipcRenderer\.send\(IPC_CHANNELS\.frame/g) ?? []).length;
-  assert.equal(sends, 1, '⛔ 只准 `sendFrame()` 入面嗰一次 send');
-  assert.match(html, /sendFrame\(vw, vh, \{\n\s*width,\n\s*height,\n\s*cropped: Boolean\(roi\),/, '正常幀要經 sendFrame');
-  assert.match(html, /result: true,/, '「基礎能力數字欄」嗰條路要經 sendFrame（`result: true`）');
-  // ⚠️ 正常幀**唔准**帶 `result` key（舊行為逐字保留：主程序靠 `frame.result` 分流）
-  assert.match(html, /if \(result\) payload\.result = true;/, '`result` 要選填，唔准每次都塞 key');
-  // 封包內容（wire format）逐欄鎖住：主程序靠呢六個欄位
-  assert.match(
-    html,
-    /const payload = \{ width, height, fullWidth: vw, fullHeight: vh, cropped, buffer \};/,
-    '⛔ 封包欄位唔准改（fullWidth／fullHeight 係 HUD 對位靠嘅原生大細）',
-  );
-  assert.match(html, /ipcRenderer\.send\(IPC_CHANNELS\.frame, payload\);/, 'send 一定要喺 sendFrame 入面');
+test('capture-region：驗收閘（`tools/diag-statbar.js`）一定要行生產碼，唔准手抄', () => {
+  assert.match(DIAG, /import captureRegion from '\.\.\/electron\/capture-region\.cjs';/,
+    '閘要 import 生產模組');
+  assert.match(DIAG, /const \{ regionFor \} = captureRegion;/, '要解構 `regionFor`');
+  assert.match(DIAG, /const \{ sx, sy, sw, sh \} = regionFor\(image\.width, image\.height, rect, null, o\.aspect\);/,
+    '`cropLikeRenderer()` 要用 `regionFor()`');
+  // ⛔ 反向：手抄版嗰四行唔准返轉頭（M8 就係噉樣令閘驗副本）
+  //    ⚠️ 一定要剝註釋先驗：`diag-statbar.js` 嘅**註釋**本身就引用咗舊寫法做例子
+  //       （唔剝嘅話，實作整句刪走都照過 —— 同 AGENTS「註釋唔計」原則一致）。
+  const diag = stripComments(DIAG);
+  assert.ok(!/Math\.round\(image\.width \* o\.roiX\[0\]\)/.test(diag), '唔准再手抄 x0 計算');
+  assert.ok(!/Math\.round\(image\.width \* o\.roiX\[1\]\)/.test(diag), '唔准再手抄 x1 計算');
+  assert.ok(!/Math\.round\(box\.height \* o\.roiY\[0\]\)/.test(diag), '唔准再手抄 y0 計算');
+});
+
+test('capture-region：內容框規則同 `src/vision/content-box.js` 逐個解析度等價（M8 第 ③ 份）', () => {
+  // `contentFrame()`（renderer 用）同 `contentBox()`（主程序 reader 用）係兩個關注點，
+  // 但**語意一定要一樣** —— 呢條閘就係「唔准靜默分叉」嗰條線。
+  const sizes = [[1920, 1120], [1930, 1116], [1600, 900], [1356, 800], [2560, 1440], [1280, 720], [1280, 760]];
+  for (const [w, h] of sizes) {
+    const mine = contentFrame(w, h);
+    const theirs = contentBox({ width: w, height: h });
+    assert.equal(mine.height, theirs.height, `${w}×${h} 內容區高唔同`);
+    assert.equal(mine.top, theirs.top, `${w}×${h} 內容框上邊界唔同`);
+  }
+  assert.equal(CONTENT_ASPECT, 9 / 16);
 });
