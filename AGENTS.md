@@ -7,7 +7,7 @@
 >
 > ⚠️ 為咗令呢份文件**讀得完**（agent 嘅工作區指令預算 65,536 bytes），
 > 三份大表已經搬去 `docs/`（D4，2026-09-19）—— **同你嘅改動有關就要開嚟睇**：
-> - `docs/pitfalls.md`：**33 條地雷**（改影像／計分／HUD 之前必讀）
+> - `docs/pitfalls.md`：**34 條地雷**（改影像／計分／HUD 之前必讀）
 > - `docs/known-issues.md`：已知待辦 ＋ **未修**嘅技術債（§9.1）
 > - `docs/backlog.md`：總 Backlog（A／B／C／D，邊項做咗／做緊）
 >
@@ -24,7 +24,7 @@
 | **2** | 指令（跑咩、環境變數、驗收標準）| 要跑嘢之前 |
 | **3** | 檔案地圖（壓縮版；完整版喺 `docs/file-map.md`）| 搵某個檔 |
 | **4** | 核心公式（五維／ランク／技能）| 改計分之前 |
-| **5** | 地雷索引（33 條；全條喺 `docs/pitfalls.md`）| 改任何相關嘢之前 |
+| **5** | 地雷索引（34 條；全條喺 `docs/pitfalls.md`）| 改任何相關嘢之前 |
 | **6** | 影像辨識設計原則（完整版喺 `docs/design.md`）| 改影像／HUD 之前 |
 | **7** | 開發環境（Windows 實測）| 換機／裝環境 |
 | **8** | 改動後必做（驗收閘）| 每次改完 |
@@ -290,7 +290,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（529 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（534 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ **electron/**（4 檔，含
                                      #    main.js／panel-window.js／web-preferences.js／ipc-channels.cjs）
                                      #    ＋ src/**（47 檔）＋ tools/**（54 檔）—— 見 §8 4b
@@ -496,7 +496,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **529 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **534 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 15/15**、**負樣本 5/5 唔出數**），全部都要中
@@ -530,7 +530,7 @@ src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔�
                 #   env-flag.js（環境變數唯一讀法）／history.js（C3 成長曲線核心）
 electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／ipc-channels.cjs（channel 名唯一來源）／
                 #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 529 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+test/           # 534 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
 tools/          # 54 個 CLI（＋ tools/lib/ 2 個共用模組）：診斷／建模板／對答案／what-if／advice／
                 #   診斷包／renderer 實載閘／讀技能名（`read-skills` 等 5 個）／
                 #   外部名單比對（`diff-skill-names`）／GameTora 抓取＋查詢＋缺口（`fetch-gametora`／
@@ -548,7 +548,7 @@ shots/          # ⭐ 證據庫 —— **每個目錄係咩睇 `shots/README.md`
                 #   result/（培育結束確認正面樣本）／debug-crops/（人手剪放大圖）／
                 #   live-debug/、skill-dump/（唔入 git）
 docs/           # ⭐ **索引喺 `docs/README.md`**（「我應該睇邊份？」）——
-                #   formula.md／vision-design.md／skill-screen.md／pitfalls.md（33 條地雷）／
+                #   formula.md／vision-design.md／skill-screen.md／pitfalls.md（34 條地雷）／
                 #   known-issues.md／backlog.md／file-map.md／design.md／packaging.md（A9）／
                 #   github.md（CI／Release）／electron-dedup-report.md（歷史存檔）
 ```
@@ -608,7 +608,7 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ---
 
-## 5. 地雷清單（33 條）—— ⭐ **詳情喺 `docs/pitfalls.md`**
+## 5. 地雷清單（34 條）—— ⭐ **詳情喺 `docs/pitfalls.md`**
 
 > ⚠️ **動到相關範圍之前，一定要開 `docs/pitfalls.md` 睇全條**（呢度只係索引；
 > 每一條都係實際踩過嘅坑，寫明「⛔ 舊寫法／錯假設」同「✅ 正解」，通常連住一個閘）。
@@ -650,6 +650,7 @@ oval > 0 → 再加 oval 部分；最後 floor
 | 31 | ⭐ 以為「格與格之間嘅分隔線唔會入墨色窗口」同「同字元一樣高就一定係字元」 |
 | 32 | ⭐ 以為「面板底一定係淺色」→ 直接拿面板條嘅 `lightFraction` 去讀「培育結束確認」（半透明面板 → 0.4 會削走數字） |
 | 33 | ⭐⭐ 以為「註釋入面打咩都得」＋「`npm.cmd test` 過咗就等於個檔載得入」→ 註釋寫咗「`min` ＋ 星號 ＋ 斜號」提早收咗 block comment → `npm.cmd start` 直接 `SyntaxError`，**程式完全開唔到** |
+| 34 | ⭐⭐ 以為「技能條件字串只有繁中一種寫法」→ **認唔到就靜默當「通用」×1.0**（實測 1589 條之中 **211 條**用咗簡體／日文寫法；what-if 會印「條件 中距离」＋「適性 通用」自相矛盾）→ 正解：`APTITUDE_ALIASES` 別名表 ＋ 技能庫覆蓋閘 `test/aptitude-coverage.test.js` |
 
 ---
 
@@ -684,12 +685,12 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **529 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **534 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
    （歷史：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js` 要求 repo 根
-   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹同乾淨 HEAD 都係 **529／0**（2026-09-27 進度：批量 what-if +17 → 394 → `skillread` 14 → `nameseg` 8 → 402 → `skilllist-diff` 8 → 410 → `gametora-data` 5 → 415 → `gametora-skills` 8 → 423 → `bwiki-skill-page` 12 → 435 → `bwiki-coverage` 12 → 455 → `bwiki-calc-page` 8 → 463 → `skill-db-merge` 14 → 479 → 名 fallback +1 → 483 → `kindOfRarity` 修正 +1 → 484 → 窗批量輸入 +11 → 495 → **去重第二輪（`docs/dedup-next-steps.md`）：M1 `hud-util` +6 → 501 → L1 `stamp` +5 → 506 → M7 `skill-name-key` +5 → 511 → H1 `capture-region` +7 → 518 → M2 `writable-root` +4 → 522 → 地雷 #33 `panel-window` +4 ＋ `renderer-syntax-gate` +3 → 529**）。
+   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹同乾淨 HEAD 都係 **529／0**（2026-09-27 進度：批量 what-if +17 → 394 → `skillread` 14 → `nameseg` 8 → 402 → `skilllist-diff` 8 → 410 → `gametora-data` 5 → 415 → `gametora-skills` 8 → 423 → `bwiki-skill-page` 12 → 435 → `bwiki-coverage` 12 → 455 → `bwiki-calc-page` 8 → 463 → `skill-db-merge` 14 → 479 → 名 fallback +1 → 483 → `kindOfRarity` 修正 +1 → 484 → 窗批量輸入 +11 → 495 → **去重第二輪（`docs/dedup-next-steps.md`）：M1 `hud-util` +6 → 501 → L1 `stamp` +5 → 506 → M7 `skill-name-key` +5 → 511 → H1 `capture-region` +7 → 518 → M2 `writable-root` +4 → 522 → 地雷 #33 `panel-window` +4 ＋ `renderer-syntax-gate` +3 → 529 → **設計審查 S1（適性別名 `APTITUDE_ALIASES`）＋ 技能庫覆蓋閘 `aptitude-coverage` +5 → 534**）。
    逐步累積過程（2026-09-19，僅供回溯）：H1 之後乾淨 HEAD 327／0 vs 工作樹 328／0 →
    A9 `write-root` +5 → 333 → 地雷 #31 +1 → 334 → `log-file` +5 → 339 → 擷取凍結 +3 → 342
    → 診斷掣 +4 → 346 → 培育結束確認 reader +5 → 351 → 確認閘 +3 → 354 →

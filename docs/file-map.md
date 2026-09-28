@@ -12,9 +12,13 @@ src/umascore/
   profiles.js     # 版本 profile（tw / cn / jp，現時三個共用同一張表）
   evaluate.js     # evaluate()：唯一需要 100% 準確嘅核心，純函數零 I/O
   aptitude.js     # ⭐ 適性倍率規則**唯一一份實作**（同類取最大、跨類別相乘、草地／沙地唔乘）：
-                  #    MULTIPLIER_GROUPS／GRADE_MULTIPLIER／aptitudeKeyOf()／aptitudesFor()／
+                  #    MULTIPLIER_GROUPS／**APTITUDE_ALIASES（簡體／日文別名 → 正名）**／
+                  #    **MULTIPLIER_KEYWORDS_BY_GROUP**／**NON_MULTIPLIER_KEYWORDS**／
+                  #    GRADE_MULTIPLIER／aptitudeKeyOf()／aptitudesFor()／
                   #    groupHits()／multiplierForGrades()。`tools/fill-ground-truth.js` 同
-                  #    what-if 都係用呢份（獨立審計 H1 去重；地雷 #6 由「只守一半」變單一來源）
+                  #    what-if 都係用呢份（獨立審計 H1 去重；地雷 #6 由「只守一半」變單一來源）。
+                  #    ⚠️ 別名表係 2026-09-28 設計審查 S1 加嘅：舊版認唔到簡體／日文寫法 →
+                  #    211／1589 條招靜默當「通用」×1.0（地雷 #34）。閘：`test/aptitude-coverage.test.js`
   whatif.js       # ⭐ C1 what-if（純函數零 I/O）：searchSkills()／skillSearchItems()／
                   #    aptitudeMapFor()／skillPointsFor()／parseStatInput()／
                   #    whatIfAddSkill()（加一招 → Δ分／Pt／ランク變化；`after` 照樣經 evaluate() 計，
