@@ -18,7 +18,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { APPENDIX_MARK, buildAppendix, describeFile, isMentioned, splitMap, walkSources } from '../tools/lib/file-map.js';
 
@@ -53,7 +53,13 @@ test('buildAppendix：判斷「正文有冇提及」唔准連附錄自己都當�
   const [prose] = splitMap(MAP_TEXT);
   const built = buildAppendix(prose, ROOT);
   assert.ok(built.split('\n').filter((l) => l.startsWith('- ')).length > 0, '唔准生成出 0 個檔');
-  assert.match(built, /`src\/vision\/content-box\.js`/);
+  // ⚠️ 唔准寫死某個檔名做樣本：正文一提到佢（例如 M8 就喺正文寫咗 `content-box.js`）
+  //    佢就會（正確地）由附錄消失 → 呢個測試會假紅。改為**動態揀一個正文真係冇提嘅檔**。
+  const candidate = walkSources(join(ROOT, 'src'), [])
+    .find((f) => !isMentioned(prose, basename(f)) && !isMentioned(prose, relative(ROOT, f).split('\\').join('/')));
+  assert.ok(candidate, '至少要有一個 src 檔係正文冇提及（唔係嘅話附錄本來就應該空）');
+  assert.ok(built.includes(`- \`${relative(ROOT, candidate).split('\\').join('/')}\``),
+    `正文冇提嘅 ${basename(candidate)} 應該出現喺附錄`);
 });
 
 test('buildAppendix：列出嘅每個檔都真實存在，而且描述唔會作（冇檔頭註釋就照樣列出＋警告）', () => {

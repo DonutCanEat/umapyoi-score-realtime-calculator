@@ -135,6 +135,21 @@ if (missing.length > 0) {
   console.log(`  ℹ️ 未有樣本嘅段：${missing.join(', ')}`);
 }
 
+// ⭐ 驗證廣度自報（設計審查 2026-09-28 M9）：呢一節**專門講「未驗到咩」**。
+//    為何要明講：`5/5、誤差 0` 係實測真值（唔係估），所以呢啲係「驗證廣度」風險
+//    —— 而**唔係**已知錯誤。但唔講清楚就會有人以為「成個係數表都驗過」。
+//    `npm test` 有唔准退步嘅下限（`test/verification-coverage.test.js`）。
+const rankSamples = report.rows.filter((row) => row.observedRank);
+console.log('');
+console.log('驗證廣度（⚠️ 以下係「未驗到」嘅範圍，唔准當「已驗證」）：');
+console.log(`  · 五維係數表：${SEGMENT_COUNT} 段之中 ${covered.length} 段有實機樣本（${missing.length} 段未有）`);
+console.log(`  · ランク表：${rankSamples.length} 條實機樣本反查`
+  + (rankSamples.length ? `（${rankSamples.map((r) => `${r.observedRank}←${r.predicted.total}`).join('、')}）` : ''));
+console.log('  · 實機效能（5fps 延遲／CPU／記憶體）：未量 —— 要真 Electron ＋ 遊戲，');
+console.log('    演算法部分可以先量：`node tools/diag-statbar.js --read --perf`');
+console.log('  → 詳情同風險界定：`docs/known-issues.md`「驗證廣度」。');
+
+
 const deltas = report.rows.map((row) => row.delta).filter((delta) => delta !== null && delta !== 0);
 if (deltas.length > 0) {
   const sameSign = deltas.every((delta) => delta > 0) || deltas.every((delta) => delta < 0);

@@ -62,6 +62,14 @@ const maskOverride = maskRaw === undefined
   : (([r, f]) => ({ stripWindowRadius: Number(r), lightFraction: Number(f) }))(maskRaw.split(','));
 const files = positionalArgs(args);
 const cropped = hasFlag(args, 'cropped');
+// ⭐ 效能量度（設計審查 2026-09-28 M9）：`--perf`（可以加 `--perf=N` 指定重複次數，預設 5）。
+//    ⚠️ 用 `flagValue()` 而唔係 `hasFlag()`：`--perf=10` 唔會令 `hasFlag(args,'perf')` 成立
+//    （嚴格字串比對）→ 兩個都要問。
+const perfRaw = flagValue(args, 'perf');
+const perf = hasFlag(args, 'perf') || perfRaw !== undefined;
+const perfRepeats = Number.isFinite(Number(perfRaw)) && Number(perfRaw) > 0 ? Math.floor(Number(perfRaw)) : 5;
+/** 每張圖嘅演算法耗時（ms/幀）—— 尾段印中位數同「5fps 預算用咗幾多 %」。 */
+const perfSamples = [];
 
 /** 真值：CLI `--expect` 優先，否則讀 `data/live-truth.json`（per-shot 例外行先）。 */
 const LIVE_TRUTH_PATH = join(ROOT, 'data', 'live-truth.json');
@@ -201,10 +209,33 @@ for (const entry of list) {
         want +
         (truth || wantHighlighted ? `　${ok ? '✅' : '❌'}` : ''),
     );
+    if (perf) {
+      // ⭐ 效能量度（設計審查 2026-09-28 M9：「實機效能未量」）。
+      //    ⚠️ 呢度量嘅係**演算法部分**（解 PNG ＋ 遮罩 ＋ 切行 ＋ 讀字模比對）——
+      //       **唔包**桌面擷取、IPC 傳 raw RGBA、renderer 剪 ROI；所以唔等於端到端 5fps 延遲。
+      //       真端到端要真 Electron ＋ 遊戲（沙盒做唔到）→ 唔准把呢個數當「實機 5fps 冇問題」。
+      const t0 = process.hrtime.bigint();
+      for (let i = 0; i < perfRepeats; i += 1) {
+        buildInkMask(target, maskOverride);
+        readStatBar(target, templates, { minConfidence: 0, ...maskOverride, whole });
+      }
+      const ms = Number(process.hrtime.bigint() - t0) / 1e6 / perfRepeats;
+      perfSamples.push(ms);
+      console.log(`     ⏱️ 演算法 ${ms.toFixed(1)} ms/幀（重複 ${perfRepeats} 次取平均）`);
+    }
     if (trace) traceRead(image, templates, maskOverride, entry.cropped);
   }
 }
 if (doRead && (expect || liveTruth)) console.log(`\n完全命中 ${pass}/${total}`);
+if (perf && perfSamples.length > 0) {
+  const sorted = [...perfSamples].sort((a, b) => a - b);
+  const mid = sorted[Math.floor(sorted.length / 2)];
+  console.log('');
+  console.log(`⏱️ 演算法效能（${sorted.length} 張圖）：中位 ${mid.toFixed(1)} ms/幀`
+    + `、最慢 ${sorted[sorted.length - 1].toFixed(1)} ms/幀`);
+  console.log(`   → 5fps（200 ms/幀）嘅**演算法預算**：中位用咗 ${(mid / 200 * 100).toFixed(1)}%`);
+  console.log('   ⚠️ 唔包桌面擷取／IPC／renderer 剪 ROI → **唔等於**端到端延遲（見 docs/known-issues.md「驗證廣度」）');
+}
 
 /**
  * 負樣本閘（`shots/negatives/`）：每一幀都係**其他畫面**，全部唔准出數。
