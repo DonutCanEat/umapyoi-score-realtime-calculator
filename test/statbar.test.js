@@ -246,6 +246,43 @@ test('statbar readStatBar：信心太低就唔出數（寧願讀唔到，唔可�
   assert.match(read.reason ?? '', /信心/);
 });
 
+/**
+ * ⭐ 設計審查 2026-09-28 S2：信心閘係**公開旋鈕**，但**預設刻意唔開**。
+ *
+ * 為何要兩條：① 以前呢個閘喺生產路徑**永遠 fire 唔到**（`DEFAULT_STATBAR_OPTIONS`
+ * 冇 `minConfidence`），但文件寫「唔出數有三種」→ 兩邊講唔同嘅嘢；
+ * ② 實測（973 幀 dump）信心**判唔到對錯**（0.47 讀出正確值、0.53 讀出可疑值），
+ * 所以「補一個 0.5 上去」唔係正解 —— 要維持「刻意唔開」，並且由測試擋住
+ * 「靜默加咗落預設表」同「閘本身壞咗」兩種情況。
+ * 見 `src/vision/statbar.js` 嘅 `DEFAULT_STATBAR_OPTIONS` 長註釋。
+ */
+test('statbar 信心閘：預設刻意唔開（信心判唔到對錯，唔准當防線）', () => {
+  assert.equal(
+    DEFAULT_STATBAR_OPTIONS.minConfidence,
+    undefined,
+    '預設唔准有 minConfidence —— 要開就要先量到唔會殺實測良民嘅值，'
+    + '並改埋 AGENTS §6／docs/design.md 嘅「唔出數有幾種」講法',
+  );
+  assert.ok(
+    DEFAULT_STATBAR_OPTIONS.minAccept > 0,
+    '信心嘅數學下界＝minAccept（信心係「已收錄字元分數嘅最小值」，而收錄要求 ≥ minAccept）',
+  );
+});
+
+test('statbar 信心閘：真係傳入去嗰陣要 fire（唔係死碼）', () => {
+  const image = makeStatBarImage({ width: 1600 });
+  const base = readStatBar(image, templates);
+  assert.ok(base.stats, '前提：呢張合成圖要讀得到');
+  const c = base.confidence;
+  // 門檻啱啱高過實際信心 → 一定要唔出數（證明個閘同 `confidence` 真係連住）
+  const rejected = readStatBar(image, templates, { minConfidence: c + 0.001 });
+  assert.equal(rejected.stats, null, `信心 ${c.toFixed(3)} < ${(c + 0.001).toFixed(3)} 應該唔出數`);
+  assert.match(rejected.reason ?? '', /信心/);
+  // 門檻啱啱等於實際信心（`<` 唔係 `<=`）→ 照出數
+  const kept = readStatBar(image, templates, { minConfidence: c });
+  assert.deepEqual(kept.stats, base.stats, '門檻等於信心唔應該殺（< 而唔係 <=）');
+});
+
 test('statbar readStatBar：ROI 冇面板條（例如轉場）→ 老實回報讀唔到', () => {
   const blank = makeImage(400, 130);
   const read = readStatBar(blank, templates);

@@ -111,6 +111,29 @@ export const DEFAULT_STATBAR_OPTIONS = Object.freeze({
   minGlyphHeight: 6,
   expectedGlyphHeightK: 0.0098,
   /**
+   * ⚠️ **刻意唔設 `minConfidence`**（設計審查 2026-09-28 S2 —— 之前係「死碼」）：
+   * 呢張表以前冇宣告 `minConfidence`，而 `readStatBar()` 尾段嗰個信心閘係
+   * `if (o.minConfidence !== undefined && …)` → **生產路徑永遠 fire 唔到**，
+   * 但 `AGENTS.md` §6／`docs/design.md` 就寫「唔出數只有三種（…信心不足）」
+   * → **文件同程式講唔同嘅嘢**。
+   *
+   * 為何唔係「補一個門檻上去」而係「刻意唔開」（實測，973 幀 dump 之中有 333 幀有 meta）：
+   *   ① 讀到數嘅 101 幀，信心分佈係 0.45–0.95，**最低 0.47**；
+   *   ② ⭐ 但信心**判唔到對錯**：0.47 嗰幀讀出**正確**值（`1133/259/462/358/420`，
+   *      同 `data/live-truth.json` 嘅 `roi-live-1133.png` 一致）；而 0.53 嗰幀
+   *      （`2026-09-19T07-16-43-362Z-fail`：一個框切到 3 個字元、分數 0.00／0.53／0.19）
+   *      讀出**可疑**值 `0/769/709/725/762`（速度 0）→ **冇任何門檻可以兩邊安全**；
+   *   ③ 歷史上真正嘅**靜默讀錯**（地雷 #23／#25／#26）信心係 **0.55–0.72** ——
+   *      即係「高信心都會錯」，加一個 0.5 級別嘅門檻只會殺良民（0.47 嗰幀）而擋唔到佢。
+   *   → 所以：**唔准**當信心閘係防線；真正嘅防線係結構閘（`notBar`／字高比／上限行墨量）
+   *     ＋ 字形接受門檻 ＋ 幀間多數投票。信心只用嚟**報告**（log／快照）。
+   *
+   * 呢個 `minConfidence` 仍然係**公開旋鈕**（`readStatBar(…, { minConfidence })`）：
+   * 測試同診斷工具會自己傳（`test/statbar.test.js` 用 0.999 驗「閘真係 work」、
+   * `tools/diag-statbar.js` 傳 0 驗結構閘）。要改成預設開啟 → 必須先量到一個
+   * 「唔會殺實測良民」嘅值，並且改埋上面兩份文件（測試會擋）。
+   */
+  /**
    * 「金色格」偵測（屬性達到 1200 之後，遊戲會把**嗰一格**數字畫成金色）。
    *
    * 用戶 2026-09-18 確認兩件事：① **逐格獨立** —— 只有過 1200 嗰格變金，
@@ -527,6 +550,10 @@ export function readStatBar(image, templates, options = {}) {
   }
 
   const stats = texts.map(Number);
+  // ⚠️ 呢個閘係**opt-in**（`DEFAULT_STATBAR_OPTIONS` **刻意冇** `minConfidence`）——
+  //    理由同實測數據見 `DEFAULT_STATBAR_OPTIONS` 上面嗰段長註釋（2026-09-28 設計審查 S2）：
+  //    信心判唔到對錯（0.47 正確／0.53 錯），所以預設唔用佢做防線；
+  //    但測試同診斷工具可以自己傳（傳 0 = 唔設限，用嚟單獨驗結構閘）。
   if (o.minConfidence !== undefined && confidence < o.minConfidence) {
     return {
       stats: null, texts, confidence, row: values,
