@@ -771,6 +771,30 @@ test('hud-config resolveHudConfig：env 唔合法／超範圍／檔案唔合法 
   assert.throws(() => resolveHudConfig({ UMAPYOI_HUD_W: '0' }, null), /layout\.size\.w 要大過 0/);
   // 檔案唔合法都唔可以靜默當冇事
   assert.throws(() => resolveHudConfig({}, { layout: { x: [0.9, 0.1] } }), /前細後大/);
+});
+
+/**
+ * ⭐⭐ 設計審查 M2 嘅回歸：**純空白唔准令程式開唔到**。
+ *
+ * 實測（2026-09-28 之前）：`UMAPYOI_HUD_X=' '` → `layoutFromEnv()` 解析 → `Number(' ')` = 0
+ * → 長度 1 → **throw** → `main.js` catch → `app.exit(1)` → **完全開唔到程式**；
+ * 而 `UMAPYOI_HUD_W=' '` 就靜默用預設（兩個入口政策相反）。
+ * 而家一律「空白 = 冇 set」（`envIsSet()` 唯一語意）→ 用預設，唔 throw。
+ */
+test('⭐ 回歸：位置／大細嘅 env 全部係純空白 → 唔准 throw（要用預設，程式要開得到）', () => {
+  const blanks = {
+    UMAPYOI_HUD_X: ' ',
+    UMAPYOI_HUD_Y: ' ',
+    UMAPYOI_HUD_W: ' ',
+    UMAPYOI_HUD_H: ' ',
+    UMAPYOI_HUD_DX: ' ',
+    UMAPYOI_HUD_DY: ' ',
+  };
+  const cfg = resolveHudConfig(blanks, null);
+  assert.deepEqual(cfg.layout, defaultHudConfig().layout, '全部當冇 set → 完全用預設');
+  // 真·壞值照樣要 throw（唔准因為上面嘅改動而放生）
+  assert.throws(() => resolveHudConfig({ UMAPYOI_HUD_X: 'abc' }, null), /UMAPYOI_HUD_X/);
+  assert.throws(() => resolveHudConfig({ UMAPYOI_HUD_W: 'abc' }, null), /UMAPYOI_HUD_W/);
   // 回傳一定要係完整形狀
   assert.deepEqual(Object.keys(resolveHudConfig({}, null)).sort(), ['display', 'layout']);
 });

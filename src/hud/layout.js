@@ -20,6 +20,9 @@ import { historyView } from './history.js';
 // ⭐ 共用小工具（`describe()`／`isPlainObject()`／`clampNumber()`／`finiteOr()`）——
 //    同 `config.js` 用同一份（獨立審計 L1）。
 import { clampNumber, describe, finiteOr } from './util.js';
+// ⭐ 環境變數「有冇 set」嘅唯一語意（設計審查 M2：`layoutFromEnv()` 同 `config.js`／
+//    `main.js` 一定要用同一套，唔然「空白值」會一邊當冇 set、一邊 throw 令程式開唔到）
+import { envIsSet } from './env-flag.js';
 // ⭐ 內容區（16:9）推算嘅**唯一**實作（同 `statbar.contentBox()` 共用，見審計 H3）
 import { CONTENT_ASPECT, contentBox } from '../vision/content-box.js';
 // ⚠️ `CONTENT_ASPECT` 由上面 re-export（唔准喺呢個檔再寫死 `9 / 16`）——舊呼叫者
@@ -295,9 +298,16 @@ export const HUD_ENV_KEYS = Object.freeze({
  * @returns {{x:number[],y:number[],offset:{dx:number,dy:number},size:{w:number,h:number}}}
  */
 export function layoutFromEnv(env = {}) {
+  // ⚠️ 「有冇 set」用 `envIsSet()`（**唯一語意**：`undefined`／`null`／空字串／純空白 = 冇 set）
+  //    —— 設計審查 M2：以前呢度只看 `!raw`／`raw === ''`，所以 `UMAPYOI_HUD_X=' '`
+  //    會行落解析（`Number(' ')` = 0 → 長度 1）→ **throw** → `main.js` catch →
+  //    `app.exit(1)` → **程式完全開唔到**；而同一晚嘅 `UMAPYOI_HUD_W=' '` 因為
+  //    `config.js` 用 `envIsSet()` 判斷，係「當冇 set、靜默用預設」→ 兩個入口政策相反。
+  //    而家兩邊都由 `envIsSet()` 話事：純空白 = 冇 set（同 `envFlag()` 對空白嘅處理一致）。
+  //    ⛔ 唔准改返做「空白就 throw」：用戶／啟動腳本漏一個空格唔應該令程式開唔到。
   const pair = (name, fallback) => {
+    if (!envIsSet(name, env)) return fallback;
     const raw = env[name];
-    if (!raw) return fallback;
     const parts = String(raw).split(',').map((s) => Number(s.trim()));
     if (parts.length !== 2 || parts.some((n) => !Number.isFinite(n))) {
       throw new Error(`${name} 要係「a,b」兩個數字，實得「${raw}」`);
@@ -305,9 +315,9 @@ export function layoutFromEnv(env = {}) {
     return parts;
   };
   const num = (name, fallback) => {
+    if (!envIsSet(name, env)) return fallback;
     const raw = env[name];
-    if (raw === undefined || raw === '') return fallback;
-    const n = Number(raw);
+    const n = Number(String(raw).trim());
     if (!Number.isFinite(n)) throw new Error(`${name} 要係數字，實得「${raw}」`);
     return n;
   };

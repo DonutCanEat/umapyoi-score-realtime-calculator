@@ -22,6 +22,8 @@ import {
   STAT_LABELS_ZH,
   STALE_MS,
 } from '../src/hud/layout.js';
+// ⭐ 設計審查 M2：「有冇 set 咗環境變數」嘅唯一語意（空白 = 冇 set）
+import { envIsSet } from '../src/hud/env-flag.js';
 
 test('hud contentRect：圖比 16:9 高 → 多出嘅部分係頂部標題列', () => {
   assert.deepEqual(contentRect({ x: 0, y: 0, width: 1600, height: 900 }), {
@@ -101,6 +103,31 @@ test('hud layoutFromEnv：環境變數可以覆寫位置／大細（唔使改 co
   // ⚠️ 唔合法要出聲，唔可以靜默當 0（靜默用錯位置比起跑唔到更難查）
   assert.throws(() => layoutFromEnv({ UMAPYOI_HUD_X: 'abc' }), /UMAPYOI_HUD_X/);
   assert.throws(() => layoutFromEnv({ UMAPYOI_HUD_Y: '0.7' }), /UMAPYOI_HUD_Y/);
+  assert.throws(() => layoutFromEnv({ UMAPYOI_HUD_W: 'abc' }), /UMAPYOI_HUD_W/);
+});
+
+/**
+ * ⭐ 設計審查 M2：**純空白 = 冇 set**（同 `envIsSet()` 嘅唯一語意一致）。
+ *
+ * 以前 `UMAPYOI_HUD_X=' '` 會行落解析 → `Number(' ')` = 0 → 長度 1 → **throw** →
+ * `main.js` catch → `app.exit(1)` → **程式完全開唔到**；而同類嘅 `UMAPYOI_HUD_W=' '`
+ * 因為 `config.js` 用 `envIsSet()` 判斷，係「當冇 set、靜默用預設」→ 兩個入口政策相反。
+ */
+test('hud layoutFromEnv：純空白 = 冇 set（唔准 throw；同 envIsSet 語意一致）', () => {
+  const blanks = {
+    UMAPYOI_HUD_X: ' ',
+    UMAPYOI_HUD_Y: '  ',
+    UMAPYOI_HUD_W: '\t',
+    UMAPYOI_HUD_H: ' \n ',
+    UMAPYOI_HUD_DX: ' ',
+    UMAPYOI_HUD_DY: '\t',
+  };
+  assert.deepEqual(layoutFromEnv(blanks), layoutFromEnv({}), '全部要當冇 set → 用預設');
+  for (const name of Object.keys(blanks)) {
+    assert.equal(envIsSet(name, blanks), false, `${name} 空白 → envIsSet 要話「冇 set」`);
+  }
+  // 對照：真係有值就照用（唔可以因為上面嘅改動而當咗冇 set）
+  assert.deepEqual(layoutFromEnv({ UMAPYOI_HUD_X: ' 0.02 , 0.18 ' }).x, [0.02, 0.18]);
 });
 
 test('hud hudState：冇分數 → 老實講「等待面板條」', () => {

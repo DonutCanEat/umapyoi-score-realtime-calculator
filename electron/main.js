@@ -1144,8 +1144,11 @@ function parseCrop(value) {
   if (w <= 0 || h <= 0) throw new Error(`UMAPYOI_DUMP_CROP 嘅 w／h 要 > 0，實得「${value}」`);
   return { x, y, w, h };
 }
+// ⚠️ 空白 = 冇 set（同 `envIsSet()` 嘅唯一語意一致；設計審查 M2）：以前 `?? ` 只擋
+//    `undefined`／`null`，所以 `UMAPYOI_DUMP_CROP=''`／`' '` 會行落 `parseCrop()` →
+//    module 頂層 throw → **程式開唔到**。而家空白一律當冇 set → 用預設值。
 const SKILL_CROP = SKILL_DUMP
-  ? parseCrop(process.env.UMAPYOI_DUMP_CROP ?? '0.06,0.16,0.32,0.79')
+  ? parseCrop(envIsSet('UMAPYOI_DUMP_CROP') ? process.env.UMAPYOI_DUMP_CROP : '0.06,0.16,0.32,0.79')
   : null;
 
 let skillPages = 0;

@@ -114,6 +114,20 @@
    → 要真正擋呢類錯，要另找判準（方向：同一個數字框之內**字元分數嘅分佈**／
    `readNumberTrimmed().dropped` 比例／同 `candidates` 嘅幾何一致性），
    而且要量「同名 max vs 唔同名 max」式嘅分離度先可以落。**唔准估**。
+10. ⚠️ **部分修好（2026-09-28 設計審查 M2）—— 環境變數嘅「數字解析政策」仲未完全統一**：
+   ✅ 已修：**純空白／空字串 = 冇 set**（`envIsSet()` 唯一語意）—— 以前
+   `UMAPYOI_HUD_X=' '` 會 throw → `main.js` catch → `app.exit(1)` → **完全開唔到程式**，
+   而 `UMAPYOI_HUD_W=' '` 就靜默用預設（兩個入口政策相反）；`UMAPYOI_DUMP_CROP=''`／`' '`
+   亦會喺 module 頂層 throw。而家全部當「冇 set → 用預設」，有兩個回歸測試
+   （`test/hud-config.test.js`／`test/hud.test.js`）。
+   ⛔ **未修**：仲有 **3 個入口**各自解析數字 —— `src/hud/layout.js`（`Number()`）、
+   `src/hud/env-flag.js`（`envNumber()`，唔合法 → 警告 ＋ 用預設）、
+   `electron/main.js` 嘅 `parseCrop()`（唔合法 → throw，module 頂層）。
+   所以 `UMAPYOI_HUD_W='0x10'`（`Number()` = 16）會行到 `validateConfig()` 才 throw
+   （訊息含 `layout.size.w`），而 `UMAPYOI_DUMP_FRAMES='0x10'` 就會「警告 ＋ 用預設」。
+   兩者都唔算靜默，但**政策唔一致**；要統一就要先決定「數字旋鈕唔合法應該 throw 定 warn」
+   （診斷工具鏈同用戶體驗都有影響），再逐個入口換 —— **唔准為咗一致而順手改 throw 變 warn**
+   （會令「HUD 靜默擺錯位」返嚟）。
 
 
 ---
