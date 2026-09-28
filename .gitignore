@@ -31,6 +31,11 @@ diagnostics/
 snapshots/
 
 # ── bwiki 逐頁 cache（tools/fetch-bwiki-skill-pages.js）：2404 頁 ≈ 70MB 原始 HTML 文字 ──
-# ⚠️ 呢啲係**中間產物**，唔入 git（入咗每次抓都改一大批檔）。要留嘅係**解析結果**
-#    `data/bwiki-skill-pages.json`（幾百 KB），同埋最終合併出嚟嘅技能庫。
+# ⚠️ 呢啲係**中間產物**，唔入 git（入咗每次抓都改一大批檔）。
+#    `data/bwiki-skill-pages.json` 係同一個工具嘅**解析結果**（≈28 KB）：一樣係
+#    **可以隨時重新生成**嘅 cache（本地 `data/bwiki-pages/` 齊就唔使再上網）→ 一樣唔入 git。
+#    ⛔ 以前淨係 ignore 咗 `data/bwiki-pages/`，令 `data/bwiki-skill-pages.json` 長期掛住
+#    `??`（每次 `git status` 都有 noise，而 `git add -A` 會誤入庫）—— 設計審查 L8。
+#    要留嘅係**合併入技能庫之後**嘅結果（`data/skill-db-tw.json`，有入 git）。
 data/bwiki-pages/
+data/bwiki-skill-pages.json

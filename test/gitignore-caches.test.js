@@ -1,0 +1,114 @@
+/**
+ * `.gitignore` 嘅**真閘**（設計審查 L8）。
+ *
+ * ## 為何要
+ *
+ * `.gitignore` 本身冇任何測試 → 漏一條 entry 嘅後果係**靜默**嘅：
+ *   ① `git status` 每次都出同一堆 `??`（真 noise 混住真未追蹤檔，令人唔再睇 status）；
+ *   ② 更嚴重：有人用 `git add -A`（AGENTS §0 明文禁止，但禁令唔會自己執行）就會
+ *      **一次過把 runtime 資料／幾十 MB cache 入庫**。
+ * 實測個案（L8）：`data/bwiki-skill-pages.json` 長期掛住 `??`（`git check-ignore` exit 1）
+ * —— 而佢同 `data/bwiki-pages/` 一樣係**可以重新生成**嘅 cache。
+ *
+ * ## 呢條閘點驗（唔係只睇文字）
+ *
+ * 主驗法係**真問 git**：`git check-ignore -q <path>` 要 exit 0。
+ * 只有「git 執行檔唔存在」嗰陣（例如由 tarball 解壓出嚟、冇裝 git）才 fallback 去
+ * **逐字比對 `.gitignore`**——而呢個 fallback 一樣係硬斷言（**唔會 skip**，見 AGENTS §8）。
+ */
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const GITIGNORE = readFileSync(join(ROOT, '.gitignore'), 'utf8');
+
+/**
+ * ⚠️ 呢個清單係「**一定要 ignore**」嘅 runtime 資料／快取 —— 加新 cache 落 `data/`／
+ *    寫 runtime 檔之前，要連呢個清單一齊加（唔係嘅話 `git status` 會出 noise）。
+ */
+const MUST_IGNORE = [
+  'node_modules/',
+  'dist/',
+  'hud-position.json',
+  'hud-position.json.tmp',
+  'diagnostics/',
+  'snapshots/',
+  'shots/live-debug/',
+  'shots/skill-dump/',
+  'data/bwiki-pages/',
+  'data/bwiki-skill-pages.json', // ⭐ L8：呢個就係以前漏咗嗰個
+];
+
+/** git 可唔可以用（唔用就 fallback；兩個做法都係真斷言）。 */
+function gitAvailable() {
+  try {
+    execFileSync('git', ['--version'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const HAS_GIT = gitAvailable();
+const ignoredByGit = (path) => {
+  try {
+    execFileSync('git', ['check-ignore', '-q', path], { cwd: ROOT, stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+test('gitignore：runtime 資料／快取一律要 ignore（L8：`git check-ignore` 一定 exit 0）', () => {
+  for (const path of MUST_IGNORE) {
+    if (HAS_GIT) {
+      assert.equal(ignoredByGit(path), true, `\`${path}\` 一定要被 git ignore（實測唔係）`);
+    } else {
+      // fallback：`.gitignore` 逐行比對（唔會 skip —— 只係換一個驗法）
+      const line = path.replace(/\/$/, '');
+      assert.ok(
+        GITIGNORE.split('\n').some((l) => l.trim() === path || l.trim() === line),
+        `\`.gitignore\` 冇 \`${path}\`（而且呢部機冇 git，改用逐字比對）`,
+      );
+    }
+  }
+  // 呢條測試唔准靜默「驗唔到」：一定要行到其中一邊
+  assert.ok(MUST_IGNORE.length >= 10);
+});
+
+test('gitignore：runtime 資料／快取一律**唔准**入到 git index（唔靠 `git status` 文字）', (t) => {
+  // ⚠️ 唔用 `git status --porcelain`：呢個沙盒（同 CI 以外嘅受限環境）唔准子程序用
+  //    piped stdio 捕捉輸出（實測 EPERM），而 `--error-unmatch` 只需要 **exit code**
+  //    （`stdio: 'ignore'`）就驗得到「有冇入 index」——一樣係真斷言。
+  if (!HAS_GIT) {
+    t.diagnostic('冇 git 執行檔 → 只可以驗 `.gitignore` 文字（上面嗰條已經驗咗）');
+    return;
+  }
+  for (const path of MUST_IGNORE) {
+    const target = path.replace(/\/$/, '');
+    let tracked = false;
+    try {
+      execFileSync('git', ['ls-files', '--error-unmatch', target], { cwd: ROOT, stdio: 'ignore' });
+      tracked = true;
+    } catch {
+      tracked = false; // 唔喺 index（＝正確）
+    }
+    assert.equal(tracked, false, `\`${path}\` 唔准入 git index（runtime 資料／快取）`);
+  }
+});
+
+test('gitignore：`data/` 之下兩個 bwiki cache 都要 ignore（一個都唔准漏）', () => {
+  // L8 嘅現場：`data/bwiki-pages/` 有 ignore，但同一個工具嘅解析結果冇 → 長期 `??`。
+  const text = GITIGNORE;
+  assert.match(text, /^data\/bwiki-pages\/$/m, '`data/bwiki-pages/` 要 ignore');
+  assert.match(text, /^data\/bwiki-skill-pages\.json$/m, '`data/bwiki-skill-pages.json` 要 ignore');
+  if (HAS_GIT) {
+    // 反面：真正要入 git 嘅結果（技能庫本體）**唔准**被 ignore
+    assert.equal(ignoredByGit('data/skill-db-tw.json'), false, '技能庫本體一定要入 git');
+  }
+});
