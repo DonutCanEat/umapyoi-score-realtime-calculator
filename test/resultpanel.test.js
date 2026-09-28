@@ -43,6 +43,22 @@ test('resultpanel：真樣本要完全命中（兩個實機樣本，數值唔同
   }
 });
 
+/**
+ * ⭐ 設計審查 2026-09-28 S3：培育結束確認（生產路徑之一）以前**冇**數值範圍閘
+ * → 一次誤讀可以砌出 `9999` 直接入 `evaluate()`。呢條測試釘住接駁。
+ */
+test('resultpanel 數值範圍閘：離譜數值唔准入計分（S3）', () => {
+  const shot = truth.shots[0];
+  const { read, strip } = readWindowShot(shot.file);
+  assert.ok(read.stats, '前提：真樣本要讀得到');
+  const rejected = readResultPanel(strip, templates, { maxStat: 100 });
+  assert.equal(rejected.stats, null, '超出範圍就唔准出數');
+  assert.match(rejected.reason ?? '', /唔合理/);
+  assert.equal(rejected.notResult, false, '呢個唔係「唔似嗰個畫面」——唔准撈亂兩種失敗');
+  // 邊界：預設上界之下真值要照出
+  assert.deepEqual(readResultPanel(strip, templates, { maxStat: 2600 }).stats, shot.values);
+});
+
 test('resultpanel：唔似嗰個畫面就一個數都唔准出（其他畫面全部 notResult）', () => {
   const negatives = [
     'neg-result-skills.png', // 同一個窗嘅「技能」tab（技能清單）

@@ -27,6 +27,8 @@
 import { buildInkMask, findTextLines, pixelHue } from './inkmask.js';
 import { denseBands, tightenBand, columnsToGroups, groupsToNumbers } from './digitrow.js';
 import { extractGlyphs, readNumberBoxes } from './glyphs.js';
+// ⭐ 數值合理性檢查（唯一一份；設計審查 2026-09-28 S3 —— 生產路徑以前冇呢個閘）
+import { checkStatRange } from './statrange.js';
 import { forEachCombination5 } from './combinations.js';
 // ⚠️ `countInk` 已經改用 `projection.js` 嘅共用版（審計 M3：以前呢個檔自己寫一份）。
 import { columnCounts, countInk } from './projection.js';
@@ -550,6 +552,17 @@ export function readStatBar(image, templates, options = {}) {
   }
 
   const stats = texts.map(Number);
+  // ⭐ 數值合理性檢查（**生產路徑以前冇** —— 設計審查 2026-09-28 S3）：
+  //    `maxDigits = 4` → 一次誤讀可以砌出 `9999`，之後直接入 `evaluate()`，
+  //    總分／ランク／升級差距一齊錯而**冇任何訊息**。檢查收喺 `statrange.js`（唯一一份）。
+  const range = checkStatRange(stats, { min: o.minStat, max: o.maxStat });
+  if (!range.ok) {
+    return {
+      stats: null, texts, confidence, row: values,
+      highlighted: Boolean(highlighted),
+      reason: range.reason,
+    };
+  }
   // ⚠️ 呢個閘係**opt-in**（`DEFAULT_STATBAR_OPTIONS` **刻意冇** `minConfidence`）——
   //    理由同實測數據見 `DEFAULT_STATBAR_OPTIONS` 上面嗰段長註釋（2026-09-28 設計審查 S2）：
   //    信心判唔到對錯（0.47 正確／0.53 錯），所以預設唔用佢做防線；

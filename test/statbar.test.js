@@ -283,6 +283,22 @@ test('statbar 信心閘：真係傳入去嗰陣要 fire（唔係死碼）', () =
   assert.deepEqual(kept.stats, base.stats, '門檻等於信心唔應該殺（< 而唔係 <=）');
 });
 
+/**
+ * ⭐ 設計審查 2026-09-28 S3：生產路徑（`cropped=true` → 呢個 reader）以前**冇**數值範圍閘
+ * （只有 `reader.js` 有）→ `readNumberTrimmed()` 嘅 `maxDigits = 4` 之下，
+ * 一次誤讀可以砌出 `9999` 直接入 `evaluate()`。呢條測試釘住接駁（用 `maxStat` 收窄模擬）。
+ */
+test('statbar 數值範圍閘：離譜數值唔准入計分（S3）', () => {
+  const image = makeStatBarImage({ width: 1600 });
+  assert.ok(readStatBar(image, templates).stats, '前提：正常要讀得到');
+  const read = readStatBar(image, templates, { maxStat: 100 });
+  assert.equal(read.stats, null, '超出範圍就唔准出數');
+  assert.match(read.reason ?? '', /唔合理/, '訊息要講「唔合理」');
+  assert.match(read.reason ?? '', /第 1 個/, '要指出係第幾個');
+  // 邊界：預設上界 2600 之下，正常值一定要照出（唔准殺良民）
+  assert.deepEqual(readStatBar(image, templates, { maxStat: 2600 }).stats, [226, 54, 139, 85, 102]);
+});
+
 test('statbar readStatBar：ROI 冇面板條（例如轉場）→ 老實回報讀唔到', () => {
   const blank = makeImage(400, 130);
   const read = readStatBar(blank, templates);

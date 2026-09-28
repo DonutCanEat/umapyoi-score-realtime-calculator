@@ -10,11 +10,11 @@
 import { buildInkMask } from './inkmask.js';
 import { detectDigitRow } from './digitrow.js';
 import { extractGlyphs, readNumberBoxes } from './glyphs.js';
+// ⭐ 數值合理性檢查（**唯一一份**，三個 reader 共用）—— 設計審查 2026-09-28 S3：
+//    以前只有呢個檔做檢查，生產路徑（`statbar.js`／`resultpanel.js`）冇 → 誤讀 `9999`
+//    會靜默入計分。詳情見 `statrange.js` 檔頭。
+import { checkStatRange } from './statrange.js';
 import { evaluate } from '../umascore/evaluate.js';
-
-/** 五維合理範圍（屬性上限可以變，但唔會超過 2000 好多）。 */
-const MIN_STAT = 0;
-const MAX_STAT = 2600;
 
 /**
  * 由模板 JSON（`data/glyph-templates.json`）建立 runtime 模板表。
@@ -62,10 +62,10 @@ export function readStats(image, templates, options = {}) {
   }
 
   const stats = texts.map(Number);
-  for (const [i, v] of stats.entries()) {
-    if (!Number.isFinite(v) || v < MIN_STAT || v > MAX_STAT) {
-      return { stats: null, confidence, row, reason: `第 ${i + 1} 個數值唔合理（${v}）`, numbers: texts };
-    }
+  // ⭐ 合理性檢查交共用純函數（措辭同以前逐字一樣；三個 reader 用同一支）
+  const range = checkStatRange(stats, { min: options.minStat, max: options.maxStat });
+  if (!range.ok) {
+    return { stats: null, confidence, row, reason: range.reason, numbers: texts };
   }
   return { stats, confidence, row, numbers: texts };
 }

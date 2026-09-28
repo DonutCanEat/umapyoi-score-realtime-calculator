@@ -44,6 +44,11 @@ src/vision/
                   #    逐行墨量切 5 行（要均勻）→ 每行右邊數字框 → 字形比對；
                   #    `lightFraction` **0.05**（面板半透明，數字騎住剪影 —— 地雷 #32）
   reader.js       # ⭐ 影像 → 五維 → 評價分；幀間多數投票（StatTracker）
+  statrange.js    # ⭐ 數值合理性檢查（**唯一一份**；`0 ≤ 值 ≤ 2600`）：`checkStatRange()`／
+                  #    STAT_MIN／STAT_MAX。三個 reader（reader／statbar／resultpanel）共用 ——
+                  #    設計審查 2026-09-28 S3：以前只有 `reader.js` 做檢查，生產路徑
+                  #    （`cropped=true` → `statbar`）冇 → 誤讀 `9999` 會靜默入計分。
+                  #    ⚠️ 上界 2600 唔准收緊（屬性上限開放過 1200 → 2000）
   png.js          # 零依賴 PNG 解碼器（讀實機截圖用）
   pngwrite.js     # 零依賴 PNG **編碼**器（dump 實機幀做證據用；有 round-trip 測試）
   skillscreen.js  # ⭐ 技能畫面（畫面 B）欄／行／名框偵測（見 §6.5）

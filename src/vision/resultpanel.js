@@ -30,6 +30,8 @@
 import { extractGlyphs, readNumberBoxes } from './glyphs.js';
 import { buildInkMask, findTextLines } from './inkmask.js';
 import { columnCounts, countInk, runSpans } from './projection.js';
+// ⭐ 數值合理性檢查（唯一一份；設計審查 2026-09-28 S3 —— 生產路徑以前冇呢個閘）
+import { checkStatRange } from './statrange.js';
 import { dropNonDigits } from './statbar.js';
 
 /**
@@ -266,6 +268,16 @@ export function readResultPanel(strip, templates, options = {}) {
   }
 
   const stats = texts.map(Number);
+  // ⭐ 數值合理性檢查（**生產路徑以前冇** —— 設計審查 2026-09-28 S3）：
+  //    基礎能力上限同樣係 2000（睇 `statrange.js` 為何上界留到 2600）。
+  const range = checkStatRange(stats, { min: o.minStat, max: o.maxStat });
+  if (!range.ok) {
+    return {
+      stats: null, texts, confidence, rows,
+      notResult: false,
+      reason: range.reason,
+    };
+  }
   if (o.minConfidence !== undefined && confidence < o.minConfidence) {
     return {
       stats: null, texts, confidence, rows,

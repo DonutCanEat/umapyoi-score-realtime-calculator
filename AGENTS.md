@@ -165,6 +165,10 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
   - **ステータス面板排法 30/30**。
 - ✅ **負樣本 5/5 唔出數**（其他畫面唔准出數，見地雷 #30 —— 包括**培育結束確認**嘅
   「能力值」／「技能」tab 同**賽馬娘詳情**面板）。
+- ⭐ **數值合理性閘（`0–2600`）三個 reader 都有**（設計審查 2026-09-28 S3）：
+  以前只有 `reader.js` 做，生產路徑（`statbar.js`／`resultpanel.js`）係 `texts.map(Number)`
+  就交出去 → 一次 4 位數誤讀（`9999`）會靜默入 `evaluate()`。而家收埋喺
+  `src/vision/statrange.js`（唯一一份，措辭同舊版逐字一樣）＋ `test/statrange.test.js`。
 - ✅ 已實機跑過（`npm start`，1920 窗），過程中修好三樣：
   間歇性「讀唔清」（地雷 #25）、**金色格靜默讀錯**（地雷 #26）、
   **格線入墨窗口搞到成個畫面唔出數**（地雷 #31）。
@@ -290,7 +294,7 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（536 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+npm.cmd test              # 單元測試（543 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
 node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ **electron/**（4 檔，含
                                      #    main.js／panel-window.js／web-preferences.js／ipc-channels.cjs）
                                      #    ＋ src/**（47 檔）＋ tools/**（54 檔）—— 見 §8 4b
@@ -496,7 +500,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **536 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **543 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 15/15**、**負樣本 5/5 唔出數**），全部都要中
@@ -530,7 +534,7 @@ src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔�
                 #   env-flag.js（環境變數唯一讀法）／history.js（C3 成長曲線核心）
 electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／ipc-channels.cjs（channel 名唯一來源）／
                 #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 536 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+test/           # 543 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
 tools/          # 54 個 CLI（＋ tools/lib/ 2 個共用模組）：診斷／建模板／對答案／what-if／advice／
                 #   診斷包／renderer 實載閘／讀技能名（`read-skills` 等 5 個）／
                 #   外部名單比對（`diff-skill-names`）／GameTora 抓取＋查詢＋缺口（`fetch-gametora`／
@@ -667,7 +671,8 @@ oval > 0 → 再加 oval 部分；最後 floor
 - **CV 邏輯一律喺 Node 主程序**（renderer 由 `file://` 載入 → ESM 會被 CORS 擋）：
   renderer 只「擷取 → 1:1 剪 ROI → 傳 raw RGBA」→ 所以核心邏輯可以 `node --test`。
 - **HUD 底線：正常模式一定穿透**（`setIgnoreMouseEvents(true)`，四重保險；對位模式例外）。
-- **唔出數只有兩種**：`notBar`（換咗畫面）／真失敗 —— 唔准亂估（黃金格例外，見地雷 #26）。
+- **唔出數只有三種**：`notBar`（換咗畫面）／真失敗（讀唔清）／**數值唔合理**（超出 `0–2600`，
+  見 `src/vision/statrange.js`；三個 reader 共用）—— 唔准亂估（黃金格例外，見地雷 #26）。
   ⚠️ **信心閘（`minConfidence`）係 opt-in、預設刻意唔開**（設計審查 2026-09-28 S2）：
   實測信心判唔到對錯（0.47 讀出正確值、0.53 讀出可疑值；歷史靜默讀錯反而係 0.55–0.72）
   → 見 `src/vision/statbar.js` `DEFAULT_STATBAR_OPTIONS` 長註釋、`docs/known-issues.md` §9.1-9。
@@ -688,12 +693,12 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **536 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **543 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
    （歷史：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js` 要求 repo 根
-   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹同乾淨 HEAD 都係 **529／0**（2026-09-27 進度：批量 what-if +17 → 394 → `skillread` 14 → `nameseg` 8 → 402 → `skilllist-diff` 8 → 410 → `gametora-data` 5 → 415 → `gametora-skills` 8 → 423 → `bwiki-skill-page` 12 → 435 → `bwiki-coverage` 12 → 455 → `bwiki-calc-page` 8 → 463 → `skill-db-merge` 14 → 479 → 名 fallback +1 → 483 → `kindOfRarity` 修正 +1 → 484 → 窗批量輸入 +11 → 495 → **去重第二輪（`docs/dedup-next-steps.md`）：M1 `hud-util` +6 → 501 → L1 `stamp` +5 → 506 → M7 `skill-name-key` +5 → 511 → H1 `capture-region` +7 → 518 → M2 `writable-root` +4 → 522 → 地雷 #33 `panel-window` +4 ＋ `renderer-syntax-gate` +3 → 529 → **設計審查 S1（適性別名 `APTITUDE_ALIASES`）＋ 技能庫覆蓋閘 `aptitude-coverage` +5 → 534 → S2 信心閘（改 opt-in ＋ 2 條閘）+2 → 536**）。
+   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹同乾淨 HEAD 都係 **529／0**（2026-09-27 進度：批量 what-if +17 → 394 → `skillread` 14 → `nameseg` 8 → 402 → `skilllist-diff` 8 → 410 → `gametora-data` 5 → 415 → `gametora-skills` 8 → 423 → `bwiki-skill-page` 12 → 435 → `bwiki-coverage` 12 → 455 → `bwiki-calc-page` 8 → 463 → `skill-db-merge` 14 → 479 → 名 fallback +1 → 483 → `kindOfRarity` 修正 +1 → 484 → 窗批量輸入 +11 → 495 → **去重第二輪（`docs/dedup-next-steps.md`）：M1 `hud-util` +6 → 501 → L1 `stamp` +5 → 506 → M7 `skill-name-key` +5 → 511 → H1 `capture-region` +7 → 518 → M2 `writable-root` +4 → 522 → 地雷 #33 `panel-window` +4 ＋ `renderer-syntax-gate` +3 → 529 → **設計審查 S1（適性別名 `APTITUDE_ALIASES`）＋ 技能庫覆蓋閘 `aptitude-coverage` +5 → 534 → S2 信心閘（改 opt-in ＋ 2 條閘）+2 → 536 → S3 三個 reader 共用數值範圍閘 +7 → 543**）。
    逐步累積過程（2026-09-19，僅供回溯）：H1 之後乾淨 HEAD 327／0 vs 工作樹 328／0 →
    A9 `write-root` +5 → 333 → 地雷 #31 +1 → 334 → `log-file` +5 → 339 → 擷取凍結 +3 → 342
    → 診斷掣 +4 → 346 → 培育結束確認 reader +5 → 351 → 確認閘 +3 → 354 →
