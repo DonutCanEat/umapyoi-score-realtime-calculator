@@ -22,7 +22,7 @@
 | [formula.md](formula.md) | 評價分公式：推導、來源、驗算、已知誤差 | 現行 |
 | [vision-design.md](vision-design.md) | 影像辨識設計：座標模型、畫面清單、邊界情況 | 現行 |
 | [design.md](design.md) | 設計細節：兩條路、三個畫面、為何 CV 放 Node、HUD overlay、技能畫面、what-if | 現行 |
-| [pitfalls.md](pitfalls.md) | **33 條地雷** —— 每條寫明「⛔ 舊寫法／錯假設」同「✅ 正解」，通常連住一個閘 | 現行 |
+| [pitfalls.md](pitfalls.md) | **34 條地雷** —— 每條寫明「⛔ 舊寫法／錯假設」同「✅ 正解」，通常連住一個閘 | 現行 |
 | [known-issues.md](known-issues.md) | 已知待辦 ＋ §9.1 **未修**嘅技術債（獨立審計發現） | 現行 |
 | [backlog.md](backlog.md) | 總 Backlog：**A** 唔使開遊戲／**B** 要開遊戲／**C** 新功能／**D** agent 提議 | 現行 |
 | [file-map.md](file-map.md) | 逐個檔案嘅用途、為何咁做、有咩閘（完整版） | 現行 |
@@ -30,6 +30,8 @@
 | [packaging.md](packaging.md) | 打包（A9）：指令、輸出大細、白名單、打包後路徑規則、驗收紀錄 | 現行 |
 | [github.md](github.md) | 遠端、CI／Release 流程、公開前注意事項、踩過嘅 CI-only 問題 | 現行 |
 | [electron-dedup-report.md](electron-dedup-report.md) | 2026-09-19 Electron 去重審計：15 簇重複嘅成因、修法、逐 commit 驗收數據 | ⚠️ **歷史存檔**（嗰輪做完就完，簇編號已改過一次，唔好靠編號）|
+| [design-review-2026-09-28.md](design-review-2026-09-28.md) | 2026-09-28 全程式設計審查：5 嚴重（S1–S5）／11 中等（M1–M11）／11 輕微（L1–L11），每條都有證據同反證 | 現行（逐項修復中；邊項修好睇 `git log`）|
+| [test-count-history.md](test-count-history.md) | `npm.cmd test` 測試數量嘅逐個 commit 累積歷史 | ⚠️ **歷史存檔**（2026-09-28 由 `AGENTS.md` §8.1 搬出——嗰度爆 65,536 bytes 讀取預算，見 L11）|
 
 ## 維護規則
 

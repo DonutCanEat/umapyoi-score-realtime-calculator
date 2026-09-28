@@ -15,7 +15,7 @@
 
 ```bash
 npm.cmd install                # 依賴（npm cache 已指入 workspace，見 .npmrc）
-npm.cmd test                   # 單元測試：363 個，必須全過
+npm.cmd test                   # 單元測試：573 個，必須全過
 npm.cmd start                  # 開程式（要先開住遊戲）
 ```
 
@@ -32,13 +32,13 @@ npm.cmd start                  # 開程式（要先開住遊戲）
 | 階段 | 內容 | 狀態 |
 |---|---|---|
 | Phase 0 | 評價分運算核心（精確演算法、ランク表、單元測試） | ✅ **誤差 = 0** |
-| Phase 0 | 技能資料庫（1323 招）＋ 進化技能 override | ✅ |
+| Phase 0 | 技能資料庫（1589 招）＋ 進化技能 override | ✅ |
 | Phase 0 | **精度驗證：5 條培育完成紀錄全部誤差 = 0** | ✅ 第 5 條係**遊戲自己顯示嘅評價點**（35,050）|
 | Phase 1 | 畫面擷取（`npm.cmd start`） | ✅ 含凍結自動重啟 ＋ 兩粒手動掣 |
 | Phase 1 | **五維數字辨識（零校準）** | ✅ 面板截圖 **30/30**、實機面板條 **15/15**、負樣本 **5/5 唔出數** |
 | Phase 1 | **「培育結束確認 → 基礎能力」讀取** | ✅ 2/2 實機樣本完全命中（2026-09-23 用戶實機驗過）|
 | Phase 1 | HUD overlay ＋ 設定面板 | ✅ 已實機驗過（透明置頂穿透、拖位對位、設定即時生效）|
-| Phase 2 | 技能 icon 識別 | ⏸️ **暫停中**（欄／行偵測 ＋ 名框抽取已做好；見 `docs/skill-screen.md`）|
+| Phase 2 | 技能 icon 識別 | ⛔ **唔准接 UI**（2026-09-27 實測：同名最高 0.928 < 唔同名最高 0.986 → 會靜默配錯；欄／行偵測 ＋ 名框抽取已做好，見 `docs/skill-screen.md` §5.9）|
 | Phase 3 | what-if 模擬、成長曲線、升級建議 | ✅ C1／C3／C4／C5 已做 |
 | Phase 4 | 事件選項助手 | 暫緩 |
 | Phase 5 | **打包（portable 單檔 exe）** | ✅ `npm.cmd run pack:win` → 95.7 MB 單檔 |
@@ -143,9 +143,18 @@ DPI 改變都自動食得住。
 
 ```bash
 # ── 測試同閘 ──
-npm.cmd test                                    # 363 個單元測試，必須全過
-node tools/check-renderer-syntax.js             # 語法閘（4 HTML ＋ main.js ＋ src/** ＋ tools/**）
+npm.cmd test                                    # 573 個單元測試，必須全過
+node tools/check-renderer-syntax.js             # 語法閘（4 HTML ＋ electron/** ＋ src/** ＋ tools/**）
+node tools/diag-file-map.js                     # 文件地圖閘：docs/file-map.md 附錄同實際檔案／檔頭註釋同步
+                                                # （⚠️ 紅咗要跑 `--write` 重新生成，唔准手改附錄）
+node tools/fit-score.js                         # 計分閘：完全命中 5/5　總絕對誤差 0
+node tools/diag-statbar.js --read               # 影像閘：實機面板條 15/15 ＋ 負樣本 5/5 唔出數
+node tools/read-result.js --all                 # 影像閘：培育結束確認（真值全中 ＋ 負樣本唔出數）
+node tools/build-glyph-templates.js --exclude=uma2 --verify
+                                                # 影像閘：30/30 ＋ 15/15 ＋ 5/5（⚠️ --verify 唔會寫檔）
 node tools/collect-diagnostics.js               # 一鍵診斷包 → diagnostics/diag-<時間>/report.md
+                                                # ⭐ 上面 7 個閘喺推 main／PR 嗰陣由 CI 自動跑
+                                                #    （`.github/workflows/gates.yml`；發版前再跑一次）
 
 # ── 計分核心 ──
 node src/cli.js 600 600 600 600 600             # 手動試算 → 總評價點 5715 / C+
@@ -195,9 +204,9 @@ src/capture/    揀擷取來源（排除自己嘅窗；純函數）
 src/hud/        layout／config／config-path／write-root／log-file／snapshot／env-flag／history／util
 src/cli.js      手動試算 CLI
 electron/       main.js（主程序）／ipc-channels.cjs（channel 名唯一來源）／4 個 HTML renderer
-tools/          34 個 CLI（診斷／建模板／對答案／what-if／advice／診斷包／實載閘…）＋ tools/lib/
-test/           363 條（純函數 ＋ 幾個接線閘）
-data/           skill-db-tw.json（1323 招）／glyph-templates.json／live-truth.json／ground-truth/…
+tools/          53 個 CLI（診斷／建模板／對答案／what-if／advice／診斷包／實載閘／文件地圖閘…）＋ tools/lib/（3 個共用模組）
+test/           573 條（純函數 ＋ 幾個接線閘）
+data/           skill-db-tw.json（1589 招）／glyph-templates.json／live-truth.json／ground-truth/…
 shots/          ⭐ 證據庫（每個目錄係咩睇 shots/README.md）
 docs/           設計／公式／地雷／待辦／打包／檔案地圖
 ```
@@ -215,10 +224,12 @@ docs/           設計／公式／地雷／待辦／打包／檔案地圖
 | [docs/formula.md](docs/formula.md) | 公式推導、驗證、來源 |
 | [docs/vision-design.md](docs/vision-design.md) | 影像辨識設計（座標模型、畫面清單、邊界情況）|
 | [docs/design.md](docs/design.md) | 設計細節（兩條路、三個畫面、HUD overlay、技能畫面、what-if）|
-| [docs/pitfalls.md](docs/pitfalls.md) | **32 條地雷**（改影像／計分／HUD 之前必讀）|
+| [docs/pitfalls.md](docs/pitfalls.md) | **34 條地雷**（改影像／計分／HUD 之前必讀）|
 | [docs/known-issues.md](docs/known-issues.md) | 已知待辦 ＋ **未修**嘅技術債 |
 | [docs/backlog.md](docs/backlog.md) | 總 Backlog（A／B／C／D）|
-| [docs/file-map.md](docs/file-map.md) | 逐檔完整說明 |
+| [docs/design-review-2026-09-28.md](docs/design-review-2026-09-28.md) | 全專案設計審查報告（**5 嚴重 S1–S5**／11 中等 M1–M11／11 輕微 L1–L11；每條有證據＋反證）|
+| [docs/file-map.md](docs/file-map.md) | 逐檔完整說明（附錄由各檔檔頭註釋自動生成，有同步閘 `tools/diag-file-map.js`）|
+| [docs/test-count-history.md](docs/test-count-history.md) | `npm.cmd test` 測試數量嘅逐 commit 累積歷史（歷史存檔）|
 | [docs/skill-screen.md](docs/skill-screen.md) | Phase 2 技能畫面實測版面同硬限制 |
 | [docs/packaging.md](docs/packaging.md) | 打包：指令／輸出大細／白名單／打包後路徑規則 |
 | [docs/github.md](docs/github.md) | 遠端、Release 流程、公開前注意事項 |
@@ -240,7 +251,7 @@ docs/           設計／公式／地雷／待辦／打包／檔案地圖
 
 ## 已知限制 / 下一步
 
-- **Phase 2（技能 icon 識別）暫停中**（用戶 2026-09-19 指示）—— 已做好嘅部分隨時接返。
+- **Phase 2（技能 icon 識別）唔准接 UI**（2026-09-27 實測：影像比對唔夠安全 —— 同名最高 0.928 < 唔同名最高 0.986，而盲測 3/3 全部配錯）—— 已做好嘅部分留住，但要有新證據先可以再試（見 `docs/skill-screen.md` §5.9）。
 - **HUD 跟遊戲視窗移動＝唔做**（用戶 2026-09-19 決定；可以用拖位擺去自己想擺嘅位）。
 - `shots/gt/uma2-*.png` 同 `02-西野花…UE2.json`**對唔上**（兩張圖一致讀出另一組值）——
   估計截圖係舊一輪。⚠️ 該條 ground truth 已作廢，唔好用嚟做驗收（地雷 #19）。

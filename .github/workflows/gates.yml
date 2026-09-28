@@ -17,6 +17,7 @@
 # 本機同一套指令都可以跑（見 AGENTS.md §2／§8）：
 #   npm.cmd test
 #   node tools/check-renderer-syntax.js
+#   node tools/diag-file-map.js
 #   node tools/fit-score.js
 #   node tools/diag-statbar.js --read
 #   node tools/read-result.js --all
@@ -53,6 +54,11 @@ jobs:
       # ⭐ 語法閘（4 個 renderer HTML ＋ electron/** ＋ src/** ＋ tools/**）
       - name: 語法閘
         run: node tools/check-renderer-syntax.js
+
+      # ⭐ 文件同步閘（設計審查 M5）：`docs/file-map.md` 附錄同實際 `src/**`／`tools/**`
+      #    清單 ＋ 各檔檔頭註釋第一句必須一致（唔同步 → exit 1）
+      - name: 文件地圖閘
+        run: node tools/diag-file-map.js
 
       # ⭐ 計分核心：5 條實機樣本必須完全命中、總絕對誤差 0
       - name: 對答案（計分核心）

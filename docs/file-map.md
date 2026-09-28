@@ -322,9 +322,13 @@ docs/
   formula.md             # 公式推導、驗證、來源
   vision-design.md       # 影像辨識設計（座標模型、畫面清單、邊界情況）
   design.md              # 設計細節（兩條路、三個畫面、為何 CV 放 Node、HUD overlay、what-if）
-  pitfalls.md            # ⭐ **33 條地雷**（改影像／計分／HUD 之前必讀；每條連住一個閘）
+  pitfalls.md            # ⭐ **34 條地雷**（改影像／計分／HUD 之前必讀；每條連住一個閘）
   known-issues.md        # 已知待辦 ＋ §9.1 **未修**嘅技術債（獨立審計發現）
   backlog.md             # 總 Backlog（A 唔使開遊戲／B 要開遊戲／C 新功能／D agent 提議）
+  design-review-2026-09-28.md  # ⭐ 全程式設計審查（S1–S5／M1–M11／L1–L11）：每條有證據 ＋ 反證；
+                              #    修復進度睇 `git log`（每一項一個 commit）
+  test-count-history.md  # ⚠️ **歷史存檔**：`npm.cmd test` 測試數量嘅逐 commit 累積歷史
+                          #    （2026-09-28 由 `AGENTS.md` §8.1 搬出 —— 嗰度爆 65,536 bytes 預算，見 L11）
   skill-screen.md        # ⭐ 技能畫面（Phase 2）實測版面 ＋ 識字嘅硬限制同可行路線
   packaging.md           # ⭐ A9 打包：指令／輸出大細／白名單／打包後嘅路徑規則／驗收紀錄／未驗清單
   github.md              # 遠端、CI／Release 流程、公開前注意事項、踩過嘅 CI-only 問題
@@ -355,3 +359,67 @@ docs/
 `files` 白名單（`electron/**`＋`src/**`＋2 個 runtime data JSON＋`package.json`）、
 `asar: true`、`electronDist: node_modules/electron/dist`（唔使重新下載 Electron）、
 `npmRebuild: false`、`win.target: portable`。⚠️ **將來加 runtime data 檔要同步加落白名單**。
+
+
+---
+
+## 附錄：未逐個展開嘅檔案（由各檔**檔頭註釋**自動生成）
+
+> 為何要呢一節（設計審查 2026-09-28 M5）：上面正文係人手寫嘅「主要檔」地圖，
+> 但 AGENTS.md §3 叫呢份做「**逐檔完整說明**」——實查有 **36 個** `src/**`／`tools/**`
+> 檔案完全冇出現過（實測 `grep -c content-box docs/file-map.md` = 0；`nameseg`、`skill-db-merge`
+> 一樣 0）。呢一節補齊清單：每行嘅描述都係**由嗰個檔自己嘅檔頭註釋抽第一句**
+> （唔係另外寫嘅，所以唔會同程式碼講唔同嘅嘢）。
+>
+> ⚠️ **唔准手改呢一節**（下次生成會蓋走）。正確做法：改完檔頭註釋或者加減檔案之後
+> 跑 `node tools/diag-file-map.js --appendix` 重新生成 → 貼返落嚟。
+> 呢支工具同時係呢一節嘅**閘**：`node tools/diag-file-map.js` 唔同步 → exit 1
+> （負樣本實測：加一個空檔 → 「附錄 42 行，應該係 43 行」→ 紅；改一個字 →
+> 「第 11 行唔同」→ 紅；還原 → 綠）。
+> ⚠️ 「正文有冇提及」只睇下面嗰個**標記之前**嘅部分 —— 所以呢段說明本身提到嘅檔
+> （例如 `tools/diag-file-map.js`）唔會出現喺清單（呢個係預期，唔係漏）。
+
+<!-- appendix:start -->
+
+### src/（正文冇提及嘅 13 個）
+
+- `src/umascore/bwiki-calc-page.js` — bwiki「评分计算器」頁面嘅解析（純函數，唔上網、唔讀檔）。
+- `src/umascore/bwiki-coverage.js` — **bwiki 每招一頁 ↔ 本庫 ↔ GameTora 三方對帳**（純函數，唔上網、唔讀檔）。
+- `src/umascore/bwiki-skill-page.js` — bwiki「每招一頁」嘅解析（純函數）。
+- `src/umascore/gametora-data.js` — GameTora 數據 → 本機 JSON（**唔使用瀏覽器**）。
+- `src/umascore/skill-db-merge.js` — **合併技能庫**（純函數）：bwiki 計算器頁（繁中服當前狀態）＋ GameTora（日服繁體名）＋ 本庫。
+- `src/umascore/skill-owners.js` — 技能「擁有者／進化鏈」解析（純函數）。
+- `src/umascore/skilllist-diff.js` — 外部技能名單 → 分類（純函數）。
+- `src/vision/combinations.js` — 「由 n 個候選揀 5 個」嘅組合搜尋骨架（**唯一一份**）。
+- `src/vision/content-box.js` — 「遊戲內容區（16:9）」嘅推算（**唯一一份**，獨立審計 H3）。
+- `src/vision/nameseg.js` — 技能名 → **逐字元**像素切分（Phase 2 字元模板路線）。
+- `src/vision/projection.js` — 逐列／逐欄墨量投影 ＋ 連續段掃描（**唯一一份**，獨立審計 M3）。
+- `src/vision/similarity.js` — 特徵向量嘅標準化同相似度（**唯一一份實作**）。
+- `src/vision/skillread.js` — 技能名「候選庫比對」（Phase 2 讀技能：離線部分）。
+
+### tools/（正文冇提及嘅 24 個）
+
+- `tools/analyze-gametora-skills.js` — **GameTora skills.json → 同本專案技能庫比對 ＋ 分類**（補技能庫嘅工作單）。
+- `tools/bwiki-coverage.js` — **bwiki 每招一頁 ↔ 本專案技能庫 ↔ GameTora 三方對帳**（**完全離線**，唔上網）。
+- `tools/check-labels.js` — 一次性核對（唔係閘）：`data/skill-name-labels.json` **內部一致性**檢定。
+- `tools/crawl-until-done.js` — **抓取 driver**：反覆跑 `fetch-bwiki-skill-pages.js` 直到 cache 真係抓齊為止。
+- `tools/diag-skillnames.js` — 驗證：技能名嘅**影像**喺唔同截圖之間一唔一致（Phase 2 成敗關口）。
+- `tools/diff-skill-names.js` — **技能名清單比對**：外部名單（GameTora 貼上／其他來源）→ 邊啲唔喺本專案技能庫。
+- `tools/fetch-bwiki-skill-pages.js` — **由 bwiki「每招一頁」抓技能資料（含基礎評價分 `base`）**。
+- `tools/fetch-gametora.js` — **由 GameTora 抓技能數據**（唔使用瀏覽器、唔使用人手貼）。
+- `tools/fill-missing-skillpt.js` — **用 bwiki 逐頁 cache 補 `skillPt`**（只補 `null`，**唔准覆蓋已經有嘅值**）。
+- `tools/find-skill-crop.js` — ⭐ 自動搵「技能清單」喺實拍框嘅邊個位置。
+- `tools/gametora-export.js` — GameTora 技能目錄 → CSV（貼落 Chrome DevTools Console 用；唔會改任何嘢）。
+- `tools/gametora-skill.js` — **查一招技能**（GameTora 對照 ＋ 本專案技能庫狀態）。
+- `tools/lib/args.js` — `tools/` CLI 嘅參數解析（**唯一一份**，獨立審計 M6）。
+- `tools/lib/file-map.js` — `docs/file-map.md` 附錄嘅**生成邏輯**（純函數；設計審查 2026-09-28 M5）。
+- `tools/lib/width.js` — 終端機表格用嘅「顯示闊度」同補空格工具（**唯一一份**）。
+- `tools/merge-skill-db.js` — **合併技能庫**：bwiki 計算器頁（繁中服當前狀態）＋ GameTora（日服繁體名）→ `data/skill-db-tw.json`。
+- `tools/nameboxes-sheet.js` — 技能名「逐頁逐欄」對照圖：一頁一欄 7 格 → 疊成一張清晰大圖（畀人／agent 肉眼核名）。
+- `tools/pack-win.js` — 打包（A9）嘅包裝器：`npm.cmd run pack:win` → 呢個檔 → `electron-builder`。
+- `tools/read-skills.js` — 技能名讀取（Phase 2，離線路線）：技能畫面 PNG → 逐格技能名。
+- `tools/skill-evolution-chains.js` — **進化技能鏈表**（GameTora 數據 → 人可讀）。
+- `tools/skill-gaps.js` — **技能庫缺口報告**：GameTora 有、本專案技能庫（`data/skill-db-tw.json`）冇嘅技能。
+- `tools/truth-template.js` — 印出「庫項 → 首次出現位置」清單（`data/skill-name-truth.json` 嘅標名工作單）。
+- `tools/verify-pairs.js` — 一次性核對（唔係閘）：驗「同一招喺唔同頁／唔同格」嘅像素相似度，
+- `tools/verify-skill-bases.js` — **交叉驗證**：用 bwiki 逐頁 cache 獨立核 `data/skill-db-tw.json` 嘅 `base`／`skillPt`。

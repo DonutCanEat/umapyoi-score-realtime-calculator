@@ -56,7 +56,7 @@ git -C "D:\File\Program Project\Umapyoi Score Realtime Calculator" log --oneline
   → `.github/workflows/release.yml` 自動跑（測試閘 → 語法閘 → fit-score → **三個影像閘** →
   `pack:win` → 掛上 Release）。完整流程同公開前注意事項：`docs/github.md`。
 - ⭐ **驗收閘 workflow（2026-09-28，設計審查 S5）**：`.github/workflows/gates.yml` ——
-  推 `main`／開 PR／手動都會跑齊「唔使 Electron」嘅閘（`npm test`／語法閘／fit-score／
+  推 `main`／開 PR／手動都會跑齊「唔使 Electron」嘅閘（`npm test`／語法閘／文件地圖閘／fit-score／
   `diag-statbar --read`／`read-result --all`／`build-glyph-templates --verify`）。
   以前只有推 tag 先跑 → **普通 commit 零自動驗證**。⚠️ 呢個 workflow **刻意唔跑 `npm ci`**
   （全部閘都係零依賴 Node script；裝依賴只會每次多 ~100MB Electron 下載）。
@@ -303,17 +303,21 @@ scope 用：`vision`（影像）／`score`（計分核心）／`skills`／`elect
 
 ```bash
 npm.cmd start             # 開 Electron（需要遊戲開住）＋ HUD overlay ＋ HUD 設定窗
-npm.cmd test              # 單元測試（563 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
-node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ **electron/**（4 檔，含
-                                     #    main.js／panel-window.js／web-preferences.js／ipc-channels.cjs）
-                                     #    ＋ src/**（47 檔）＋ tools/**（54 檔）—— 見 §8 4b
+npm.cmd test              # 單元測試（573 個，必須全過；⭐ 乾淨 checkout 一樣要全過 —— 見 §8）
+node tools/check-renderer-syntax.js  # ⭐ 語法閘：4 個 HTML inline script ＋ **electron/**（5 檔，含
+                                     #    main.js／panel-window.js／web-preferences.js／hud-passthrough.js／
+                                     #    ipc-channels.cjs）
+                                     #    ＋ src/**（49 檔）＋ tools/**（56 檔）—— 見 §8 4b
                                      # ⚠️ 2026-09-19 擴充：之前只驗 renderer，結果兩個工具
                                      #    喺 HEAD 已經爆 SyntaxError 都冇人知（見 §8 4b）
                                      # ⚠️ 2026-09-27 擴充到 `electron/**`：之前只列死 main.js／
                                      #    ipc-channels.cjs，令新檔（panel-window.js）嘅 syntax error
                                      #    走漏 → 用戶 `npm.cmd start` 完全開唔到（見地雷 #33）
+node tools/diag-file-map.js  # ⭐ 文件地圖閘（設計審查 M5）：`docs/file-map.md` 附錄同實際
+                             #    `src/**`／`tools/**` 清單 ＋ 各檔檔頭註釋第一句必須一致
+                             #    （唔同步 → exit 1；重新生成用 `--write`，唔准手改附錄）
 node tools/collect-diagnostics.js    # ⭐ D2 一鍵診斷包 → diagnostics/diag-<時間>/report.md
-node tools/collect-diagnostics.js --run-gates   # 順手跑齊 5 個閘並把尾部輸出寫落報告（慢）
+node tools/collect-diagnostics.js --run-gates   # 順手跑齊 7 個閘並把尾部輸出寫落報告（慢）
 node tools/collect-diagnostics.js --with-dumps  # 連最近 5 個 dump 幀一齊複製落 files/
                                     # ⚠️ `diagnostics/` 唔入 git（一次性支援資料）
 node_modules\.bin\electron.cmd tools\verify-renderer-load.js
@@ -515,7 +519,7 @@ node tools/skill-lib-sheet.js --sort=merge    # ⭐ 拼大圖人手覆核（最�
 ```
 
 **驗收標準**（全部都要）：
-1. `npm.cmd test` 全過（現時 **563 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
+1. `npm.cmd test` 全過（現時 **573 個**；⭐ 乾淨 `git archive HEAD` checkout 一樣要全過）
 2. `node tools/fit-score.js` 顯示 `可以計誤差 5/5　完全命中 5/5　總絕對誤差 0`
 3. 動到影像嘅話：`node tools/build-glyph-templates.js --exclude=uma2 --verify`
    → **面板截圖 30/30**（三閘：**實機面板條 15/15**、**負樣本 5/5 唔出數**），全部都要中
@@ -549,8 +553,8 @@ src/hud/        # layout.js（幾何＋顯示狀態）／config.js（設定檔�
                 #   env-flag.js（環境變數唯一讀法）／history.js（C3 成長曲線核心）
 electron/       # main.js（主程序：擷取 → 讀五維 → 計分 → 推 HUD）／ipc-channels.cjs（channel 名唯一來源）／
                 #   capture.html／hud.html／settings.html（設定窗）／whatif.html（what-if 窗）
-test/           # 563 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
-tools/          # 54 個 CLI（＋ tools/lib/ 2 個共用模組）：診斷／建模板／對答案／what-if／advice／
+test/           # 573 條（`npm.cmd test`）—— 純函數 ＋ 幾個**接線閘**（static wiring gate）
+tools/          # 53 個 CLI（＋ tools/lib/ 3 個共用模組）：診斷／建模板／對答案／what-if／advice／
                 #   診斷包／renderer 實載閘／讀技能名（`read-skills` 等 5 個）／
                 #   外部名單比對（`diff-skill-names`）／GameTora 抓取＋查詢＋缺口（`fetch-gametora`／
                 #   `gametora-skill`／`skill-gaps`／`analyze-gametora-skills`）／
@@ -569,7 +573,8 @@ shots/          # ⭐ 證據庫 —— **每個目錄係咩睇 `shots/README.md`
 docs/           # ⭐ **索引喺 `docs/README.md`**（「我應該睇邊份？」）——
                 #   formula.md／vision-design.md／skill-screen.md／pitfalls.md（34 條地雷）／
                 #   known-issues.md／backlog.md／file-map.md／design.md／packaging.md（A9）／
-                #   github.md（CI／Release）／electron-dedup-report.md（歷史存檔）
+                #   github.md（CI／Release）／design-review-2026-09-28.md（設計審查 S／M／L）／
+                #   test-count-history.md（測試數歷史）／electron-dedup-report.md（歷史存檔）
 ```
 
 ⚠️ 每個檔案嘅**用途、為何咁做、有咩閘**：睇 `docs/file-map.md`（完整版）。
@@ -711,17 +716,14 @@ oval > 0 → 再加 oval 部分；最後 floor
 
 ## 8. 改動後必做
 
-1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **563 個測試必須全過**
+1. `npm.cmd test`（或 `node --test --test-isolation=none test/*.test.js`）— **573 個測試必須全過**
    ⭐ **驗收閘一定要可以由乾淨 checkout 重現**：測試**唔准**依賴 repo 根嘅 runtime 檔
    （`hud-position.json` 唔入 git）或者其他未追蹤檔（`shots/skill-dump/`、`shots/live-debug/`、
    `.cache-local/` 之類）。驗法：`git archive HEAD` 抽出乾淨樹跑一次 → 要同工作樹一樣全過
-   （歷史：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js` 要求 repo 根
-   有 `hud-position.json`），修好之後兩邊一樣；而家工作樹同乾淨 HEAD 都係 **529／0**（2026-09-27 進度：批量 what-if +17 → 394 → `skillread` 14 → `nameseg` 8 → 402 → `skilllist-diff` 8 → 410 → `gametora-data` 5 → 415 → `gametora-skills` 8 → 423 → `bwiki-skill-page` 12 → 435 → `bwiki-coverage` 12 → 455 → `bwiki-calc-page` 8 → 463 → `skill-db-merge` 14 → 479 → 名 fallback +1 → 483 → `kindOfRarity` 修正 +1 → 484 → 窗批量輸入 +11 → 495 → **去重第二輪（`docs/dedup-next-steps.md`）：M1 `hud-util` +6 → 501 → L1 `stamp` +5 → 506 → M7 `skill-name-key` +5 → 511 → H1 `capture-region` +7 → 518 → M2 `writable-root` +4 → 522 → 地雷 #33 `panel-window` +4 ＋ `renderer-syntax-gate` +3 → 529 → **設計審查 S1（適性別名 `APTITUDE_ALIASES`）＋ 技能庫覆蓋閘 `aptitude-coverage` +5 → 534 → S2 信心閘（改 opt-in ＋ 2 條閘）+2 → 536 → S3 三個 reader 共用數值範圍閘 +7 → 543 → S4 第一刀 HUD 穿透狀態機抽出 +8 → 551 → M1 讀取分類 read-summary +7 → 558 → M2 純空白 env = 冇 set +2 → 560 → M3 來源太細警告換算 DIP +3 → 563**）。
-   逐步累積過程（2026-09-19，僅供回溯）：H1 之後乾淨 HEAD 327／0 vs 工作樹 328／0 →
-   A9 `write-root` +5 → 333 → 地雷 #31 +1 → 334 → `log-file` +5 → 339 → 擷取凍結 +3 → 342
-   → 診斷掣 +4 → 346 → 培育結束確認 reader +5 → 351 → 確認閘 +3 → 354 →
-   `hudViewKey` +4 → 358 → 設定檔 fsync +1 → 359 → `placeHud` DIP 換算 +4 → **363**。
-   查法一樣：`git archive` 出乾淨樹跑一次。）
+   （歷史同逐步累積過程搬咗去 `docs/test-count-history.md`（AGENTS.md 有 65,536 bytes 讀取預算，
+   見 L11）；重點：2026-09-19 修好之前乾淨樹 **179 pass／1 fail**（`hud-config.test.js`
+   要求 repo 根有 `hud-position.json`），修好之後兩邊一樣；而家工作樹同乾淨 HEAD 都係
+   **573／0**。查法一樣：`git archive` 出乾淨樹跑一次。）
    ⚠️ **唔准**用 `skip`／`if (!existsSync(...)) return;` 迴避 —— 咁樣只係把「驗唔到」
    變成「靜默通過」。要用嘅話就**自己控制環境**（例如 `os.tmpdir()` ＋ `process.chdir()`）。
    ⚠️ 涉及 cwd 嘅測試一定要**同步** ＋ `finally` 還原（`--test-isolation=none` 之下
@@ -764,9 +766,20 @@ oval > 0 → 再加 oval 部分；最後 floor
    → 之後所有 `ipcRenderer.on()` 靜默唔註冊（窗開得到但永遠唔郁）——
    `npm.cmd test` 同語法閘**只睇文字，捉唔到**。呢個閘真係開 Electron、真係來回送 IPC。
    ✅ **唔需要開遊戲**（`show:false`）；⚠️ 要真 Electron（見 §2 嗰行嘅 `ELECTRON_RUN_AS_NODE` 註記）。
+4d. **加／刪／改名 `src/**` 或 `tools/**` 之下嘅檔（或者改佢哋嘅檔頭註釋第一句）之後**：
+   `node tools/diag-file-map.js` → 要綠。紅咗就跑 `node tools/diag-file-map.js --write`
+   （只換 `docs/file-map.md` 標記之後嘅附錄，正文一個位元組都唔動）。
+   ⚠️ 為何要（設計審查 M5）：`docs/file-map.md` 一直被叫「逐檔完整說明」，但實測有 **36 個**
+   `src/**`／`tools/**` 檔案**從來冇出現過**（`grep content-box docs/file-map.md` 0 命中）→
+   睇文件嘅人會以為「呢啲檔唔存在」。附錄嘅每行描述都係**由嗰個檔自己嘅檔頭註釋抽第一句**
+   （唔會同程式碼講唔同嘅嘢）；生成邏輯喺 `tools/lib/file-map.js`（純函數 ＋ 10 條回歸測試）。
+   ⚠️ **唔准手改附錄**，亦**唔准**用 shell 重定向寫返落文件（呢部機嘅 PowerShell 會加 BOM、
+   把 `\t`／`\n` 當逃逸 —— 實測整爛過 file-map.md 一段說明）。
+   ⚠️ 負樣本（閘要捉得到，實測）：加一個空檔 → 「附錄 41 行，應該係 42 行」；改附錄一個字 →
+   「第一個唔同：第 11 行」；拆走 `<!-- appendix:start -->` → 「冇附錄標記」—— 三者都 exit 1。
 5. 更新 `docs/formula.md`（公式）或者 `docs/vision-design.md`（影像）
 5b. **CI 會自動跑同一套閘**（2026-09-28，設計審查 S5）：`.github/workflows/gates.yml`
-   （推 `main`／PR／手動）＝ `npm test`＋語法閘＋fit-score＋`diag-statbar --read`＋
+   （推 `main`／PR／手動）＝ `npm test`＋語法閘＋文件地圖閘＋fit-score＋`diag-statbar --read`＋
    `read-result --all`＋`build-glyph-templates --verify`；`release.yml` 發版前**再跑一次**
    （唔過唔會出 exe）。⚠️ 呢啲閘唔准「冇證據就靜默通過」（§8.1）—— 呢一輪順手修好
    `tools/fit-score.js` 同 `tools/diag-statbar.js` 嗰兩條（以前冇真值 → `exit 0`，而家 `exit 1`）。
