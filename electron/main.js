@@ -310,6 +310,20 @@ let lastStats = null;
  */
 let statHistory = [];
 /**
+ * ⭐ 成長曲線嘅「場次」序號（設計審查 M7）。
+ *
+ * 為何要：`statHistory` 以前**冇任何 reset**，而餵佢嘅有兩條語意唔同嘅路 ——
+ * 面板條（育成中嘅即時五維）同「培育結束確認」（`score.source = 'result'`，數值係**下限**）
+ * → 換窗／撳「強制更新」／轉去培育結束確認之後，條線同「成長 +N」都係**跨場次混算**。
+ * `history.js` 嘅 `pushSample()` 而家見到唔同 `session` 就由頭開一條新線；
+ * 場次字串由呢兩樣砌成：**讀取路（bar／result）＋ 擷取來源 ＋ 呢個序號**。
+ *
+ * ⚠️ 序號**只喺用戶主動「強制更新」嗰陣 +1**（`IPC_CHANNELS.refresh`）——
+ *    自動救援（凍結重啟／renderer reload）**唔算**新場次：同一局遊戲嘅數值係連續嘅，
+ *    喺嗰啲位斷開會無端端清空用戶條線。
+ */
+let captureSessionSeq = 0;
+/**
  * 最近一次讀到嘅「金色格」旗標（屬性 > 1200，遊戲長期用金色畫）。
  *
  * ⚠️ **粒度**：`statbar.readStatBar()` 嘅 `highlighted` 係**一個整體 boolean**
@@ -353,8 +367,9 @@ function templatesReady() {
  * 做四件事：更新 `lastScore`／`lastStats`／`lastScoreAt` → 餵一筆成長曲線樣本 →
  * `pushHud()`（有新數即刻推，唔等 500ms 嗰個 interval）。
  *
- * ⚠️ **參數名一定要叫 `score`／`stats`／`at`**：`test/hud-history-wiring.test.js` **逐字**斷言
- *    嗰句餵樣本嘅寫法（`pushSample(statHistory, …)` 用 `score.total`／`stats`／`lastScoreAt`）
+ * ⚠️ **參數名一定要叫 `score`／`stats`／`at`／`session`**：`test/hud-history-wiring.test.js`
+ *    **逐字**斷言嗰句餵樣本嘅寫法（`pushSample(statHistory, …)` 用 `score.total`／`stats`／
+ *    `lastScoreAt`／`session`）
  *    —— ⚠️ 呢一句**唔准**照抄落註釋（否則閘會靠註釋通過，見 `AGENTS.md`「註釋唔計」原則）。
  *
  * ⛔ **`lastGold` 唔准入呢度**：frame 條路係 `Boolean(read.highlighted)`，
@@ -372,7 +387,10 @@ function applyScore({ score, stats, at = Date.now() }) {
   lastScoreAt = at;
   // ⭐ C3：成長曲線記一筆（重複值／NaN 由 `pushSample()` 自己擋；冇變時回同一個參照
   //    → `hudViewKey()` 嘅 dedupe 亦唔會因此多 send 一次）。
-  statHistory = pushSample(statHistory, { at: lastScoreAt, total: score.total, stats }, { max: MAX_HISTORY });
+  //    ⭐ 2026-09-28（設計審查 M7）：帶埋 `session` —— 讀取路（`score.source`）／擷取來源／
+  //    場次序號任何一樣變咗，`pushSample()` 就會由頭開一條新線（唔准跨場次混算）。
+  const session = `${score?.source === 'result' ? 'result' : 'bar'}@${captureSourceId ?? '(未揀來源)'}#${captureSessionSeq}`;
+  statHistory = pushSample(statHistory, { at: lastScoreAt, total: score.total, stats, session }, { max: MAX_HISTORY });
   pushHud();
 }
 
@@ -2062,6 +2080,9 @@ ipcMain.on(IPC_CHANNELS.refresh, async () => {
   console.log('[擷取] 🔄 用戶按「強制更新」→ 重新揀來源 ＋ 重新開始擷取');
   recoverAttempts = 0; // 手動更新等於「重新開始」→ 自動救援嘅次數歸零
   lastRecoverAt = 0;
+  // ⭐ 成長曲線（設計審查 M7）：手動更新＝新場次 → 條線由頭嚟（唔准同上一輪混算）。
+  captureSessionSeq += 1;
+  console.log(`[HUD] 成長曲線：開新場次 #${captureSessionSeq}（舊樣本唔會併入）`);
   try {
     await beginCapture(captureWin);
     notifyCapture('✅ 已強制更新（重新揀來源 ＋ 重開擷取）。如果畫面唔喺ステータス面板，仍然會顯示「唔見面板條」。');

@@ -12,6 +12,7 @@ import {
   MAX_HISTORY,
   SPARK_HEIGHT,
   SPARK_WIDTH,
+  historyAxis,
   historySummary,
   historyView,
   pushSample,
@@ -85,11 +86,88 @@ test('C3：摘要講得出「由幾多升到幾多、用咗幾久」', () => {
   const sum = historySummary([s(10000, 1000), s(10300, 61000), s(10800, 181000)]);
   assert.deepEqual(sum, {
     count: 3, first: 10000, latest: 10800, delta: 800, spanMs: 180000, from: 1000, to: 181000,
+    session: null, axis: 'time',
   });
   assert.equal(historySummary([]), null);
   assert.equal(historySummary(null), null);
   assert.equal(historySummary([{ at: 5, total: NaN }]), null, '全部唔合法 → null（唔可以出 NaN 摘要）');
 });
+
+// ── ⭐ 設計審查 M7：x 軸語意（時間 vs 樣本序號）────────────────────────────────
+
+test('M7：`at` 有跨度 → x 用真時間（唔平均嘅間距要畫成唔平均）', () => {
+  // 3 筆：0s → 10s → 100s（第二段係第一段嘅 9 倍長）
+  const pts = sparklinePoints([s(1, 0), s(2, 10000), s(3, 100000)]);
+  assert.equal(historyAxis([s(1, 0), s(2, 10000), s(3, 100000)]), 'time');
+  assert.deepEqual(pts.map((p) => p.x), [0, 10, 100], 'x 同時間成正比（序號版會係 0/50/100）');
+});
+
+test('M7：`at` 冇跨度／唔齊 → 退返樣本序號，而且 `axis` 講明（唔准靜默二選一）', () => {
+  const flat = [s(1, 0), s(2, 0), s(3, 0)];
+  assert.equal(historyAxis(flat), 'index');
+  assert.deepEqual(sparklinePoints(flat).map((p) => p.x), [0, SPARK_WIDTH / 2, SPARK_WIDTH]);
+  assert.equal(historyView(flat).axis, 'index');
+  assert.equal(historyAxis([s(1, 0)]), 'index', '一點＝冇時間資訊');
+  assert.equal(historyAxis([s(1, 0), s(2, 5000)]), 'time');
+  assert.equal(historyAxis([s(1, 5000), s(2, 0)]), 'index', '時間倒轉（時鐘調整）→ 唔好用時間軸');
+});
+
+test('M7：時間軸之下中間嗰筆 `at` 唔合法／倒後 → x 夾住單調唔減（條線唔准摺埋）', () => {
+  const pts = sparklinePoints([
+    { at: 0, total: 1 },
+    { at: NaN, total: 2 },
+    { at: 500, total: 3 }, // ⚠️ 比上一筆「細」（時鐘調整）→ 唔准畫返轉頭
+    { at: 1000, total: 4 },
+  ]);
+  assert.ok(pts.every((p) => p.x >= 0 && p.x <= SPARK_WIDTH), 'x 唔可以出界');
+  for (let i = 1; i < pts.length; i += 1) {
+    assert.ok(pts[i].x >= pts[i - 1].x, `x 一定要單調唔減：${JSON.stringify(pts)}`);
+  }
+});
+
+test('M7：HUD 句「（N 分鐘）」同條線嘅橫向距離一致（spanMs 就係 x 軸總長）', () => {
+  const v = historyView([s(1000, 0), s(2000, 60000), s(3000, 180000)]);
+  assert.equal(v.axis, 'time');
+  assert.equal(v.spanMs, 180000, '3 分鐘');
+  assert.equal(v.points[0].x, 0);
+  assert.equal(v.points[v.points.length - 1].x, SPARK_WIDTH, '最後一點一定要喺最右');
+  assert.equal(Math.round(v.spanMs / 60000), 3);
+});
+
+// ── ⭐ 設計審查 M7：場次邊界 ──────────────────────────────────────────────────
+
+test('M7：`session` 一變 → 由頭開一條新線（唔准跨場次混算）', () => {
+  let h = [];
+  h = pushSample(h, { at: 1, total: 1000, stats: [1, 2, 3, 4, 5], session: 'bar@win#0' });
+  h = pushSample(h, { at: 2, total: 1200, stats: [2, 2, 3, 4, 5], session: 'bar@win#0' });
+  assert.equal(h.length, 2, '同一場次要累積');
+  h = pushSample(h, { at: 3, total: 500, stats: [1, 1, 1, 1, 1], session: 'bar@win#1' });
+  assert.equal(h.length, 1, '新場次 → 舊樣本唔准留低');
+  assert.equal(h[0].session, 'bar@win#1');
+});
+
+test('M7：場次邊界優先過「去重」（新場次第一筆數值一樣都要開新線）', () => {
+  const last = { at: 9, total: 1234, stats: [1, 1, 1, 1, 1], session: 'bar@win#0' };
+  const next = pushSample([last], { at: 10, total: 1234, stats: [1, 1, 1, 1, 1], session: 'bar@win#1' });
+  assert.equal(next.length, 1, '得新場次嗰筆');
+  assert.equal(next[0].at, 10);
+  assert.notEqual(next[0], last, '唔可以回舊嗰筆');
+});
+
+test('M7：冇傳 `session`（舊呼叫者）→ 一律同一場次，行為同以前一樣', () => {
+  let h = [];
+  h = pushSample(h, s(100, 1));
+  h = pushSample(h, s(200, 2));
+  assert.equal(h.length, 2);
+  assert.equal(h[0].session, null);
+  assert.equal(historySummary(h).session, null);
+});
+
+test('M7：`session` 唔係字串（例如 `undefined`／數字）→ 當 `null`（唔准出半截場次名）', () => {
+  const h = pushSample([], { at: 1, total: 5, stats: null, session: 7 });
+  assert.equal(h[0].session, null);
+});
+
 
 test('C3：historyView 係 HUD 收到嘅嘢（冇樣本 → null，唔會出半截 view）', () => {
   assert.equal(historyView([]), null);

@@ -59,8 +59,13 @@ test('C3：主程序要真係每幀餵 `pushSample()`（而且用同一個上限
   // ⚠️ 用剝咗註釋嘅原始碼（見 `stripComments()` 嘅註釋：唔剝就會「註釋冒充實作」）。
   //    ⚠️ 呢句而家住喺 `applyScore()`（獨立審計 M8 兩條計分路徑共用）→ 參數名
   //    `score`／`stats`／`at` **唔准改**（改咗就係改閘，要喺 commit message 講明理由）。
-  assert.match(MAIN_CODE, /statHistory = pushSample\(statHistory, \{ at: lastScoreAt, total: score\.total, stats \}/,
-    '餵入點：收到穩定值嗰度');
+  //    ⭐ 2026-09-28（設計審查 M7）：多咗 `session` —— 冇咗佢就會跨場次混算
+  //    （育成中嘅五維同「培育結束確認」嘅下限值夾埋一條線）。
+  assert.match(MAIN_CODE, /statHistory = pushSample\(statHistory, \{ at: lastScoreAt, total: score\.total, stats, session \}/,
+    '餵入點：收到穩定值嗰度（而且要帶住場次）');
+  assert.match(MAIN_CODE, /const session = `\$\{score\?\.source === 'result' \? 'result' : 'bar'\}@\$\{captureSourceId \?\? /,
+    '場次一定要包含「讀取路」同「擷取來源」');
+  assert.match(MAIN_CODE, /captureSessionSeq \+= 1;/, '「強制更新」要開新場次（唔然條線跨住兩輪）');
   assert.match(MAIN_CODE, /\{ max: MAX_HISTORY \}/, '上限要同 `hudState()` 計 `capped` 用嗰個一樣');
   assert.match(MAIN, /let statHistory = \[\];/, '要有狀態');
   assert.match(MAIN, /history: statHistory,/, '要傳落 hudState()');
@@ -80,4 +85,16 @@ test('C3：顯示選項 `history` 要喺設定窗出現（唔係嘅話用家閂�
   const FIELDS = /const DISPLAY_FIELDS = \[([\s\S]*?)\];/.exec(read('electron/settings.html'))?.[1];
   assert.ok(FIELDS, '搵唔到設定窗嘅 DISPLAY_FIELDS');
   assert.match(FIELDS, /key: 'history'/, '設定窗要有一格可以閂／開成長曲線');
+});
+
+test('M7：HUD 嗰句「用咗幾久」唔准喺冇時間軸嗰陣照講分鐘', () => {
+  // ⚠️ 呢個係 M7 嘅重點：x 軸（`history.axis`）同文字一定要講同一件事。
+  assert.match(HUD, /historyWhen\(history\)/, '「用咗幾久」要經 `historyWhen()`');
+  assert.match(HUD, /if \(history\.axis !== 'time'\) return `\$\{history\.count\} 次變化`;/,
+    '冇時間軸 → 講「N 次變化」，唔准假裝知道用咗幾久');
+  assert.match(HUD, /minutes >= 1 \? `\$\{minutes\} 分鐘` : '少於 1 分鐘'/,
+    '有時間軸但唔夠一分鐘 → 唔准講「1 分鐘」');
+  assert.ok(!/label\.textContent = `成長 \$\{sign\}\$\{history\.delta\}（\$\{minutes\} 分鐘/.test(HUD),
+    '唔准返轉頭無條件出「（N 分鐘）」');
+  assert.match(HUD, /\|\$\{history\.axis\}`/, 'dedupe key 要包含 `axis`（唔係轉軸嗰刻唔會重畫）');
 });

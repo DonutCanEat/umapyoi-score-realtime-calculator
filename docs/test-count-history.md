@@ -33,5 +33,7 @@
 - **M4** 診斷快照覆蓋「培育結束確認」條路（無新測試；靠快照節數驗） → 563
 - **M5** 文件地圖附錄 ＋ 同步閘（`tools/diag-file-map.js`／`tools/lib/file-map.js`）+10 → **573**
 - **M6** 啟動資源錯誤政策統一（`src/hud/startup-resource.js`）+13（含 2 條接線閘）→ **586**
+- **L11** `AGENTS.md` §1.2 影像里程碑搬去 `docs/vision-design.md`（無新測試；65,195 → 61,596 bytes）→ 586
+- **M7** 成長曲線 x 軸改真時間（`historyAxis()`）＋ 場次邊界（`session`）+8 ＋ HUD 標籤接線閘 +1 → **595**
 
 ⚠️ 每一項嘅 commit hash／驗收數據睇 `git log --oneline`（commit message 有寫實測數字）。

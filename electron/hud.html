@@ -111,10 +111,9 @@
           historyEl.textContent = fallback;
           return;
         }
-        const key = `${history.width}x${history.height}|${history.points.map((p) => `${p.x},${p.y}`).join(' ')}|${history.delta}|${history.capped}`;
+        const key = `${history.width}x${history.height}|${history.points.map((p) => `${p.x},${p.y}`).join(' ')}|${history.delta}|${history.capped}|${history.axis}`;
         if (key === historyKey) return;
         historyKey = key;
-        const minutes = Math.round(history.spanMs / 60000);
         const sign = history.delta >= 0 ? '+' : '';
         const svgNs = 'http://www.w3.org/2000/svg';
         const svg = document.createElementNS(svgNs, 'svg');
@@ -125,9 +124,23 @@
         svg.append(line);
         const label = document.createElement('div');
         label.className = 'hist';
-        label.textContent = `成長 ${sign}${history.delta}（${minutes} 分鐘${history.capped ? '，只顯示最近一段' : ''}）`;
+        // ⭐ 設計審查 M7：只有 `axis === 'time'`（x 軸真係時間）先可以講「幾多分鐘」——
+        //    唔係嘅話 `spanMs` 係 0，出「0 分鐘」就係講大話；嗰陣老實講「N 次變化」。
+        label.textContent = `成長 ${sign}${history.delta}（${historyWhen(history)}${history.capped ? '，只顯示最近一段' : ''}）`;
         historyEl.hidden = false;
         historyEl.replaceChildren(svg, label);
+      }
+
+      /**
+       * 成長曲線嗰句「用咗幾久」（設計審查 M7）。
+       *
+       * - `axis === 'time'`：x 軸同 `spanMs` 係同一樣嘢 → 講分鐘（< 1 分鐘唔講「1 分鐘」）。
+       * - `axis === 'index'`：冇時間資訊 → 講「N 次變化」，唔准假裝知道用咗幾久。
+       */
+      function historyWhen(history) {
+        if (history.axis !== 'time') return `${history.count} 次變化`;
+        const minutes = Math.round(history.spanMs / 60000);
+        return minutes >= 1 ? `${minutes} 分鐘` : '少於 1 分鐘';
       }
 
       /** 五維逐格（主程序已經按「速度／持久／力量／毅力／智力」排好）。 */
