@@ -61,6 +61,9 @@ import { createHudPassthrough } from './hud-passthrough.js';
 // ⭐ HUD 拖位狀態機（設計審查 S4 第二刀）：以前係一個 module-level `let hudDrag` ＋ 散落
 //    三處嘅判斷（地雷 #28／#29 嘅現場），而家純模組 ＋ 假視窗測試（`test/hud-drag-machine.test.js`）。
 import { createHudDrag, DRAG_IDLE_MS, clampedWarning, dragCommitWhy } from './hud-drag.js';
+// ⭐ HUD 位置警告（設計審查 S4 第三刀）：HUD 有 contentProtection（唔會出現喺截圖）→
+//    位置只可以靠數字核對，所以「走出內容區」嘅警告措辭同**去重政策**要釘死（有測試）。
+import { createOffContentWarner, boundsMismatchWarning } from './hud-place.js';
 import { MAX_HISTORY, pushSample } from '../src/hud/history.js';
 // ⭐ 「dump／連拍要寫邊」嘅決策（A9 打包）：打包之後 `ROOT` 係唯讀 asar，
 //    寫入會 throw ENOTDIR/EROFS → 同「設定檔位置」一樣要集中一個決策（`src/hud/write-root.js`）。
@@ -263,8 +266,12 @@ let whatifDbError = null;
  * 差一個 `scaleFactor` 就會令用戶拖完之後重開程式 HUD 跳位。
  */
 let hudContent = null;
-/** 上次警告過嘅「HUD 走出內容區」位置簽名（同一個位置只嘈一次）。 */
-let lastOffContentKey = '';
+/**
+ * 「HUD 走出內容區」警告器（`electron/hud-place.js`）：同一個位置只嘈一次，
+ * 返返內容區就清空簽名。以前係一個 module-level `let lastOffContentKey = ''` ＋
+ * 散落嘅判斷（零測試覆蓋）→ 而家純模組（`test/hud-place.test.js`）。
+ */
+const offContentWarner = createOffContentWarner({ onWarn: (text) => console.warn(text) });
 
 /**
  * 環境變數「開關旗標」（`UMAPYOI_NO_HUD`／`UMAPYOI_NO_SETTINGS`／`UMAPYOI_NO_WHATIF`／
@@ -901,30 +908,7 @@ function finishDrag(commit) {
  * @param {{x:number,y:number,width:number,height:number}} target 想擺嘅位置（`anchorHud()` 結果）
  */
 function warnIfHudOffContent(target) {
-  if (!hudContent) return;
-  const c = hudContent;
-  const inside = target.x >= c.x - 1 && target.y >= c.y - 1
-    && target.x + target.width <= c.x + c.width + 1
-    && target.y + target.height <= c.y + c.height + 1;
-  if (inside) {
-    lastOffContentKey = '';
-    return;
-  }
-  const key = `${target.x},${target.y},${target.width},${target.height}`;
-  if (key === lastOffContentKey) return; // 同一個位置只嘈一次（唔想每幀洗版）
-  lastOffContentKey = key;
-  const overlapW = Math.min(target.x + target.width, c.x + c.width) - Math.max(target.x, c.x);
-  const overlapH = Math.min(target.y + target.height, c.y + c.height) - Math.max(target.y, c.y);
-  const visible = overlapW > 0 && overlapH > 0;
-  console.warn(
-    `[HUD/位] ⚠️ HUD 走出遊戲內容區：要求 x ${target.x} y ${target.y} ${target.width}×${target.height}，` +
-    `內容區 ${c.x},${c.y} ${c.width}×${c.height}${visible ? '（只有一部分睇得到）' : '（**完全睇唔到**）'}。`,
-  );
-  console.warn(
-    '[HUD/位] 　→ 成因通常係 offset（dx／dy）太大。修法：① HUD 設定窗撳「還原預設」；' +
-    '② 或者將 dx／dy 調返 0（設定窗會顯示實際螢幕像素範圍）。' +
-    '⚠️ 程式**唔會**自動改你嘅設定檔 —— 要寫入就喺設定窗撳「儲存」。',
-  );
+  offContentWarner.check(target, hudContent);
 }
 
 /**
@@ -961,14 +945,8 @@ function placeHud(game) {
   //    肉眼框」嘅已知 bug（electron#51679／#51876，未確認 44.4.1 修咗未），
   //    而 HUD 因為 `setContentProtection` 唔會出現喺截圖 → log 係唯一證據。
   if (HUD_EDIT) {
-    const actual = hudWindow.getBounds();
-    if (actual.x !== target.x || actual.y !== target.y
-      || actual.width !== target.width || actual.height !== target.height) {
-      console.warn(
-        `[HUD/位] ⚠️ setBounds 之後唔一致（疑似 electron#51679）：` +
-        `要求 ${JSON.stringify(target)}　實際 ${JSON.stringify(actual)}`,
-      );
-    }
+    const mismatch = boundsMismatchWarning(target, hudWindow.getBounds());
+    if (mismatch) console.warn(mismatch);
   }
 }
 

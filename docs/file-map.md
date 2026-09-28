@@ -142,6 +142,12 @@ electron/
                   #    clampedWarning(rel,layout)（拖出內容區要被夾返 → 講明夾咗邊個軸）。
                   #    以前係 main.js 一個 `let hudDrag` ＋ 三處散落判斷（地雷 #28／#29 現場）
                   #    → 而家有 14 條測試（test/hud-drag-machine.test.js，含接線閘）＋ 負樣本自測。
+  hud-place.js    # ⭐ HUD 位置警告（設計審查 S4 第三刀）：offContentReport(target,content)（純函數：
+                  #    喺唔喺內容區內／可唔可見／兩句訊息，一定要有實際像素）＋
+                  #    createOffContentWarner({onWarn})（去重：同一位置只嘈一次、返返內容區要
+                  #    清空簽名）＋ boundsMismatchWarning(target,actual)（electron#51679 量測鉤）。
+                  #    HUD 有 contentProtection → 位置只可以靠數字核對（用戶 2026-09-19 原話
+                  #    「其實根本就冇」）→ 13 條測試（test/hud-place.test.js，含接線閘）。
   panel-window.js # ⭐ 普通面板窗建立器（審計 M3）：createPanelWindow({file, title, width, height,
                   #    minWidth, minHeight, onClosed}) → BrowserWindow ＋ webPreferences
                   #    ＋ setContentProtection ＋ loadFile ＋ ready-to-show → show。
@@ -226,6 +232,11 @@ test/
                        #    `end()` 之後清空／`why` 同警告措辭逐字 ＋ 接線閘（`main.js` 唔准
                        #    再留住可變 `hudDrag`、唔准自己砌訊息）。負樣本自測：改成 `>=`
                        #    或者加返 `let hudDrag = null` → 即刻紅
+  hud-place.test.js   # ⭐ HUD 位置警告（設計審查 S4 第三刀，13 條）：喺內容區內（±1px 容忍）／
+                       #    完全睇唔到 vs 只睇到一部分嘅措辭／訊息一定要有實際像素同「唔會自動改
+                       #    設定檔」／純函數唔准改傳入物件／去重（同位置只嘈一次、換位置再嘈、
+                       #    **返返內容區要清空簽名**、每個 warner 各自獨立）＋ 量測鉤措辭 ＋ 接線閘。
+                       #    負樣本自測：拆走「返返內容區清空簽名」→ 即刻紅
   renderer-syntax-gate.test.js # ⭐ **語法閘自己嘅閘**（地雷 #33，3 條）：`JS_DIRS` 一定要有
                        #    `electron`／`electron/` 之下每個 `.js`／`.cjs` 都被覆蓋／4 個 HTML
                       #    都要驗（防止「新增檔走漏」再一次發生）

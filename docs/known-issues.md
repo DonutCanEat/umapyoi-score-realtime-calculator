@@ -86,6 +86,12 @@
    `end()` 清空／訊息措辭逐字／接線閘）—— 呢段係地雷 #28／#29 嘅現場，以前零覆蓋。
    ⚠️ `main.js` 仍然零覆蓋嘅部分收窄到：IPC handler 本體、`placeHud()`／`pushHud()`、
    診斷快照、同 `finishDrag()` 落 `applyHudConfig()`／存檔嗰幾句。
+   ✅ **2026-09-28 第五輪收窄（設計審查 S4 第三刀）**：⑨ **HUD 位置警告**搬去
+   `electron/hud-place.js`（`offContentReport()`／`createOffContentWarner()`／
+   `boundsMismatchWarning()`）＋ `test/hud-place.test.js`（**13 條**：±1px 容忍、兩種可見性措辭、
+   去重（同位置只嘈一次／換位置再嘈／**返返內容區要清空簽名**）、純函數唔准改傳入物件、
+   electron#51679 量測鉤措辭、接線閘）—— 呢段以前係 `main.js` 一個 `let lastOffContentKey`
+   ＋ 內聯判斷，用戶原話係「其實根本就冇」（2026-09-19）＝警告唔可信，所以措辭同去重政策要釘死。
 6. ✅ **已修（2026-09-23，技術債 §9.1-6）—— 唔可以再當「技術債」**：原子寫原本冇 `fsync`
    （`saveConfig()` = `writeFileSync(.tmp)` ＋ `renameSync`）→ `writeFileSync` 只係寫入
    OS page cache，**停電／硬斷電**之下 `rename()` 完成咗但內容仲喺 cache，開機之後見到嘅
