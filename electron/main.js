@@ -64,6 +64,9 @@ import { createHudDrag, DRAG_IDLE_MS, clampedWarning, dragCommitWhy } from './hu
 // ⭐ HUD 位置警告（設計審查 S4 第三刀）：HUD 有 contentProtection（唔會出現喺截圖）→
 //    位置只可以靠數字核對，所以「走出內容區」嘅警告措辭同**去重政策**要釘死（有測試）。
 import { createOffContentWarner, boundsMismatchWarning } from './hud-place.js';
+// ⭐ 擷取凍結 watchdog（設計審查 S4 第四刀）：5 個可變全域 ＋ 節流／上限政策搬去純模組
+//    （2026-09-19 實機「擷取靜默凍結」事故嘅防線，以前零測試覆蓋）。
+import { createCaptureWatchdog, MAX_CAPTURE_RECOVERS } from './capture-watchdog.js';
 import { MAX_HISTORY, pushSample } from '../src/hud/history.js';
 // ⭐ 「dump／連拍要寫邊」嘅決策（A9 打包）：打包之後 `ROOT` 係唯讀 asar，
 //    寫入會 throw ENOTDIR/EROFS → 同「設定檔位置」一樣要集中一個決策（`src/hud/write-root.js`）。
@@ -1294,31 +1297,23 @@ function dumpFrame(image, meta) {
  */
 let captureWin = null;
 let captureSourceId = null;
-let lastFrameAt = 0;
-let framesInWindow = 0;
-let recoverAttempts = 0;
-let lastRecoverAt = 0;
-let heartbeatTick = 0;
-const MAX_CAPTURE_RECOVERS = 5;
-const FRAME_FREEZE_MS = 15000;
-
-/** 試救：叫 renderer 重新開始擷取（同一條 sourceId）。 */
-function recoverCapture(why) {
-  if (!captureWin || captureWin.isDestroyed() || !captureSourceId) return;
-  if (Date.now() - lastRecoverAt < 10000) return; // 節流：10 秒內唔重複試
-  if (recoverAttempts >= MAX_CAPTURE_RECOVERS) {
-    console.error(`[擷取] ⛔ 已經重試 ${recoverAttempts} 次都收唔到幀（${why}）→ 唔再自動試，請重開程式。`);
-    return;
-  }
-  recoverAttempts += 1;
-  lastRecoverAt = Date.now();
-  lastFrameAt = Date.now(); // 畀新一輪時間（唔係嘅話 5 秒後又話凍結）
-  console.warn(`[擷取] ⚠️ ${why} → 重新啟動擷取（第 ${recoverAttempts}/${MAX_CAPTURE_RECOVERS} 次）`);
-  try {
+/**
+ * 擷取凍結 watchdog（`electron/capture-watchdog.js`）—— 心跳、凍結偵測、節流、重試上限
+ * 全部喺佢入面。以前係 5 個 module-level 可變全域（`lastFrameAt`／`framesInWindow`／
+ * `recoverAttempts`／`lastRecoverAt`／`heartbeatTick`，設計審查 S4 第四刀）。
+ * 診斷快照要用嘅狀態經 `captureWatchdog.state()` 讀。
+ */
+const captureWatchdog = createCaptureWatchdog({
+  isStarted: () => Boolean(captureSourceId),
+  canRestart: () => Boolean(captureWin) && !captureWin.isDestroyed() && Boolean(captureSourceId),
+  restart: () => {
     captureWin.webContents.send(IPC_CHANNELS.start, captureSourceId);
-  } catch (error) {
-    console.error(`[擷取] ⚠️ 重啟失敗：${error?.message ?? error}`);
-  }
+  },
+});
+
+/** 試救：叫 renderer 重新開始擷取（同一條 sourceId）—— 政策喺 watchdog 入面。 */
+function recoverCapture(why) {
+  return captureWatchdog.attempt(why);
 }
 
 /**
@@ -1353,6 +1348,7 @@ function writeDiagnosticSnapshot() {
     .sort()
     .map((key) => [key, process.env[key]]);
   const display = screen.getPrimaryDisplay();
+  const captureState = captureWatchdog.state();
   const hudBounds = hudWindow && !hudWindow.isDestroyed() ? hudWindow.getBounds() : null;
   let logTail = ['（讀唔到 log 檔）'];
   try {
@@ -1401,9 +1397,11 @@ function writeDiagnosticSnapshot() {
         ['擷取窗', captureWin && !captureWin.isDestroyed()
           ? `visible=${captureWin.isVisible()} crashed=${captureWin.webContents.isCrashed()}`
           : '（唔存在）'],
-        ['最後一幀', lastFrameAt ? `${Math.round((Date.now() - lastFrameAt) / 1000)} 秒前` : '（從來冇）'],
-        ['最近 60 秒幀數', framesInWindow],
-        ['自動救援次數', `${recoverAttempts}/${MAX_CAPTURE_RECOVERS}`],
+        ['最後一幀', captureState.lastFrameAt
+          ? `${Math.round((Date.now() - captureState.lastFrameAt) / 1000)} 秒前`
+          : '（從來冇）'],
+        ['最近 60 秒幀數', captureState.framesInWindow],
+        ['自動救援次數', `${captureState.recoverAttempts}/${MAX_CAPTURE_RECOVERS}`],
         ['最後一幀大細', lastFrame ? `${lastFrame.image.width}×${lastFrame.image.height}（${lastFrame.meta.kind}）` : '（冇）'],
         ['最近 dump 檔', lastDumpPath ?? '（冇）'],
       ],
@@ -1469,25 +1467,13 @@ function writeDiagnosticSnapshot() {
   return { log: logPath, png: wrotePng ? pngPath : null };
 }
 
-/** 每 5 秒檢查凍結、每分鐘報一次心跳。 */function startCaptureWatchdog() {
+/** 每 5 秒檢查凍結、每分鐘報一次心跳。 */
+function startCaptureWatchdog() {
   setInterval(() => {
-    if (!captureSourceId || !lastFrameAt) return;
-    const since = Date.now() - lastFrameAt;
-    if (since > FRAME_FREEZE_MS) recoverCapture(`已經 ${Math.round(since / 1000)} 秒冇收到幀`);
+    captureWatchdog.checkFreeze();
   }, 5000);
   setInterval(() => {
-    heartbeatTick += 1;
-    const since = lastFrameAt ? Math.round((Date.now() - lastFrameAt) / 1000) : null;
-    if (framesInWindow === 0) {
-      console.warn(
-        `[擷取] ⚠️ 心跳：最近 60 秒**一幀都收唔到**（最後一幀：`
-        + `${since === null ? '從來冇' : `${since} 秒前`}）—— 擷取可能凍結咗`,
-      );
-      recoverCapture('60 秒冇收到任何幀');
-    } else if (heartbeatTick % 5 === 0) {
-      console.log(`[擷取] 心跳：最近 60 秒收到 ${framesInWindow} 幀（最後一幀 ${since ?? '—'} 秒前）`);
-    }
-    framesInWindow = 0;
+    captureWatchdog.heartbeat();
   }, 60000);
 }
 
@@ -1742,9 +1728,7 @@ async function beginCapture(win) {
       });
     win.webContents.send(IPC_CHANNELS.start, hit.id);
     captureSourceId = hit.id;
-    lastFrameAt = Date.now();
-    framesInWindow = 0;
-    recoverAttempts = 0; // 開得成新一輪 → 重試次數歸零
+    captureWatchdog.markStarted(); // 新一輪：畀時間 ＋ 重試次數歸零（政策喺 watchdog 入面）
     if (SKILL_DUMP) {
       win.webContents.send(IPC_CHANNELS.fps, envNumber('UMAPYOI_CAPTURE_FPS', { fallback: 1, positive: true }));
       if (SKILL_CROP) win.webContents.send(IPC_CHANNELS.crop, SKILL_CROP);
@@ -1822,8 +1806,7 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
   const { width, height, fullWidth, fullHeight, buffer, cropped } = frame;
   if (!width || !height) return;
   // ⭐ 心跳用（見 `startCaptureWatchdog()`）：有幀到就代表擷取仲生。
-  lastFrameAt = Date.now();
-  framesInWindow += 1;
+  captureWatchdog.noteFrame();
 
   // ⭐ 「培育結束確認 → 基礎能力」條帶（renderer 每秒一張）——**另一條路**，唔關面板條事。
   if (frame.result) {
@@ -2050,8 +2033,7 @@ function notifyCapture(text) {
  */
 ipcMain.on(IPC_CHANNELS.refresh, async () => {
   console.log('[擷取] 🔄 用戶按「強制更新」→ 重新揀來源 ＋ 重新開始擷取');
-  recoverAttempts = 0; // 手動更新等於「重新開始」→ 自動救援嘅次數歸零
-  lastRecoverAt = 0;
+  captureWatchdog.resetForManualRefresh(); // 手動更新＝重新開始（重試次數＋節流一齊歸零）
   // ⭐ 成長曲線（設計審查 M7）：手動更新＝新場次 → 條線由頭嚟（唔准同上一輪混算）。
   captureSessionSeq += 1;
   console.log(`[HUD] 成長曲線：開新場次 #${captureSessionSeq}（舊樣本唔會併入）`);

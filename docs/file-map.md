@@ -148,6 +148,13 @@ electron/
                   #    清空簽名）＋ boundsMismatchWarning(target,actual)（electron#51679 量測鉤）。
                   #    HUD 有 contentProtection → 位置只可以靠數字核對（用戶 2026-09-19 原話
                   #    「其實根本就冇」）→ 13 條測試（test/hud-place.test.js，含接線閘）。
+  capture-watchdog.js # ⭐ 擷取凍結 watchdog（設計審查 S4 第四刀）：MAX_CAPTURE_RECOVERS=5／
+                  #    FRAME_FREEZE_MS=15000／RECOVER_THROTTLE_MS=10000 ＋
+                  #    createCaptureWatchdog({now,isStarted,canRestart,restart,onLog/Warn/Error}) →
+                  #    {attempt(why)／noteFrame()／markStarted()／resetForManualRefresh()／
+                  #    checkFreeze()／heartbeat()／state()}。政策：10 秒節流、最多 5 次、
+                  #    重試成功要「畀新一輪時間」、心跳一幀都收唔到要大聲講。
+                  #    2026-09-19 實機事故（擷取靜默凍結）嘅防線 → 17 條測試。
   panel-window.js # ⭐ 普通面板窗建立器（審計 M3）：createPanelWindow({file, title, width, height,
                   #    minWidth, minHeight, onClosed}) → BrowserWindow ＋ webPreferences
                   #    ＋ setContentProtection ＋ loadFile ＋ ready-to-show → show。
@@ -232,6 +239,12 @@ test/
                        #    `end()` 之後清空／`why` 同警告措辭逐字 ＋ 接線閘（`main.js` 唔准
                        #    再留住可變 `hudDrag`、唔准自己砌訊息）。負樣本自測：改成 `>=`
                        #    或者加返 `let hudDrag = null` → 即刻紅
+  capture-watchdog.test.js # ⭐ 擷取凍結 watchdog（設計審查 S4 第四刀，17 條）：凍結係**嚴格大於**
+                       #    15 秒（邊界值釘死）／未開始／冇窗唔准當「試過」／節流 10 秒（啱啱好
+                       #    就准）／試夠 5 次要停手 ＋ 叫用戶重開程式／重試要「畀新一輪時間」／
+                       #    重啟 throw 唔准爆／心跳（一幀都收唔到 → 警告 ＋ 試救、有幀每 5 個
+                       #    週期先報一次、窗口一定歸零）／`markStarted()` 唔清節流（同手動更新唔同）
+                       #    ＋ 接線閘（`main.js` 唔准再有嗰 5 個可變全域）。負樣本自測：拆走節流 → 3 條紅
   hud-place.test.js   # ⭐ HUD 位置警告（設計審查 S4 第三刀，13 條）：喺內容區內（±1px 容忍）／
                        #    完全睇唔到 vs 只睇到一部分嘅措辭／訊息一定要有實際像素同「唔會自動改
                        #    設定檔」／純函數唔准改傳入物件／去重（同位置只嘈一次、換位置再嘈、

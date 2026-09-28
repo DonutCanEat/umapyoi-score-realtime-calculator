@@ -41,5 +41,6 @@
 - **M11** renderer 實載閘「agent shell 跑唔到」嘅文檔更正（`AGENTS.md` §2／§8 4c、`docs/design.md` §6.6；無新測試）→ 605
 - **S4（第二刀）** HUD 拖位狀態機抽出（`electron/hud-drag.js` ＋ `test/hud-drag-machine.test.js`）+14 → **619**
 - **S4（第三刀）** HUD 位置警告去重抽出（`electron/hud-place.js` ＋ `test/hud-place.test.js`）+13 → **632**
+- **S4（第四刀）** 擷取凍結 watchdog 抽出（`electron/capture-watchdog.js` ＋ `test/capture-watchdog.test.js`）+17 → **649**
 
 ⚠️ 每一項嘅 commit hash／驗收數據睇 `git log --oneline`（commit message 有寫實測數字）。

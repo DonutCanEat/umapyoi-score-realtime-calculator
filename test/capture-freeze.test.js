@@ -55,13 +55,25 @@ test('擷取凍結閘：capture.html 要支援「再叫一次 start」＋串流�
   assert.match(html, /video\.videoWidth\s*>\s*0/, '要有「有冇畫面」嘅判斷（停滯偵察用）');
 });
 
-test('擷取凍結閘：main.js 要收幀心跳＋超時自動重啟擷取（有上限）', () => {  const main = code('electron/main.js');
-  assert.match(main, /lastFrameAt\s*=\s*Date\.now\(\)/, '每幀都要更新 lastFrameAt');
+test('擷取凍結閘：main.js 要收幀心跳＋超時自動重啟擷取（有上限）', () => {
+  // ⭐ 2026-09-28（設計審查 S4 第四刀）：政策（節流／上限／凍結門檻）搬咗去
+  //    `electron/capture-watchdog.js`（純模組，`test/capture-watchdog.test.js` 17 條真驗行為）。
+  //    呢條閘改成兩截，兩邊都要釘住：
+  //      ① `main.js` 真係經 watchdog 收幀／啟動／檢查（唔准繞過）；
+  //      ② 政策本身仍然存在（搬走之後唔見咗 = 靜默退化）。
+  const main = code('electron/main.js');
+  const watchdog = code('electron/capture-watchdog.js');
+  assert.match(main, /captureWatchdog\.noteFrame\(\)/, '每幀都要經 watchdog 記低最後幀時間');
+  assert.match(main, /captureWatchdog\.markStarted\(\)/, '開擷取要經 watchdog（畀新一輪時間）');
+  assert.match(main, /captureWatchdog\.checkFreeze\(\)/, '要真係定期檢查凍結');
   assert.match(main, /function recoverCapture\(/, '要有救援函數');
-  assert.match(main, /MAX_CAPTURE_RECOVERS/, '重試要有上限（唔准無限重啟）');
-  assert.match(main, /FRAME_FREEZE_MS/, '要有凍結門檻');
+  assert.match(watchdog, /MAX_CAPTURE_RECOVERS\s*=\s*5/, '重試要有上限（唔准無限重啟）');
+  assert.match(watchdog, /FRAME_FREEZE_MS\s*=\s*15000/, '要有凍結門檻');
+  assert.match(watchdog, /RECOVER_THROTTLE_MS\s*=\s*10000/, '要有節流（唔准連環重啟）');
   assert.match(main, /startCaptureWatchdog\(\)/, 'watchdog 一定要真係啟動');
-  assert.match(main, /心跳/, '要有心跳 log（將來同類問題一眼睇得出）');
+  // ⚠️ 「心跳 log」而家喺 watchdog 入面（`main.js` 嗰句只剩註釋 → 剝咗註釋之後當然搵唔到），
+  //    所以呢條斷言搬去 watchdog 嗰邊；`main.js` 只需要「真係啟動佢」（上面一條）。
+  assert.match(watchdog, /心跳/, '心跳 log 要有（將來同類問題一眼睇得出）');
   // renderer 一 reload 就要重跑「揀來源 → 送 ROI → 開擷取」（`once` 會留低一個永遠唔好返嘅洞）
   assert.doesNotMatch(
     main,

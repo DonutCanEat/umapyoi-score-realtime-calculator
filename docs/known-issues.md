@@ -92,6 +92,14 @@
    去重（同位置只嘈一次／換位置再嘈／**返返內容區要清空簽名**）、純函數唔准改傳入物件、
    electron#51679 量測鉤措辭、接線閘）—— 呢段以前係 `main.js` 一個 `let lastOffContentKey`
    ＋ 內聯判斷，用戶原話係「其實根本就冇」（2026-09-19）＝警告唔可信，所以措辭同去重政策要釘死。
+   ✅ **2026-09-28 第六輪收窄（設計審查 S4 第四刀）**：⑩ **擷取凍結 watchdog**搬去
+   `electron/capture-watchdog.js`（`createCaptureWatchdog()`：節流／重試上限／凍結判斷／心跳／狀態）
+   ＋ `test/capture-watchdog.test.js`（**17 條**）—— 呢段係 2026-09-19 實機「擷取靜默凍結」
+   事故嘅防線，以前係 5 個 module-level 可變全域（`lastFrameAt`／`framesInWindow`／
+   `recoverAttempts`／`lastRecoverAt`／`heartbeatTick`）散喺收幀 handler、兩個 `setInterval`、
+   `beginCapture()`、「強制更新」四條路，**零覆蓋**。
+   ⚠️ `main.js` 仍然零覆蓋嘅部分：IPC handler 本體、`placeHud()`／`pushHud()`、診斷快照組裝、
+   `finishDrag()` 落 `applyHudConfig()`／存檔嗰幾句、`beginCapture()` 本體。
 6. ✅ **已修（2026-09-23，技術債 §9.1-6）—— 唔可以再當「技術債」**：原子寫原本冇 `fsync`
    （`saveConfig()` = `writeFileSync(.tmp)` ＋ `renameSync`）→ `writeFileSync` 只係寫入
    OS page cache，**停電／硬斷電**之下 `rename()` 完成咗但內容仲喺 cache，開機之後見到嘅
