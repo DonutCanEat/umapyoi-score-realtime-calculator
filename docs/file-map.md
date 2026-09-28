@@ -44,6 +44,11 @@ src/vision/
                   #    逐行墨量切 5 行（要均勻）→ 每行右邊數字框 → 字形比對；
                   #    `lightFraction` **0.05**（面板半透明，數字騎住剪影 —— 地雷 #32）
   reader.js       # ⭐ 影像 → 五維 → 評價分；幀間多數投票（StatTracker）
+  read-summary.js # ⭐ 一次讀取結果 → **診斷用分類**（唯一一份；設計審查 M1）：
+                  #    classifyRead(read) → {kind, quietMs, shouldDump, goldRow, notBar, ok}。
+                  #    ⚠️ `statbar` 嘅 `highlighted`（＝呢行係金色）喺**失敗路徑一樣有**，
+                  #    唔准再用佢判「金色格跳過」—— 金格＋失敗一定要當真失敗（dump 幀、5s 節流）。
+                  #    閘：`test/read-summary.test.js`
   statrange.js    # ⭐ 數值合理性檢查（**唯一一份**；`0 ≤ 值 ≤ 2600`）：`checkStatRange()`／
                   #    STAT_MIN／STAT_MAX。三個 reader（reader／statbar／resultpanel）共用 ——
                   #    設計審查 2026-09-28 S3：以前只有 `reader.js` 做檢查，生產路徑

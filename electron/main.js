@@ -23,6 +23,9 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { pickGameSource } from '../src/capture/source.js';
 import { loadTemplates, readStats, StatTracker, scoreStats } from '../src/vision/reader.js';
 import { readStatBar, DEFAULT_STATBAR_OPTIONS } from '../src/vision/statbar.js';
+// ⭐ 「一次讀取結果 → 診斷用分類」嘅唯一一份（設計審查 M1）：`highlighted` 喺失敗路徑
+//    唔代表「金色格跳過」，唔准再用佢做判準（見 `read-summary.js` 檔頭）。
+import { classifyRead } from '../src/vision/read-summary.js';
 import { rowInkProfile, findSkillRows, nameBoxesInRow } from '../src/vision/skillscreen.js';
 import { columnCounts } from '../src/vision/projection.js';
 import { encodePng } from '../src/vision/pngwrite.js';
@@ -1790,32 +1793,34 @@ ipcMain.on(IPC_CHANNELS.frame, (_event, frame) => {
   if (!read.stats) {
     // 讀唔到（轉場／唔喺ステータス畫面）→ 照樣推 null，等投票緩衝自然清走
     tracker.push(null);
-    // ⭐ 診斷快照要知「最近一次讀到咩／點解讀唔到」（唔理下面 log 有冇節流）。
+    // ⭐ 診斷用分類嘅**唯一一份**喺 `src/vision/read-summary.js`（設計審查 M1）：
+    //    以前呢度用 `read.highlighted` 判「金色格跳過」，但 `highlighted` 嘅意思係
+    //    「呢行係金色」（失敗路徑一樣帶住佢）→ 一行真失敗會被當成預期之內：
+    //    寫錯分類、沉默 5s→10s、**唔 dump 幀**。而家金格失敗照當真失敗查
+    //    （`goldRow` 另外記落快照），同 `main.js` 自己嘅註釋一致。
+    const summary = classifyRead(read);
     lastReadSummary = {
-      kind: read.notBar ? 'notBar（唔見面板條）' : read.highlighted ? 'skip（金色格跳過）' : 'fail（讀唔清）',
-      reason: read.reason ?? '',
+      kind: summary.kind,
+      reason: summary.reason,
       candidates: read.candidates ?? null,
-      notBar: Boolean(read.notBar),
+      notBar: summary.notBar,
+      goldRow: summary.goldRow,
       at: Date.now(),
     };
     const now = Date.now();
-    // 三種「唔出數」：
-    //   ① 金色格（屬性 > 1200，長期金色）—— 唔應該再出現（有 `goldLightFraction` 專用遮罩，
-    //      實測 1489 讀得返）；如果真係出現，通常係格框切得唔準
-    //   ② 唔見／唔似面板條（換咗畫面）—— 屬正常
-    //   ③ 其他（面板喺度但讀唔清）—— 真問題，要 dump 幀查
-    const quietMs = read.notBar ? 30000 : read.highlighted ? 10000 : 5000;
-    if (read.reason && now - lastLog > quietMs) {
+    if (read.reason && now - lastLog > summary.quietMs) {
       lastLog = now;
-      if (read.highlighted) {
-        console.log(`[跳過] ${read.reason}（會沿用上一個穩定值）`);
-      } else if (read.notBar) {
+      if (summary.notBar) {
         console.log(`[讀唔到] （唔見面板條 —— 可能喺其他畫面／轉場，屬正常：${read.reason}）`);
       } else {
-        console.log(`[讀唔到] ${read.reason}`);
+        console.log(`[讀唔到] ${read.reason}${summary.goldRow ? '（⚠️ 金色行：通常係格框切得唔準，照當真失敗查）' : ''}`);
         if (read.candidates) console.log(`         候選：${read.candidates.join(' ')}`);
-        const dumped = dumpFrame(image, { kind: 'fail', reason: read.reason, candidates: read.candidates, cropped });
-        if (dumped) console.log(`         已存幀：${dumped.replace(`${ROOT}\\`, '')}`);
+        if (summary.shouldDump) {
+          const dumped = dumpFrame(image, {
+            kind: 'fail', reason: read.reason, candidates: read.candidates, cropped, goldRow: summary.goldRow,
+          });
+          if (dumped) console.log(`         已存幀：${dumped.replace(`${ROOT}\\`, '')}`);
+        }
       }
     }
     return;
